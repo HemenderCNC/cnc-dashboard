@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\User;
 use App\Models\Option;
+use App\Models\Skill;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use App\Services\FileUploadService;
@@ -36,7 +37,7 @@ class UserController extends Controller
             'emergency_contact_number' => 'nullable|string',
 
             // Qualification
-            'qualification_level_id' => 'nullable|exists:options,_id',
+            'qualification_level_id' => 'nullable|exists:qualifications,_id',
             'certification_name' => 'nullable|string',
             'year_of_completion' => 'nullable|date',
             'qualification_document' => 'nullable|file|mimes:pdf,jpeg,png|max:2048',
@@ -46,8 +47,8 @@ class UserController extends Controller
             'username' => 'required|string|unique:users,username',
             'password' => 'required|string|min:6',
             'role_id' => 'required|exists:roles,_id',
-            'department_id' => 'nullable|exists:options,_id',
-            'designation_id' => 'nullable|exists:options,_id',
+            'department_id' => 'nullable|exists:departments,_id',
+            'designation_id' => 'nullable|exists:designations,_id',
             'joining_date' => 'nullable|date',
             'in_out_time' => 'nullable|string',
             'adharcard_number' => 'nullable|string',
@@ -55,6 +56,9 @@ class UserController extends Controller
             'employment_type_id' => 'nullable|exists:options,_id',
             'employee_status_id' => 'nullable|exists:options,_id',
             'created_by' => 'required|exists:users,_id',
+            //Skills
+            'skills' => 'nullable|array',
+            'skills.*' => 'exists:skills,_id',
         ]);
         if ($validator->fails()) {
             
@@ -124,7 +128,8 @@ class UserController extends Controller
             
             // 'role' => $request->role, 
             'created_by' => $request->user->id,
-
+            //Skills
+            'skills' => $request->skills,
             // Add other fields here...
         ]);
         return response()->json(['message' => 'User added successfully!', 'user' => $user], 201);
@@ -165,7 +170,7 @@ class UserController extends Controller
             'emergency_contact_number' => 'nullable|string',
 
             // Qualification
-            'qualification_level_id' => 'nullable|exists:options,_id',
+            'qualification_level_id' => 'nullable|exists:qualifications,_id',
             'certification_name' => 'nullable|string',
             'year_of_completion' => 'nullable|date',
             // 'qualification_document' => 'nullable|file|mimes:pdf,jpeg,png|max:2048',
@@ -175,13 +180,17 @@ class UserController extends Controller
             'username' => 'required|string|unique:users,username,'. $id,
             'password' => 'required|string|min:6',
             'role_id' => 'required|exists:roles,_id',
-            'department_id' => 'nullable|exists:options,_id',
-            'designation_id' => 'nullable|exists:options,_id',
+            'department_id' => 'nullable|exists:departments,_id',
+            'designation_id' => 'nullable|exists:designations,_id',
             'joining_date' => 'nullable|date',
             'in_out_time' => 'nullable|string',
             'employment_type_id' => 'nullable|exists:options,_id',
             'employee_status_id' => 'nullable|exists:options,_id',
             'created_by' => 'required|exists:users,_id',
+            
+            //Skills
+            'skills' => 'nullable|array',
+            'skills.*' => 'exists:skills,_id',
         ]);
     
         if ($validator->fails()) {
@@ -193,6 +202,7 @@ class UserController extends Controller
     
 
         //Handel Upload
+        //CREATED seperate API to edit docs
         // $service = app(FileUploadService::class);
         // $profilePhoto = $service->upload($request->file('profile_photo'), 'uploads', $request->user->id);
         // $qualificationDocument = $service->upload($request->file('qualification_document'), 'uploads', $request->user->id);
@@ -209,7 +219,7 @@ class UserController extends Controller
             'blood_group' => $request->blood_group,
             'marital_status' => $request->marital_status,
             'nationality' => $request->nationality,
-            // 'profile_photo' => $profilePhoto,
+            // 'profile_photo' => $profilePhoto, //CREATED seperate API to edit docs
 
             // Address Information
             'residential_address' => $request->residential_address,
@@ -223,7 +233,7 @@ class UserController extends Controller
             'qualification_level_id' => $request->qualification_level_id,
             'certification_name' => $request->certification_name,
             'year_of_completion' => $request->year_of_completion,
-            // 'qualification_document' => $qualificationDocument,
+            // 'qualification_document' => $qualificationDocument, //CREATED seperate API to edit docs
 
 
             // Work Information
@@ -239,6 +249,9 @@ class UserController extends Controller
             'employee_status_id' => $request->employee_status_id,
 
             'created_by' => $request->user->id,
+
+            // Skills
+            'skills' => $request->skills, // Save array of skill IDs
         ]);
     
         // Return a success message

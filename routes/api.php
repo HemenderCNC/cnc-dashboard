@@ -7,6 +7,9 @@ use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\TaskTypeController;
 use App\Http\Controllers\DepartmentController;
+use App\Http\Controllers\DesignationController;
+use App\Http\Controllers\QualificationController;
+use App\Http\Controllers\SkillController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -73,5 +76,16 @@ Route::middleware('api')->group(function () {
         Route::delete('departments/{id}', [DepartmentController::class, 'deleteDepartment']); // Delete Department
         Route::get('departments', [DepartmentController::class, 'getAllDepartments']); // Get all Departments
         Route::get('departments/{id}', [DepartmentController::class, 'getDepartmentById']); // Get all Department
+
+
+
+        //Designation API
+        Route::apiResource('designations', DesignationController::class);
+
+        //Qualifications API
+        Route::apiResource('qualifications', QualificationController::class);
+
+        //Skills API
+        Route::apiResource('skills', SkillController::class);
     });
 });
