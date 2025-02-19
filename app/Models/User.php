@@ -7,13 +7,13 @@ use MongoDB\Laravel\Eloquent\Model as Eloquent;
 class User extends Eloquent
 {
     use Notifiable;
-    protected $connection = 'mongodb'; 
+    protected $connection = 'mongodb';
     protected $fillable = [
         // Basic Information
         'name',
         'last_name',
-        'gender', 
-        'contact_number', 
+        'gender',
+        'contact_number',
         'birthdate',
         'personal_email',
         'blood_group',
@@ -71,7 +71,7 @@ class User extends Eloquent
                 // Fetch all permissions by IDs and get only their names
                 // $permissions = Permission::whereIn('_id', $permissionIds)->pluck('name');
                 $permissions = Permission::whereIn('_id', $permissionIds)->get(['_id', 'name']);
-            
+
                 return [
                     'role_name' => $role->name,
                     // 'permissions' => $permissions->toArray()
@@ -88,7 +88,10 @@ class User extends Eloquent
 
         return null;
     }
-
+    public function department()
+    {
+        return $this->belongsTo(Department::class, 'department_id');
+    }
     public function tokens()
     {
         return $this->hasMany(PersonalAccessToken::class, 'tokenable_id')->where('tokenable_type', self::class);

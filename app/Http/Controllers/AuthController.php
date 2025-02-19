@@ -35,14 +35,14 @@ class AuthController extends Controller
     public function registerAdmin(Request $request)
     {
         // Redirect to the default route if an admin exists
-       
+
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users',
             'password' => 'required|confirmed|min:6',
         ]);
         if ($validator->fails()) {
-            
+
                 return response()->json([
                     'message' => 'Validation failed',
                     'errors' => $validator->errors()
@@ -58,13 +58,13 @@ class AuthController extends Controller
 
         // return redirect()->route('login');
         // Create token
-        $token = PersonalAccessToken::createToken($user, 'auth_token', ['*'], 60);
-        
+        $token = PersonalAccessToken::createToken($user, 'auth_token', ['*'], 6000);
+
         return response()->json([
             'access_token' => $token,
             'user' => $user,
             'token_type' => 'Bearer',
-            'expires_in' => 60, // Expiration in minutes
+            'expires_in' => 6000, // Expiration in minutes
         ]);
     }
 
@@ -101,7 +101,7 @@ class AuthController extends Controller
         }
 
         // Generate a custom token
-        $token = PersonalAccessToken::createToken($user, 'auth_token', ['*']);
+        $token = PersonalAccessToken::createToken($user, 'auth_token', ['*'],6000);
 
         // Return the token
         return response()->json([
@@ -130,7 +130,7 @@ class AuthController extends Controller
             'emails.otp',
             ['otp' => $otp]
         );
-    
+
         if (!$isMailSent) {
             return response()->json(['message' => 'Failed to send OTP email. Please try again later.'], 500);
         }
@@ -144,7 +144,7 @@ class AuthController extends Controller
             'email' => 'required|email|exists:users,email',
             'otp' => 'required',
         ]);
-        if ($validator->fails()) {  
+        if ($validator->fails()) {
             return response()->json([
                 'message' => 'Validation failed',
                 'errors' => $validator->errors()
@@ -155,11 +155,11 @@ class AuthController extends Controller
         if ($user->otp != $request->otp) {
             return response()->json(['message' => 'Invalid OTP.'], 422);
         }
-    
+
         if (now()->greaterThan($user->otp_expires_at)) {
             return response()->json(['message' => 'OTP has expired.'], 422);
         }
-        
+
         // Return success response
         return response()->json([
             'message' => 'OTP verified successfully.',

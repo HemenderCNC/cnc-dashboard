@@ -6,6 +6,7 @@ use App\Http\Controllers\UserFieldOptionController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\TaskTypeController;
+use App\Http\Controllers\DepartmentController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -66,6 +67,11 @@ Route::middleware('api')->group(function () {
             Route::delete('users/{id}', [UserController::class, 'deleteUser']);
         });
 
-        
+        //Department API
+        Route::post('departments', [DepartmentController::class, 'addDepartment']);        // Add Department
+        Route::put('departments/{id}', [DepartmentController::class, 'editDepartment']);  // Edit Department
+        Route::delete('departments/{id}', [DepartmentController::class, 'deleteDepartment']); // Delete Department
+        Route::get('departments', [DepartmentController::class, 'getAllDepartments']); // Get all Departments
+        Route::get('departments/{id}', [DepartmentController::class, 'getDepartmentById']); // Get all Department
     });
 });
