@@ -45,7 +45,9 @@ class User extends Eloquent
         'pancard_number',
         'employment_type_id',
         'employee_status_id',
-        'created_by'
+        'created_by',
+        //Skills
+        'skills'
     ];
 
     protected $hidden = ['password', 'remember_token'];
