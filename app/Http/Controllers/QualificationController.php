@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 use App\Models\Qualification;
 use Illuminate\Http\Request;
-
+use Illuminate\Support\Facades\Validator;
 class QualificationController extends Controller
 {
     /**
@@ -19,10 +19,12 @@ class QualificationController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
-            'name' => 'required|string|unique:qualifications,name'
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|unique:qualifications,name',
         ]);
-
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
         $qualification = Qualification::create($request->only('name'));
         return response()->json($qualification, 201);
     }
@@ -48,11 +50,12 @@ class QualificationController extends Controller
         if (!$qualification) {
             return response()->json(['message' => 'Qualification not found'], 404);
         }
-
-        $request->validate([
+        $validator = Validator::make($request->all(), [
             'name' => 'required|string|unique:qualifications,name,' . $id
         ]);
-
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
         $qualification->update($request->only('name'));
         return response()->json($qualification, 200);
     }

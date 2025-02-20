@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers;
 use App\Models\Designation;
+use App\Models\Department;
 use Illuminate\Http\Request;
-
+use Illuminate\Support\Facades\Validator;
 class DesignationController extends Controller
 {
     /**
@@ -19,11 +20,27 @@ class DesignationController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
-            'name' => 'required|string|unique:designations,name'
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|unique:designations,name',
+            'department_id' => 'required|exists:departments,_id',
         ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
 
-        $designation = Designation::create($request->only('name'));
+        // Fetch the department name using department_id
+        $department = Department::find($request->department_id);
+
+        if (!$department) {
+            return response()->json(['message' => 'Department not found'], 404);
+        }
+
+
+        $designation = Designation::create([
+            'name' => $request->name,
+            'department_id' => $request->department_id,
+            'department_name' => $department->name, // Store department name
+        ]);
         return response()->json($designation, 201);
     }
 
@@ -48,14 +65,27 @@ class DesignationController extends Controller
         if (!$designation) {
             return response()->json(['message' => 'Designation not found'], 404);
         }
-
-        $request->validate([
-            'name' => 'required|string|unique:designations,name,' . $id
+    
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|unique:designations,name,' . $id,
+            'department_id' => 'required|exists:departments,_id',
         ]);
-
-        $designation->update($request->only('name'));
-        return response()->json($designation, 200);
+    
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+    
+        $designation->update([
+            'name' => $request->name,
+            'department_id' => $request->department_id
+        ]);
+    
+        return response()->json([
+            'message' => 'Designation updated successfully',
+            'designation' => $designation
+        ], 200);
     }
+    
 
     /**
      * Remove the specified designation.

@@ -11,5 +11,5 @@ class Designation extends Eloquent
     use HasFactory;
     protected $connection = 'mongodb'; // Specify MongoDB connection
     protected $collection = 'designations'; // Collection name
-    protected $fillable = ['name']; // Allow mass assignment
+    protected $fillable = ['name','department_id','department_name']; // Allow mass assignment
 }
