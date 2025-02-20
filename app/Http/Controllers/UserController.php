@@ -159,7 +159,7 @@ class UserController extends Controller
             'blood_group' => 'nullable|string',
             'marital_status' => 'nullable|string',
             'nationality' => 'nullable|string',
-            // 'profile_photo' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+            'profile_photo' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
 
             // Address Information
             'residential_address' => 'nullable|string',
@@ -173,7 +173,7 @@ class UserController extends Controller
             'qualification_level_id' => 'nullable|exists:qualifications,_id',
             'certification_name' => 'nullable|string',
             'year_of_completion' => 'nullable|date',
-            // 'qualification_document' => 'nullable|file|mimes:pdf,jpeg,png|max:2048',
+            'qualification_document' => 'nullable|file|mimes:pdf,jpeg,png|max:2048',
 
             // Work Information
             'company_email' => 'nullable|email|unique:users,email,'. $id,
@@ -206,6 +206,34 @@ class UserController extends Controller
         // $service = app(FileUploadService::class);
         // $profilePhoto = $service->upload($request->file('profile_photo'), 'uploads', $request->user->id);
         // $qualificationDocument = $service->upload($request->file('qualification_document'), 'uploads', $request->user->id);
+
+
+        // Handle File Uploads Only If Present in Request
+        $service = app(FileUploadService::class);
+
+        if ($request->hasFile('profile_photo')) {
+
+            // Delete old profile photo if exists
+            if ($user->profile_photo) {
+                $service->delete($user->profile_photo['file_path']);
+            }
+
+            $profilePhoto = $service->upload($request->file('profile_photo'), 'uploads', $request->user->id);
+            $user->profile_photo = $profilePhoto;
+        }
+
+        if ($request->hasFile('qualification_document')) {
+
+            // Delete old qualification document if exists
+            if ($user->qualification_document) {
+                $service->delete($user->qualification_document['file_path']);
+            }
+
+            $qualificationDocument = $service->upload($request->file('qualification_document'), 'uploads', $request->user->id);
+            $user->qualification_document = $qualificationDocument;
+        }
+
+
 
         // Update user data
         $user->update([
