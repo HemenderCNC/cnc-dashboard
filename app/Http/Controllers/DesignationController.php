@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 use App\Models\Designation;
 use Illuminate\Http\Request;
-
+use Illuminate\Support\Facades\Validator;
 class DesignationController extends Controller
 {
     /**
@@ -19,10 +19,12 @@ class DesignationController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
-            'name' => 'required|string|unique:designations,name'
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|unique:designations,name',
         ]);
-
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
         $designation = Designation::create($request->only('name'));
         return response()->json($designation, 201);
     }
@@ -48,10 +50,12 @@ class DesignationController extends Controller
         if (!$designation) {
             return response()->json(['message' => 'Designation not found'], 404);
         }
-
-        $request->validate([
+        $validator = Validator::make($request->all(), [
             'name' => 'required|string|unique:designations,name,' . $id
         ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
 
         $designation->update($request->only('name'));
         return response()->json($designation, 200);

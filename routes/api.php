@@ -10,6 +10,7 @@ use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\DesignationController;
 use App\Http\Controllers\QualificationController;
 use App\Http\Controllers\SkillController;
+use App\Http\Controllers\EmployeeTypesController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -82,5 +83,11 @@ Route::middleware('api')->group(function () {
 
         //Skills API
         Route::apiResource('skills', SkillController::class);
+
+        //Employee Type API
+        Route::apiResource('employee-types', EmployeeTypesController::class);
+
+        //Work Location API
+        Route::apiResource('employee-types', EmployeeTypesController::class);
     });
 });
