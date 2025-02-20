@@ -50,12 +50,6 @@ class User extends Eloquent
         //Skills
         'skills'
     ];
-    protected $casts = [
-        'joining_date' => 'datetime',
-        'in_out_time' => 'array',
-        'skills' => 'array',
-    ];
-
     protected $hidden = ['password', 'remember_token'];
 
     // Relationship to Role
