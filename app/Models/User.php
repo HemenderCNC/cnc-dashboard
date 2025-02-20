@@ -50,6 +50,8 @@ class User extends Eloquent
         //Skills
         'skills'
     ];
+
+
     protected $hidden = ['password', 'remember_token'];
 
     // Relationship to Role
