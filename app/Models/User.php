@@ -33,6 +33,7 @@ class User extends Eloquent
         'year_of_completion',
         'qualification_document',
         // Work Information
+        'work_location_id',
         'email',
         'username',
         'password',
@@ -49,7 +50,6 @@ class User extends Eloquent
         //Skills
         'skills'
     ];
-
     protected $hidden = ['password', 'remember_token'];
 
     // Relationship to Role
@@ -63,39 +63,31 @@ class User extends Eloquent
 
     public function getRoleWithPermissionsAttribute()
     {
-        $role = $this->role;
-
-        if ($role) {
-            // Retrieve permissions for the role
-            $permissionIds =$role->permissions;
-
-            if($permissionIds){
-                // Fetch all permissions by IDs and get only their names
-                // $permissions = Permission::whereIn('_id', $permissionIds)->pluck('name');
-                $permissions = Permission::whereIn('_id', $permissionIds)->get(['_id', 'name']);
-
-                return [
-                    'role_name' => $role->name,
-                    // 'permissions' => $permissions->toArray()
-                    'permissions' => $permissions->map(function ($permission) {
-                    return [
-                        'id' => (string) $permission->_id,
-                        'name' => $permission->name,
-                    ];
-                }),
-                ];
-            }
-
+        if (!$this->role) {
+            return null;
         }
 
-        return null;
+        $permissions = Permission::whereIn('_id', $this->role->permissions ?? [])->get(['_id', 'name']);
+
+        return [
+            'role_name' => $this->role->name,
+            'permissions' => $permissions->map(fn($permission) => [
+                'id' => (string) $permission->_id,
+                'name' => $permission->name,
+            ]),
+        ];
     }
+
     public function department()
     {
         return $this->belongsTo(Department::class, 'department_id');
     }
+    public function employeeType()
+    {
+        return $this->belongsTo(EmployeeType::class, 'employment_type_id');
+    }
     public function tokens()
     {
-        return $this->hasMany(PersonalAccessToken::class, 'tokenable_id')->where('tokenable_type', self::class);
+        return $this->hasMany(PersonalAccessToken::class, 'tokenable_id')->where('tokenable_type', static::class);
     }
 }

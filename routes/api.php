@@ -10,6 +10,9 @@ use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\DesignationController;
 use App\Http\Controllers\QualificationController;
 use App\Http\Controllers\SkillController;
+use App\Http\Controllers\EmployeeTypesController;
+use App\Http\Controllers\WorkLocationController;
+use App\Http\Controllers\EmployeeStatusController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -71,12 +74,7 @@ Route::middleware('api')->group(function () {
         });
 
         //Department API
-        Route::post('departments', [DepartmentController::class, 'addDepartment']);        // Add Department
-        Route::put('departments/{id}', [DepartmentController::class, 'editDepartment']);  // Edit Department
-        Route::delete('departments/{id}', [DepartmentController::class, 'deleteDepartment']); // Delete Department
-        Route::get('departments', [DepartmentController::class, 'getAllDepartments']); // Get all Departments
-        Route::get('departments/{id}', [DepartmentController::class, 'getDepartmentById']); // Get all Department
-
+        Route::apiResource('departments', DepartmentController::class);
 
 
         //Designation API
@@ -87,5 +85,14 @@ Route::middleware('api')->group(function () {
 
         //Skills API
         Route::apiResource('skills', SkillController::class);
+
+        //Employee Type API
+        Route::apiResource('employee-types', EmployeeTypesController::class);
+
+        //Work Location API
+        Route::apiResource('work-location', WorkLocationController::class);
+
+        //Employee Status API
+        Route::apiResource('employee-status', EmployeeStatusController::class);
     });
 });
