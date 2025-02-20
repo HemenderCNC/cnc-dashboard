@@ -33,6 +33,7 @@ class User extends Eloquent
         'year_of_completion',
         'qualification_document',
         // Work Information
+        'work_location_id',
         'email',
         'username',
         'password',
