@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 use App\Models\Skill;
 use App\Models\User;
 use Illuminate\Http\Request;
-
+use Illuminate\Support\Facades\Validator;
 class SkillController extends Controller
 {
     /**
@@ -20,10 +20,12 @@ class SkillController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
-            'name' => 'required|string|unique:skills,name'
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|unique:skills,name',
         ]);
-
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
         $skill = Skill::create($request->only('name'));
         return response()->json($skill, 201);
     }
@@ -49,10 +51,12 @@ class SkillController extends Controller
         if (!$skill) {
             return response()->json(['message' => 'Skill not found'], 404);
         }
-
-        $request->validate([
+        $validator = Validator::make($request->all(), [
             'name' => 'required|string|unique:skills,name,' . $id
         ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
 
         $skill->update($request->only('name'));
         return response()->json($skill, 200);
