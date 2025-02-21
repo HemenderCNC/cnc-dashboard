@@ -34,7 +34,9 @@ class EmployeeLeaveController extends Controller
         }
 
         $leave_duration = (new \DateTime($request->start_date))->diff(new \DateTime($request->end_date))->days + 1;
-
+        if($request->half_day){
+            $leave_duration = 0.5;
+        }
         $leave = Leave::create([
             'employee_id' => $request->user->id,
             'start_date' => $request->start_date,
@@ -95,7 +97,9 @@ class EmployeeLeaveController extends Controller
         }
 
         $leave_duration = (new \DateTime($request->start_date))->diff(new \DateTime($request->end_date))->days + 1;
-
+        if($request->half_day){
+            $leave_duration = 0.5;
+        }
         $leave->update([
             'start_date' => $request->start_date,
             'end_date' => $request->end_date,
