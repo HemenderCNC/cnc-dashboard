@@ -38,8 +38,7 @@ class DesignationController extends Controller
 
         $designation = Designation::create([
             'name' => $request->name,
-            'department_id' => $request->department_id,
-            'department_name' => $department->name, // Store department name
+            'department_id' => $request->department_id
         ]);
         return response()->json($designation, 201);
     }
@@ -65,27 +64,27 @@ class DesignationController extends Controller
         if (!$designation) {
             return response()->json(['message' => 'Designation not found'], 404);
         }
-    
+
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|unique:designations,name,' . $id,
             'department_id' => 'required|exists:departments,_id',
         ]);
-    
+
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-    
+
         $designation->update([
             'name' => $request->name,
             'department_id' => $request->department_id
         ]);
-    
+
         return response()->json([
             'message' => 'Designation updated successfully',
             'designation' => $designation
         ], 200);
     }
-    
+
 
     /**
      * Remove the specified designation.
