@@ -84,9 +84,25 @@ class User extends Eloquent
     {
         return $this->belongsTo(Department::class, 'department_id');
     }
+    public function designation()
+    {
+        return $this->belongsTo(Designation::class, 'designation_id');
+    }
     public function employeeType()
     {
         return $this->belongsTo(EmployeeType::class, 'employment_type_id');
+    }
+    public function employeeStatus()
+    {
+        return $this->belongsTo(EmployeeStatus::class, 'employee_status_id');
+    }
+    public function workLocation()
+    {
+        return $this->belongsTo(WorkLocation::class, 'work_location_id');
+    }
+    public function createdBy()
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
     public function tokens()
     {
