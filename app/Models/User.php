@@ -20,6 +20,7 @@ class User extends Eloquent
         'marital_status',
         'nationality',
         'profile_photo',
+        'office_location',
         // Address Information
         'residential_address',
         'permanent_address',
