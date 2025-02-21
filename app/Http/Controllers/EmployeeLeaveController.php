@@ -135,4 +135,26 @@ class EmployeeLeaveController extends Controller
 
         return response()->json(['message' => 'Leave request canceled successfully'], 200);
     }
+
+    public function getLeaveSummary(Request $request)
+    {
+        $userId = $request->user->id; // Get logged-in employee ID
+        $totalLeaves = 12; // Define the total allowed leaves
+
+        // Get the total approved leave days
+        $consumedLeaves = Leave::where('employee_id', $userId)
+            ->where('status', 'approved')
+            ->sum('leave_duration'); //leave duration
+
+        // Calculate remaining leaves
+        $remainingLeaves = max($totalLeaves - $consumedLeaves, 0); // Ensures no negative values
+
+        return response()->json([
+            'message' => 'Leave summary retrieved successfully',
+            'total_leaves' => $totalLeaves,
+            'consumed_leaves' => $consumedLeaves,
+            'remaining_leaves' => $remainingLeaves
+        ], 200);
+    }
+
 }
