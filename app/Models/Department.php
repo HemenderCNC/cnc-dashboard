@@ -16,7 +16,7 @@ class Department extends Eloquent
     {
         return $this->hasMany(User::class, 'department_id');
     }
-    
+
     // Relationship with Designations
     public function designations()
     {
