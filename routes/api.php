@@ -13,6 +13,8 @@ use App\Http\Controllers\SkillController;
 use App\Http\Controllers\EmployeeTypesController;
 use App\Http\Controllers\WorkLocationController;
 use App\Http\Controllers\EmployeeStatusController;
+use App\Http\Controllers\EmployeeLeaveController;
+use App\Http\Controllers\ManagementLeaveController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -94,5 +96,23 @@ Route::middleware('api')->group(function () {
 
         //Employee Status API
         Route::apiResource('employee-status', EmployeeStatusController::class);
+
+        //Employee Leave Module
+        Route::prefix('employee/leaves')->group(function () {
+            Route::get('/', [EmployeeLeaveController::class, 'index']); // Employee views own leaves
+            Route::post('/', [EmployeeLeaveController::class, 'store']); // Employee requests leave
+            Route::get('/{id}', [EmployeeLeaveController::class, 'show']); // View specific leave request
+            Route::put('/{id}', [EmployeeLeaveController::class, 'update']); // Update leave request (only if pending)
+            Route::patch('/{id}/cancel', [EmployeeLeaveController::class, 'cancel']); // Cancel leave request (only if start date not passed)
+        });
+
+        //Management Leave Module
+        Route::prefix('management/leaves')->group(function () {
+            Route::get('/', [ManagementLeaveController::class, 'index']);
+            Route::get('/{id}', [ManagementLeaveController::class, 'show']); // View details of a specific leave request
+            Route::put('/{id}/approve', [ManagementLeaveController::class, 'approve']);
+            Route::put('/{id}/reject', [ManagementLeaveController::class, 'reject']);
+        });
+        
     });
 });
