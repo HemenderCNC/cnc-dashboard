@@ -56,6 +56,7 @@ class UserController extends Controller
             'employment_type_id' => 'nullable|exists:employee_types,_id',
             'employee_status_id' => 'nullable|exists:employee_statuses,_id',
             'work_location_id' => 'nullable|exists:work_locations,_id',
+            'office_location' => 'required|string',
             'created_by' => 'required|exists:users,_id',
             //Skills
             'skills' => 'nullable|array',
@@ -114,6 +115,7 @@ class UserController extends Controller
             // Work Information
             'email' => $request->company_email,
             'work_location_id' => $request->work_location_id,
+            'office_location' => $request->office_location,
             'username' => $request->username,
             'password' => Hash::make($request->password),
             'role_id' => $request->role_id,
@@ -190,6 +192,7 @@ class UserController extends Controller
             'employee_status_id' => 'nullable|exists:employee_statuses,_id',
             'work_location_id' => 'nullable|exists:work_locations,_id',
             'created_by' => 'required|exists:users,_id',
+            'office_location' => 'required|string',
 
             //Skills
             'skills' => 'nullable|array',
@@ -279,6 +282,7 @@ class UserController extends Controller
             'employment_type_id' => $request->employment_type_id,
             'employee_status_id' => $request->employee_status_id,
             'work_location_id' => $request->work_location_id,
+            'office_location' => $request->office_location,
 
             'created_by' => $request->user->id,
 
