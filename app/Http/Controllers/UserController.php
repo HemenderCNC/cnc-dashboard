@@ -53,10 +53,12 @@ class UserController extends Controller
             'in_out_time' => 'nullable|string',
             'adharcard_number' => 'nullable|string|size:12',
             'pancard_number' => 'nullable|string',
-            'employment_type_id' => 'nullable|exists:options,_id',
-            'employee_status_id' => 'nullable|exists:options,_id',
-            'work_location_id' => 'required|exists:work_locations,_id',
+            'employment_type_id' => 'nullable|exists:employee_types,_id',
+            'employee_status_id' => 'nullable|exists:employee_statuses,_id',
+            'work_location_id' => 'nullable|exists:work_locations,_id',
             'office_location' => 'required|string',
+            'created_by' => 'required|exists:users,_id',
+
             //Skills
             'skills' => 'nullable|array',
             'skills.*' => 'exists:skills,_id',
@@ -67,9 +69,13 @@ class UserController extends Controller
             'account_number' => 'nullable|string',
             'bank_ifsc_code' => 'nullable|string',
             'bank_branch_location' => 'nullable|string',
+
+            //document details
+            'document_type_id' => 'nullable|exists:document_types,_id',
+            'document' => 'nullable|file|mimes:pdf,jpeg,png|max:2048',
         ]);
         if ($validator->fails()) {
-            
+
                 return response()->json([
                     'message' => 'Validation failed',
                     'errors' => $validator->errors()
@@ -86,7 +92,10 @@ class UserController extends Controller
         $service = app(FileUploadService::class);
         $profilePhoto = $service->upload($request->file('profile_photo'), 'uploads', $request->user->id);
         $qualificationDocument = $service->upload($request->file('qualification_document'), 'uploads', $request->user->id);
-
+        $document = '';
+        if ($request->hasFile('document')) {
+            $document = $service->upload($request->file('document'), 'uploads', $request->user->id);
+        }
 
         // Save User
         $user = User::create([
@@ -120,6 +129,8 @@ class UserController extends Controller
 
             // Work Information
             'email' => $request->company_email,
+            'work_location_id' => $request->work_location_id,
+            'office_location' => $request->office_location,
             'username' => $request->username,
             'password' => Hash::make($request->password),
             'role_id' => $request->role_id,
@@ -132,20 +143,23 @@ class UserController extends Controller
             'employment_type_id' => $request->employment_type_id,
             'employee_status_id' => $request->employee_status_id,
             'work_location_id' => $request->work_location_id,
-            'office_location' => $request->office,
             // 'email' => $request->email,
-            
-            // 'role' => $request->role, 
+
+            // 'role' => $request->role,
             'created_by' => $request->user->id,
             //Skills
             'skills' => $request->skills,
-            
+
             //Bank details
             'account_holde_name' => $request->account_holde_name,
             'bank_name' => $request->bank_name,
             'account_number' => $request->account_number,
             'bank_ifsc_code' => $request->bank_ifsc_code,
             'bank_branch_location' => $request->bank_branch_location,
+
+            //document details
+            'document_type_id' => $request->document_type_id,
+            'document' => $document,
         ]);
         return response()->json(['message' => 'User added successfully!', 'user' => $user], 201);
     }
@@ -155,13 +169,13 @@ class UserController extends Controller
     {
         // Find user by ID
         $user = User::find($id);
-    
+
         if (!$user) {
             return response()->json([
                 'message' => 'User not found',
             ], 404);
         }
-    
+
         // Validate the incoming data
         $validator = Validator::make($request->all(), [
             // Basic Information
@@ -199,12 +213,13 @@ class UserController extends Controller
             'designation_id' => 'nullable|exists:designations,_id',
             'joining_date' => 'nullable|date',
             'in_out_time' => 'nullable|string',
-            'adharcard_number' => 'nullable|string|size:12',
-            'employment_type_id' => 'nullable|exists:options,_id',
-            'employee_status_id' => 'required|exists:options,_id',
-            'work_location_id' => 'required|exists:work_locations,_id',
+            'employment_type_id' => 'nullable|exists:employee_types,_id',
+            'employee_status_id' => 'nullable|exists:employee_statuses,_id',
+            'work_location_id' => 'nullable|exists:work_locations,_id',
+            // 'created_by' => 'required|exists:users,_id',
             'office_location' => 'required|string',
-            
+
+
             //Skills
             'skills' => 'nullable|array',
             'skills.*' => 'exists:skills,_id',
@@ -215,15 +230,19 @@ class UserController extends Controller
             'account_number' => 'nullable|string',
             'bank_ifsc_code' => 'nullable|string',
             'bank_branch_location' => 'nullable|string',
+
+            //document details
+            'document_type_id' => 'nullable|exists:document_types,_id',
+            'document' => 'nullable|file|mimes:pdf,jpeg,png|max:2048',
         ]);
-    
+
         if ($validator->fails()) {
             return response()->json([
                 'message' => 'Validation failed',
                 'errors' => $validator->errors()
             ], 422);
         }
-    
+
 
         //Handel Upload
         //CREATED seperate API to edit docs
@@ -255,6 +274,17 @@ class UserController extends Controller
 
             $qualificationDocument = $service->upload($request->file('qualification_document'), 'uploads', $request->user->id);
             $user->qualification_document = $qualificationDocument;
+        }
+
+        if ($request->hasFile('document')) {
+
+            // Delete old qualification document if exists
+            if ($user->document) {
+                $service->delete($user->document['file_path']);
+            }
+
+            $document = $service->upload($request->file('document'), 'uploads', $request->user->id);
+            $user->document = $document;
         }
 
 
@@ -301,6 +331,7 @@ class UserController extends Controller
             'employment_type_id' => $request->employment_type_id,
             'employee_status_id' => $request->employee_status_id,
             'work_location_id' => $request->work_location_id,
+            'office_location' => $request->office_location,
 
             'created_by' => $request->user->id,
 
@@ -313,15 +344,18 @@ class UserController extends Controller
             'account_number' => $request->account_number,
             'bank_ifsc_code' => $request->bank_ifsc_code,
             'bank_branch_location' => $request->bank_branch_location,
+
+            //document details
+            'document_type_id' => $request->document_type_id,
         ]);
-    
+
         // Return a success message
         return response()->json([
             'message' => 'User updated successfully!',
             'user' => $user
         ], 200);
     }
-    
+
     /**
      * Get a user by their ID.
      *
@@ -331,7 +365,7 @@ class UserController extends Controller
     public function getUserById($id)
     {
         // Find the user by ID
-        $user = User::find($id);
+        $user = User::with(['employeeType','department','employeeStatus','designation','workLocation','documentType'])->find($id);
 
         // Check if the user exists
         if (!$user) {
@@ -579,7 +613,7 @@ class UserController extends Controller
     }
 
 
-    
+
 
 
 }

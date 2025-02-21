@@ -20,6 +20,7 @@ class User extends Eloquent
         'marital_status',
         'nationality',
         'profile_photo',
+        'office_location',
         // Address Information
         'residential_address',
         'permanent_address',
@@ -57,6 +58,10 @@ class User extends Eloquent
         'account_number',
         'bank_ifsc_code',
         'bank_branch_location',
+
+        //document type file
+        'document_type_id',
+        'document',
     ];
 
 
@@ -69,7 +74,7 @@ class User extends Eloquent
     }
 
     // Appending custom attribute for role with permissions
-    protected $appends = ['role_with_permissions'];
+    protected $appends = ['role_with_permissions','skills_data'];
 
     public function getRoleWithPermissionsAttribute()
     {
@@ -88,13 +93,40 @@ class User extends Eloquent
         ];
     }
 
+    public function getSkillsDataAttribute()
+    {
+
+        return Skill::whereIn('_id', $this->skills ?? [])->get();
+    }
+
+
     public function department()
     {
         return $this->belongsTo(Department::class, 'department_id');
     }
+    public function designation()
+    {
+        return $this->belongsTo(Designation::class, 'designation_id');
+    }
     public function employeeType()
     {
         return $this->belongsTo(EmployeeType::class, 'employment_type_id');
+    }
+    public function documentType()
+    {
+        return $this->belongsTo(DocumentType::class, 'document_type_id');
+    }
+    public function employeeStatus()
+    {
+        return $this->belongsTo(EmployeeStatus::class, 'employee_status_id');
+    }
+    public function workLocation()
+    {
+        return $this->belongsTo(WorkLocation::class, 'work_location_id');
+    }
+    public function createdBy()
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
     public function tokens()
     {
