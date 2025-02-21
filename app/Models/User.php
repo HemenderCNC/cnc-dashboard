@@ -47,9 +47,17 @@ class User extends Eloquent
         'pancard_number',
         'employment_type_id',
         'employee_status_id',
+        'office_location',
         'created_by',
         //Skills
-        'skills'
+        'skills',
+
+        //Bank details
+        'account_holde_name',
+        'bank_name',
+        'account_number',
+        'bank_ifsc_code',
+        'bank_branch_location',
     ];
 
 
