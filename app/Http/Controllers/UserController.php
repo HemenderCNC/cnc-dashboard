@@ -51,14 +51,22 @@ class UserController extends Controller
             'designation_id' => 'nullable|exists:designations,_id',
             'joining_date' => 'nullable|date',
             'in_out_time' => 'nullable|string',
-            'adharcard_number' => 'nullable|string',
+            'adharcard_number' => 'nullable|string|size:12',
             'pancard_number' => 'nullable|string',
             'employment_type_id' => 'nullable|exists:options,_id',
             'employee_status_id' => 'nullable|exists:options,_id',
-            'created_by' => 'required|exists:users,_id',
+            'work_location_id' => 'required|exists:work_locations,_id',
+            'office_location' => 'required|string',
             //Skills
             'skills' => 'nullable|array',
             'skills.*' => 'exists:skills,_id',
+
+            //Bank details
+            'account_holde_name' => 'nullable|string',
+            'bank_name' => 'nullable|string',
+            'account_number' => 'nullable|string',
+            'bank_ifsc_code' => 'nullable|string',
+            'bank_branch_location' => 'nullable|string',
         ]);
         if ($validator->fails()) {
             
@@ -123,14 +131,21 @@ class UserController extends Controller
             'pancard_number' => $request->pancard_number,
             'employment_type_id' => $request->employment_type_id,
             'employee_status_id' => $request->employee_status_id,
-
+            'work_location_id' => $request->work_location_id,
+            'office_location' => $request->office,
             // 'email' => $request->email,
             
             // 'role' => $request->role, 
             'created_by' => $request->user->id,
             //Skills
             'skills' => $request->skills,
-            // Add other fields here...
+            
+            //Bank details
+            'account_holde_name' => $request->account_holde_name,
+            'bank_name' => $request->bank_name,
+            'account_number' => $request->account_number,
+            'bank_ifsc_code' => $request->bank_ifsc_code,
+            'bank_branch_location' => $request->bank_branch_location,
         ]);
         return response()->json(['message' => 'User added successfully!', 'user' => $user], 201);
     }
@@ -184,13 +199,22 @@ class UserController extends Controller
             'designation_id' => 'nullable|exists:designations,_id',
             'joining_date' => 'nullable|date',
             'in_out_time' => 'nullable|string',
+            'adharcard_number' => 'nullable|string|size:12',
             'employment_type_id' => 'nullable|exists:options,_id',
-            'employee_status_id' => 'nullable|exists:options,_id',
-            'created_by' => 'required|exists:users,_id',
+            'employee_status_id' => 'required|exists:options,_id',
+            'work_location_id' => 'required|exists:work_locations,_id',
+            'office_location' => 'required|string',
             
             //Skills
             'skills' => 'nullable|array',
             'skills.*' => 'exists:skills,_id',
+
+            //Bank details
+            'account_holde_name' => 'nullable|string',
+            'bank_name' => 'nullable|string',
+            'account_number' => 'nullable|string',
+            'bank_ifsc_code' => 'nullable|string',
+            'bank_branch_location' => 'nullable|string',
         ]);
     
         if ($validator->fails()) {
@@ -273,13 +297,22 @@ class UserController extends Controller
             'designation_id' => $request->designation_id,
             'joining_date' => $request->joining_date,
             'in_out_time' => $request->in_out_time,
+            'adharcard_number' => $request->adharcard_number,
             'employment_type_id' => $request->employment_type_id,
             'employee_status_id' => $request->employee_status_id,
+            'work_location_id' => $request->work_location_id,
 
             'created_by' => $request->user->id,
 
             // Skills
             'skills' => $request->skills, // Save array of skill IDs
+
+            //Bank details
+            'account_holde_name' => $request->account_holde_name,
+            'bank_name' => $request->bank_name,
+            'account_number' => $request->account_number,
+            'bank_ifsc_code' => $request->bank_ifsc_code,
+            'bank_branch_location' => $request->bank_branch_location,
         ]);
     
         // Return a success message
