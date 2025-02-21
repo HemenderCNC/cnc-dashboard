@@ -16,6 +16,7 @@ use App\Http\Controllers\EmployeeStatusController;
 use App\Http\Controllers\EmployeeLeaveController;
 use App\Http\Controllers\ManagementLeaveController;
 use App\Http\Controllers\NoticeController;
+use App\Http\Controllers\DocumentTypeController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -98,6 +99,9 @@ Route::middleware('api')->group(function () {
         //Employee Status API
         Route::apiResource('employee-status', EmployeeStatusController::class);
 
+        //Document Type API
+        Route::apiResource('document-types', DocumentTypeController::class);
+
         //Employee Leave Module
         Route::prefix('employee/leaves')->group(function () {
             Route::get('/', [EmployeeLeaveController::class, 'index']); // Employee views own leaves
@@ -128,6 +132,6 @@ Route::middleware('api')->group(function () {
         //Public rout for notice board
         Route::get('/active-notices', [NoticeController::class, 'getVisibleNotices']);
 
-        
+
     });
 });
