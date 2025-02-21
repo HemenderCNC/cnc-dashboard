@@ -15,6 +15,7 @@ use App\Http\Controllers\WorkLocationController;
 use App\Http\Controllers\EmployeeStatusController;
 use App\Http\Controllers\EmployeeLeaveController;
 use App\Http\Controllers\ManagementLeaveController;
+use App\Http\Controllers\NoticeController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -113,6 +114,20 @@ Route::middleware('api')->group(function () {
             Route::put('/{id}/approve', [ManagementLeaveController::class, 'approve']);
             Route::put('/{id}/reject', [ManagementLeaveController::class, 'reject']);
         });
+        
+        //Notice Module
+        Route::prefix('notices')->group(function () {
+            Route::get('/', [NoticeController::class, 'index']); // Get all notices
+            Route::post('/', [NoticeController::class, 'store']); // Create a notice
+            Route::get('/{id}', [NoticeController::class, 'show']); // Get notice details
+            Route::put('/{id}', [NoticeController::class, 'update']); // Update a notice
+            Route::put('/{id}/status', [NoticeController::class, 'changeStatus']);
+            Route::delete('/{id}', [NoticeController::class, 'destroy']); // Delete a notice
+        });
+
+        //Public rout for notice board
+        Route::get('/active-notices', [NoticeController::class, 'getVisibleNotices']);
+
         
     });
 });
