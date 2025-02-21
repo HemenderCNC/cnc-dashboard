@@ -104,11 +104,13 @@ Route::middleware('api')->group(function () {
 
         //Employee Leave Module
         Route::prefix('employee/leaves')->group(function () {
+            Route::get('/leaves-summary', [EmployeeLeaveController::class, 'getLeaveSummary']);
             Route::get('/', [EmployeeLeaveController::class, 'index']); // Employee views own leaves
             Route::post('/', [EmployeeLeaveController::class, 'store']); // Employee requests leave
             Route::get('/{id}', [EmployeeLeaveController::class, 'show']); // View specific leave request
             Route::put('/{id}', [EmployeeLeaveController::class, 'update']); // Update leave request (only if pending)
             Route::patch('/{id}/cancel', [EmployeeLeaveController::class, 'cancel']); // Cancel leave request (only if start date not passed)
+
         });
 
         //Management Leave Module
