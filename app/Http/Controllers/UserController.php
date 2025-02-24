@@ -46,6 +46,7 @@ class UserController extends Controller
             'company_email' => 'nullable|email|unique:users,email',
             'username' => 'required|string|unique:users,username',
             'password' => 'required|string|min:6',
+            'employee_id' => 'nullable|string',
             'role_id' => 'required|exists:roles,_id',
             'department_id' => 'nullable|exists:departments,_id',
             'designation_id' => 'nullable|exists:designations,_id',
@@ -73,6 +74,9 @@ class UserController extends Controller
             //document details
             'document_type_id' => 'nullable|exists:document_types,_id',
             'document' => 'nullable|file|mimes:pdf,jpeg,png|max:2048',
+
+            'reporting_manager_id' => 'nullable|exists:users,_id',
+            'provided_original_document' => 'nullable|string',
         ]);
         if ($validator->fails()) {
 
@@ -133,6 +137,7 @@ class UserController extends Controller
             'office_location' => $request->office_location,
             'username' => $request->username,
             'password' => Hash::make($request->password),
+            'employee_id' => $request->employee_id,
             'role_id' => $request->role_id,
             'department_id' => $request->department_id,
             'designation_id' => $request->designation_id,
@@ -160,6 +165,9 @@ class UserController extends Controller
             //document details
             'document_type_id' => $request->document_type_id,
             'document' => $document,
+
+            'reporting_manager_id' => $request->reporting_manager_id,
+            'provided_original_document' => $request->provided_original_document,
         ]);
         return response()->json(['message' => 'User added successfully!', 'user' => $user], 201);
     }
@@ -207,7 +215,8 @@ class UserController extends Controller
             // Work Information
             'company_email' => 'nullable|email|unique:users,email,'. $id,
             'username' => 'required|string|unique:users,username,'. $id,
-            'password' => 'required|string|min:6',
+            // 'password' => 'required|string|min:6',
+            'employee_id' => 'nullable|string',
             'role_id' => 'required|exists:roles,_id',
             'department_id' => 'nullable|exists:departments,_id',
             'designation_id' => 'nullable|exists:designations,_id',
@@ -234,6 +243,9 @@ class UserController extends Controller
             //document details
             'document_type_id' => 'nullable|exists:document_types,_id',
             'document' => 'nullable|file|mimes:pdf,jpeg,png|max:2048',
+
+            'reporting_manager_id' => 'nullable|exists:users,_id',
+            'provided_original_document' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
@@ -321,7 +333,8 @@ class UserController extends Controller
             // Work Information
             'email' => $request->company_email,
             'username' => $request->username,
-            'password' => Hash::make($request->password),
+            // 'password' => Hash::make($request->password),
+            'employee_id' => $request->employee_id,
             'role_id' => $request->role_id,
             'department_id' => $request->department_id,
             'designation_id' => $request->designation_id,
@@ -347,6 +360,9 @@ class UserController extends Controller
 
             //document details
             'document_type_id' => $request->document_type_id,
+
+            'reporting_manager_id' => $request->reporting_manager_id,
+            'provided_original_document' => $request->provided_original_document,
         ]);
 
         // Return a success message
@@ -365,7 +381,7 @@ class UserController extends Controller
     public function getUserById($id)
     {
         // Find the user by ID
-        $user = User::with(['employeeType','department','employeeStatus','designation','workLocation','documentType'])->find($id);
+        $user = User::with(['employeeType','department','employeeStatus','designation','workLocation','documentType','qualification','reportingManager'])->find($id);
 
         // Check if the user exists
         if (!$user) {
@@ -389,7 +405,7 @@ class UserController extends Controller
     public function getAllUsers()
     {
         // Fetch all users
-        $users = User::all();
+        $users = User::with(['employeeStatus'])->get();
 
         // Check if there are any users
         if ($users->isEmpty()) {
