@@ -26,6 +26,13 @@ class FileUploadService
         $originalName = $file->getClientOriginalName();
         $fileName = pathinfo($originalName, PATHINFO_FILENAME);
         $extension = $file->getClientOriginalExtension();
+
+        // **Sanitize File Name (Remove Special Characters, Replace Spaces, Lowercase)**
+        $fileName = pathinfo($originalName, PATHINFO_FILENAME);
+        $fileName = preg_replace('/[^a-zA-Z0-9-_]/', '', str_replace(' ', '_', $fileName)); // Remove unwanted characters
+        $fileName = strtolower($fileName); // Convert to lowercase
+
+        // Resolve file name conflicts
         $uniqueFileName = $fileName;
         
         $counter = 1;
