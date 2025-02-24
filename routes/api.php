@@ -17,6 +17,7 @@ use App\Http\Controllers\EmployeeLeaveController;
 use App\Http\Controllers\ManagementLeaveController;
 use App\Http\Controllers\NoticeController;
 use App\Http\Controllers\DocumentTypeController;
+use App\Http\Controllers\HolidayController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -133,6 +134,18 @@ Route::middleware('api')->group(function () {
 
         //Public rout for notice board
         Route::get('/active-notices', [NoticeController::class, 'getVisibleNotices']);
+
+
+
+
+        //Holiday Module
+        Route::prefix('holidays')->group(function () {
+            Route::get('/', [HolidayController::class, 'index']); // Get all holidays
+            Route::post('/', [HolidayController::class, 'store']); // Create a holiday
+            Route::get('/{id}', [HolidayController::class, 'show']); // Get holiday by ID
+            Route::post('/{id}', [HolidayController::class, 'update']); // Update a holiday
+            Route::delete('/{id}', [HolidayController::class, 'destroy']); // Delete a holiday
+        });
 
 
     });
