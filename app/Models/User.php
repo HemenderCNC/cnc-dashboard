@@ -124,6 +124,14 @@ class User extends Eloquent
     {
         return $this->belongsTo(WorkLocation::class, 'work_location_id');
     }
+    public function qualification()
+    {
+        return $this->belongsTo(Qualification::class, 'qualification_level_id');
+    }
+    public function reportingManager()
+    {
+        return $this->belongsTo(User::class, 'reporting_manager_id');
+    }
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by');
