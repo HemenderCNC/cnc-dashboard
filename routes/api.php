@@ -18,6 +18,9 @@ use App\Http\Controllers\ManagementLeaveController;
 use App\Http\Controllers\NoticeController;
 use App\Http\Controllers\DocumentTypeController;
 use App\Http\Controllers\HolidayController;
+use App\Http\Controllers\ProjectStatusController;
+use App\Http\Controllers\PlatformController;
+use App\Http\Controllers\LanguagesController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -100,8 +103,17 @@ Route::middleware('api')->group(function () {
         //Employee Status API
         Route::apiResource('employee-status', EmployeeStatusController::class);
 
+        //Project Status API
+        Route::apiResource('project-status', ProjectStatusController::class);
+
         //Document Type API
         Route::apiResource('document-types', DocumentTypeController::class);
+
+        //Platform API
+        Route::apiResource('platforms', PlatformController::class);
+
+        //Languages API
+        Route::apiResource('languages', LanguagesController::class);
 
         //Employee Leave Module
         Route::prefix('employee/leaves')->group(function () {
@@ -121,7 +133,7 @@ Route::middleware('api')->group(function () {
             Route::put('/{id}/approve', [ManagementLeaveController::class, 'approve']);
             Route::put('/{id}/reject', [ManagementLeaveController::class, 'reject']);
         });
-        
+
         //Notice Module
         Route::prefix('notices')->group(function () {
             Route::get('/', [NoticeController::class, 'index']); // Get all notices
