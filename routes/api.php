@@ -21,6 +21,7 @@ use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\ProjectStatusController;
 use App\Http\Controllers\PlatformController;
 use App\Http\Controllers\LanguagesController;
+use App\Http\Controllers\ProjectsController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -114,6 +115,9 @@ Route::middleware('api')->group(function () {
 
         //Languages API
         Route::apiResource('languages', LanguagesController::class);
+
+        //Projects API
+        Route::apiResource('languages', ProjectsController::class);
 
         //Employee Leave Module
         Route::prefix('employee/leaves')->group(function () {
