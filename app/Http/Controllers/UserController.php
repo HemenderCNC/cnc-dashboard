@@ -68,6 +68,7 @@ class UserController extends Controller
             'account_holde_name' => 'nullable|string',
             'bank_name' => 'nullable|string',
             'account_number' => 'nullable|string',
+            'account_type' => 'nullable|string',
             'bank_ifsc_code' => 'nullable|string',
             'bank_branch_location' => 'nullable|string',
 
@@ -159,6 +160,7 @@ class UserController extends Controller
             'account_holde_name' => $request->account_holde_name,
             'bank_name' => $request->bank_name,
             'account_number' => $request->account_number,
+            'account_type' => $request->account_type,
             'bank_ifsc_code' => $request->bank_ifsc_code,
             'bank_branch_location' => $request->bank_branch_location,
 
@@ -222,6 +224,8 @@ class UserController extends Controller
             'designation_id' => 'nullable|exists:designations,_id',
             'joining_date' => 'nullable|date',
             'in_out_time' => 'nullable|string',
+            'adharcard_number' => 'nullable|string|size:12',
+            'pancard_number' => 'nullable|string',
             'employment_type_id' => 'nullable|exists:employee_types,_id',
             'employee_status_id' => 'nullable|exists:employee_statuses,_id',
             'work_location_id' => 'nullable|exists:work_locations,_id',
@@ -237,6 +241,7 @@ class UserController extends Controller
             'account_holde_name' => 'nullable|string',
             'bank_name' => 'nullable|string',
             'account_number' => 'nullable|string',
+            'account_type' => 'nullable|string',
             'bank_ifsc_code' => 'nullable|string',
             'bank_branch_location' => 'nullable|string',
 
@@ -341,6 +346,7 @@ class UserController extends Controller
             'joining_date' => $request->joining_date,
             'in_out_time' => $request->in_out_time,
             'adharcard_number' => $request->adharcard_number,
+            'pancard_number' => $request->pancard_number,
             'employment_type_id' => $request->employment_type_id,
             'employee_status_id' => $request->employee_status_id,
             'work_location_id' => $request->work_location_id,
@@ -355,6 +361,7 @@ class UserController extends Controller
             'account_holde_name' => $request->account_holde_name,
             'bank_name' => $request->bank_name,
             'account_number' => $request->account_number,
+            'account_type' => $request->account_type,
             'bank_ifsc_code' => $request->bank_ifsc_code,
             'bank_branch_location' => $request->bank_branch_location,
 
