@@ -45,6 +45,8 @@ class User extends Eloquent
         'in_out_time',
         'adharcard_number',
         'pancard_number',
+        'provided_original_document',
+        'employee_id',
         'employment_type_id',
         'employee_status_id',
         'office_location',
@@ -56,10 +58,12 @@ class User extends Eloquent
         'account_holde_name',
         'bank_name',
         'account_number',
+        'account_type',
         'bank_ifsc_code',
         'bank_branch_location',
 
         //document type file
+        'reporting_manager_id',
         'document_type_id',
         'document',
     ];
