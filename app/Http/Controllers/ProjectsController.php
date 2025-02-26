@@ -13,10 +13,106 @@ class ProjectsController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json(Project::with(['projectStatus'])->get(), 200);
+        $matchStage = (object)[]; // Ensure it's an object, not an empty array
+
+        // Filter by project name (partial match)
+        if ($request->has('project_name')) {
+            $matchStage->project_name = ['$regex' => $request->project_name, '$options' => 'i'];
+        }
+
+        // Filter by client ID
+        if ($request->has('client_id')) {
+            $matchStage->client_id = $request->client_id;
+        }
+
+        // Filter by project industry
+        if ($request->has('project_industry')) {
+            $matchStage->project_industry = $request->project_industry;
+        }
+
+        // Filter by project status
+        if ($request->has('project_status_id')) {
+            $matchStage->project_status_id = $request->project_status_id;
+        }
+
+        // Filter by platforms (array match)
+        if ($request->has('platforms')) {
+            $matchStage->platforms = ['$in' => array_map('strval', (array) $request->platforms)];
+        }
+
+        // Filter by languages (array match)
+        if ($request->has('languages')) {
+            $matchStage->languages = ['$in' => array_map('strval', (array) $request->languages)];
+        }
+
+        // Ensure matchStage is not empty
+        if (empty((array) $matchStage)) {
+            $matchStage = (object)[]; // Empty object for MongoDB
+        }
+
+        // MongoDB Aggregation Pipeline
+        $projects = Project::raw(function ($collection) use ($matchStage) {
+            return $collection->aggregate([
+                ['$match' => $matchStage],  // Apply Filters
+                ['$lookup' => [
+                    'from' => 'project_statuses',
+                    'let' => ['statusId' => ['$toObjectId' => '$project_status_id']], // Convert to ObjectId
+                    'pipeline' => [
+                        ['$match' => ['$expr' => ['$eq' => ['$_id', '$$statusId']]]]
+                    ],
+                    'as' => 'project_status'
+                ]],
+                ['$lookup' => [
+                    'from' => 'clients',   // Collection name for Clients
+                    'let' => ['clientId' => ['$toObjectId' => '$client_id']], // Convert to ObjectId
+                    'pipeline' => [
+                        ['$match' => ['$expr' => ['$eq' => ['$_id', '$$clientId']]]]
+                    ],
+                    'as' => 'client'
+                ]],
+                ['$lookup' => [
+                    'from' => 'users',   // Collection name for Users (Project Manager)
+                    'localField' => 'project_manager_id',
+                    'foreignField' => '_id',
+                    'as' => 'project_manager'
+                ]],
+                ['$lookup' => [
+                    'from' => 'users',   // Collection name for Users (Created By)
+                    'localField' => 'created_by',
+                    'foreignField' => '_id',
+                    'as' => 'created_bys'
+                ]],
+                ['$project' => [
+                    'project_name' => 1,
+                    'project_industry' => 1,
+                    'project_type' => 1,
+                    'priority' => 1,
+                    'budget' => 1,
+                    'estimated_start_date' => 1,
+                    'estimated_end_date' => 1,
+                    'actual_start_date' => 1,
+                    'actual_end_date' => 1,
+                    'client_id' => 1,
+                    'client' => 1,
+                    'assignee' => 1,
+                    'estimated_hours' => 1,
+                    'project_manager_id' => 1,
+                    'project_status_id' => 1,
+                    'project_status' => 1,
+                    'created_by' => 1,
+                    'platforms' => 1,
+                    'languages' => 1,
+                    'other_details' => 1,
+                ]]
+            ]);
+        });
+
+        return response()->json($projects, 200);
     }
+
+
 
     /**
      * Store a newly created resource in storage.
