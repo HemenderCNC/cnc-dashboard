@@ -22,6 +22,7 @@ use App\Http\Controllers\ProjectStatusController;
 use App\Http\Controllers\PlatformController;
 use App\Http\Controllers\LanguagesController;
 use App\Http\Controllers\ProjectsController;
+use App\Http\Controllers\ClientsController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -116,8 +117,24 @@ Route::middleware('api')->group(function () {
         //Languages API
         Route::apiResource('languages', LanguagesController::class);
 
+
+        //Clients API
+        Route::prefix('clients')->group(function () {
+            Route::get('/', [ClientsController::class, 'index']); // Get all holidays
+            Route::post('/', [ClientsController::class, 'store']); // Create a holiday
+            Route::get('/{id}', [ClientsController::class, 'show']); // Get holiday by ID
+            Route::post('/{id}', [ClientsController::class, 'update']); // Update a holiday
+            Route::delete('/{id}', [ClientsController::class, 'destroy']); // Delete a holiday
+        });
+
         //Projects API
-        Route::apiResource('languages', ProjectsController::class);
+        Route::prefix('projects')->group(function () {
+            Route::get('/', [ProjectsController::class, 'index']); // Get all holidays
+            Route::post('/', [ProjectsController::class, 'store']); // Create a holiday
+            Route::get('/{id}', [ProjectsController::class, 'show']); // Get holiday by ID
+            Route::post('/{id}', [ProjectsController::class, 'update']); // Update a holiday
+            Route::delete('/{id}', [ProjectsController::class, 'destroy']); // Delete a holiday
+        });
 
         //Employee Leave Module
         Route::prefix('employee/leaves')->group(function () {
