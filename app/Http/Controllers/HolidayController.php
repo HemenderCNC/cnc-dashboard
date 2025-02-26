@@ -106,7 +106,7 @@ class HolidayController extends Controller
             $holiday->festival_image = $imagePath;
         }
 
-        $holiday->update($request->only(['festival_name', 'date', 'color', 'message']));
+        $holiday->update($request->only(['festival_name', 'date', 'color', 'greeting_message']));
 
         return response()->json(['message' => 'Holiday updated successfully', 'data' => $holiday]);
     }

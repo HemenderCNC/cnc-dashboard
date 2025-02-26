@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use App\Services\FileUploadService;
+use MongoDB\BSON\ObjectId;
 
 class UserController extends Controller
 {
@@ -407,23 +408,130 @@ class UserController extends Controller
      *
      * @return \Illuminate\Http\JsonResponse
      */
-    public function getAllUsers()
+    public function getAllUsers(Request $request)
     {
-        // Fetch all users
-        $users = User::with(['employeeStatus'])->get();
+        $filters = [];
 
-        // Check if there are any users
-        if ($users->isEmpty()) {
-            return response()->json([
-                'message' => 'No users found',
-            ], 404);
-        }
+    // 🔍 Search Filter (by name or employee_id)
+    if ($request->has('search') && !empty($request->search)) {
+        $search = trim($request->search);
+        $filters['$or'] = [
+            ['name' => ['$regex' => $search, '$options' => 'i']],  // Case-insensitive name search
+            ['employee_id' => ['$regex' => $search, '$options' => 'i']]
+        ];
+    }
 
-        // Return the list of users
+    // 🏢 Department Filter
+    if ($request->has('department_id') && !empty($request->department_id)) {
+        $filters['department_id'] = $request->department_id;
+    }
+
+    // 🎭 Role Filter
+    if ($request->has('role_id') && !empty($request->role_id)) {
+        $filters['role_id'] = $request->role_id;
+    }
+
+    // 🏬 Office Location Filter
+    if ($request->has('work_location_id') && !empty($request->work_location_id)) {
+        $filters['work_location_id'] = $request->work_location_id;
+    }
+
+    // 🚀 Employee Status Filter
+    if ($request->has('employee_status_id') && !empty($request->employee_status_id)) {
+        $filters['employee_status_id'] = $request->employee_status_id;
+    }
+
+    // 📅 Joining Date Range Filter
+    if ($request->has('joining_date_from') && $request->has('joining_date_to')) {
+        $filters['joining_date'] = [
+            '$gte' => $request->joining_date_from,
+            '$lte' => $request->joining_date_to,
+        ];
+    }
+
+    // 🔄 Fetch users with filters applied
+    $users = User::raw(function ($collection) use ($filters) {
+        return $collection->aggregate([
+            ['$match' => count($filters) > 0 ? $filters : (object)[]], // Ensure valid match object
+
+            // Lookup Department
+            ['$lookup' => [
+                'from' => 'departments',
+                'localField' => 'department_id',
+                'foreignField' => '_id',
+                'as' => 'department'
+            ]],
+            ['$unwind' => ['path' => '$department', 'preserveNullAndEmptyArrays' => true]],
+
+            // Lookup Role
+            ['$lookup' => [
+                'from' => 'roles',
+                'localField' => 'role_id',
+                'foreignField' => '_id',
+                'as' => 'role'
+            ]],
+            ['$unwind' => ['path' => '$role', 'preserveNullAndEmptyArrays' => true]],
+
+            // Lookup Office
+            ['$lookup' => [
+                'from' => 'work_locations',
+                'localField' => 'work_location_id',
+                'foreignField' => '_id',
+                'as' => 'work_location'
+            ]],
+            ['$unwind' => ['path' => '$work_location', 'preserveNullAndEmptyArrays' => true]],
+
+            // Lookup Employee Status (Fix ObjectId issue)
+            ['$lookup' => [
+                'from' => 'employee_statuses',
+                'let' => ['statusId' => ['$toObjectId' => '$employee_status_id']],
+                'pipeline' => [
+                    ['$match' => ['$expr' => ['$eq' => ['$_id', '$$statusId']]]]
+                ],
+                'as' => 'employee_status'
+            ]],
+            ['$unwind' => ['path' => '$employee_status', 'preserveNullAndEmptyArrays' => true]],
+
+            // Project Only Required Fields
+            ['$project' => [
+                'name' => 1,
+                'last_name' => 1,
+                'gender' => 1,
+                'contact_number' => 1,
+                'birthdate' => 1,
+                'personal_email' => 1,
+                'blood_group' => 1,
+                'marital_status' => 1,
+                'office_location' => 1,
+                'residential_address' => 1,
+                'role_id' => 1,
+                'username' => 1,
+                'nationality' => 1,
+                'employee_status_id' => 1,
+                'profile_photo' => 1,
+                'employee_id' => 1,
+                'skills' => 1,
+                'email' => 1,
+                'reporting_manager_id' => 1,
+                'joining_date' => 1,
+                'department' => 1,
+                'role' => 1,
+                'work_location' => 1,
+                'employee_status' => 1,
+            ]]
+        ]);
+    });
+    // Check if users exist
+    if ($users->isEmpty()) {
         return response()->json([
-            'message' => 'Users retrieved successfully',
-            'data' => $users,
-        ], 200);
+            'message' => 'No users found',
+        ], 404);
+    }
+
+    return response()->json([
+        'message' => 'Users retrieved successfully',
+        'data' => $users,
+    ], 200);
     }
 
 
