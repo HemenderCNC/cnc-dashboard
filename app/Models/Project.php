@@ -3,41 +3,61 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
+use MongoDB\Laravel\Eloquent\Model as Eloquent;
 
-class Project extends Model
+class Project extends Eloquent
 {
     protected $connection = 'mongodb';
     protected $collection = 'projects';
-    
+
     protected $fillable = [
-        'name',
-        'industry',
-        'type',
-        'budget',
-        'description',
-        'platform_technology',
-        'programming_languages',
+        'project_name',
+        'project_industry',
+        'project_type',
+        'estimated_hours',
+        'project_description',
         'priority',
-        'status',
-        'timeline' => [
-            'estimated_start_date',
-            'estimated_end_date',
-            'actual_start_date',
-            'actual_end_date',
-        ],
-        'stakeholders' => [
-            'client',
-            'assignees',
-            'project_manager'
-        ],
-        'files',
-        'milestones' => [
-            'name',
-            'start_date',
-            'end_date',
-            'color',
-            'status'
-        ]
+        'budget',
+        'project_status_id',
+        'platforms',
+        'languages',
+        'estimated_start_date',
+        'estimated_end_date',
+        'actual_start_date',
+        'actual_end_date',
+        'client_id',
+        'assignee',
+        'project_manager_id',
+        'other_details',
+        'created_by',
     ];
+    // protected $appends = ['assignees_data','languages_data','platforms_data'];
+    public function createdBy()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+    public function projectManager()
+    {
+        return $this->belongsTo(User::class, 'project_manager_id');
+    }
+    public function client()
+    {
+        return $this->belongsTo(Clients::class, 'client_id');
+    }
+    public function projectStatus()
+    {
+        return $this->belongsTo(ProjectStatus::class, 'project_status_id');
+    }
+    public function getAssigneesDataAttribute()
+    {
+        return User::whereIn('_id', $this->assignee ?? [])->get();
+    }
+    public function getLanguagesDataAttribute()
+    {
+        return Languages::whereIn('_id', $this->languages ?? [])->get();
+    }
+    public function getPlatformsDataAttribute()
+    {
+        return Platform::whereIn('_id', $this->platforms ?? [])->get();
+    }
 }
