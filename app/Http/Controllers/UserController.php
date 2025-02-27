@@ -39,7 +39,7 @@ class UserController extends Controller
             'qualification_level_id' => 'nullable|exists:qualifications,_id',
             'certification_name' => 'nullable|string',
             'year_of_completion' => 'nullable|date',
-            'qualification_document' => 'nullable|file|mimes:pdf,jpeg,png|max:2048',
+            'qualification_document' => 'nullable|file|mimes:pdf,jpeg,jpg,png|max:2048',
 
             // Work Information
             'company_email' => 'nullable|email|unique:users,email',
@@ -73,7 +73,7 @@ class UserController extends Controller
 
             //document details
             'document_type_id' => 'nullable|exists:document_types,_id',
-            'document' => 'nullable|file|mimes:pdf,jpeg,png|max:2048',
+            'document' => 'nullable|file|mimes:pdf,jpeg,jpg,png|max:2048',
 
             'reporting_manager_id' => 'nullable|exists:users,_id',
             'provided_original_document' => 'nullable|string',

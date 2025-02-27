@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
+
 use Illuminate\Support\Facades\Validator;
 use App\Models\Holiday;
 use App\Models\Media;
@@ -106,7 +107,7 @@ class HolidayController extends Controller
             $holiday->festival_image = $imagePath;
         }
 
-        $holiday->update($request->only(['festival_name', 'date', 'color', 'greeting_message']));
+        $holiday->update($request->only(['festival_name', 'festival_date', 'color', 'greeting_message']));
 
         return response()->json(['message' => 'Holiday updated successfully', 'data' => $holiday]);
     }
