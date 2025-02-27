@@ -2,10 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
+use MongoDB\Laravel\Eloquent\Model as Eloquent;
 
-class TaskType extends Model
+class TaskType extends Eloquent
 {
     protected $connection = 'mongodb';
     protected $collection = 'task_types';
@@ -13,4 +12,13 @@ class TaskType extends Model
     protected $fillable = [
         'name',
     ];
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::deleting(function ($tasktype) {
+            Tasks::where('task_type_id', $tasktype->_id)->update(['task_type_id' => null]);
+        });
+    }
 }
