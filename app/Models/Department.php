@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use Illuminate\Notifications\Notifiable;
 use MongoDB\Laravel\Eloquent\Model as Eloquent;
 
 class Department extends Eloquent
@@ -28,10 +27,7 @@ class Department extends Eloquent
         parent::boot();
 
         static::deleting(function ($department) {
-            // Remove department_id from users when the department is deleted
             User::where('department_id', $department->_id)->update(['department_id' => null]);
-
-            // Delete all designations related to this department
             Designation::where('department_id', $department->_id)->delete();
         });
     }

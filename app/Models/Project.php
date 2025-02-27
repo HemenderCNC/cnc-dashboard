@@ -31,7 +31,15 @@ class Project extends Eloquent
         'other_details',
         'created_by',
     ];
-    // protected $appends = ['assignees_data','languages_data','platforms_data'];
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::deleting(function ($project) {
+            Milestones::where('project_id', $project->_id)->update(['project_id' => null]);
+        });
+    }
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by');

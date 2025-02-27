@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\TaskType;
+use Illuminate\Support\Facades\Validator;
 
 class TaskTypeController extends Controller
 {
@@ -20,10 +21,12 @@ class TaskTypeController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
-            'name' => 'required|unique:task_types,name',
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|unique:task_types,name',
         ]);
-
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
         $taskType = TaskType::create([
             'name' => $request->name,
         ]);
