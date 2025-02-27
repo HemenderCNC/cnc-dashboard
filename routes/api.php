@@ -23,6 +23,9 @@ use App\Http\Controllers\PlatformController;
 use App\Http\Controllers\LanguagesController;
 use App\Http\Controllers\ProjectsController;
 use App\Http\Controllers\ClientsController;
+use App\Http\Controllers\MilestoneController;
+use App\Http\Controllers\TaskStatusController;
+use App\Http\Controllers\TasksController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -117,6 +120,12 @@ Route::middleware('api')->group(function () {
         //Languages API
         Route::apiResource('languages', LanguagesController::class);
 
+        //Milestones API
+        Route::apiResource('milestones', MilestoneController::class);
+
+        //TaskStatus API
+        Route::apiResource('task-status', TaskStatusController::class);
+
 
         //Clients API
         Route::prefix('clients')->group(function () {
@@ -125,6 +134,15 @@ Route::middleware('api')->group(function () {
             Route::get('/{id}', [ClientsController::class, 'show']); // Get holiday by ID
             Route::post('/{id}', [ClientsController::class, 'update']); // Update a holiday
             Route::delete('/{id}', [ClientsController::class, 'destroy']); // Delete a holiday
+        });
+
+        //Tasks API
+        Route::prefix('tasks')->group(function () {
+            Route::get('/', [TasksController::class, 'index']); // Get all holidays
+            Route::post('/', [TasksController::class, 'store']); // Create a holiday
+            Route::get('/{id}', [TasksController::class, 'show']); // Get holiday by ID
+            Route::post('/{id}', [TasksController::class, 'update']); // Update a holiday
+            Route::delete('/{id}', [TasksController::class, 'destroy']); // Delete a holiday
         });
 
         //Projects API
