@@ -13,8 +13,7 @@ use App\Http\Controllers\SkillController;
 use App\Http\Controllers\EmployeeTypesController;
 use App\Http\Controllers\WorkLocationController;
 use App\Http\Controllers\EmployeeStatusController;
-use App\Http\Controllers\EmployeeLeaveController;
-use App\Http\Controllers\ManagementLeaveController;
+use App\Http\Controllers\LeaveController;
 use App\Http\Controllers\NoticeController;
 use App\Http\Controllers\DocumentTypeController;
 use App\Http\Controllers\HolidayController;
@@ -154,24 +153,18 @@ Route::middleware('api')->group(function () {
             Route::delete('/{id}', [ProjectsController::class, 'destroy']); // Delete a holiday
         });
 
-        //Employee Leave Module
-        Route::prefix('employee/leaves')->group(function () {
-            Route::get('/leaves-summary', [EmployeeLeaveController::class, 'getLeaveSummary']);
-            Route::get('/', [EmployeeLeaveController::class, 'index']); // Employee views own leaves
-            Route::post('/', [EmployeeLeaveController::class, 'store']); // Employee requests leave
-            Route::get('/{id}', [EmployeeLeaveController::class, 'show']); // View specific leave request
-            Route::put('/{id}', [EmployeeLeaveController::class, 'update']); // Update leave request (only if pending)
-            Route::patch('/{id}/cancel', [EmployeeLeaveController::class, 'cancel']); // Cancel leave request (only if start date not passed)
-
+        //Leave Module
+        Route::prefix('leaves')->group(function () {
+            Route::get('/leaves-summary', [LeaveController::class, 'getLeaveSummary']);
+            Route::get('/', [LeaveController::class, 'index']); // Employee views own leaves
+            Route::post('/', [LeaveController::class, 'store']); // Employee requests leave
+            Route::get('/{id}', [LeaveController::class, 'show']); // View specific leave request
+            Route::put('/{id}', [LeaveController::class, 'update']); // Update leave request (only if pending)
+            Route::post('/{id}/cancel', [LeaveController::class, 'cancel']); // Cancel leave request (only if start date not passed)
+            Route::put('/{id}/approve', [LeaveController::class, 'approve']);
+            Route::put('/{id}/reject', [LeaveController::class, 'reject']);
         });
 
-        //Management Leave Module
-        Route::prefix('management/leaves')->group(function () {
-            Route::get('/', [ManagementLeaveController::class, 'index']);
-            Route::get('/{id}', [ManagementLeaveController::class, 'show']); // View details of a specific leave request
-            Route::put('/{id}/approve', [ManagementLeaveController::class, 'approve']);
-            Route::put('/{id}/reject', [ManagementLeaveController::class, 'reject']);
-        });
 
         //Notice Module
         Route::prefix('notices')->group(function () {
