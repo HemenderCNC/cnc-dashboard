@@ -96,12 +96,12 @@ class HolidayController extends Controller
                 $media = Media::find($holiday->festival_image['media_id']);
 
                 if ($media) {
-                    $this->fileUploadService->delete($media->file_path); // Delete file from storage
+                    $this->fileUploadService->delete($media->file_path,$holiday->festival_image['media_id']); // Delete file from storage
                     $media->delete(); // Remove media record from database
                 }
             }
             if ($holiday->festival_image) {
-                $this->fileUploadService->delete($holiday->festival_image);
+                $this->fileUploadService->delete($holiday->festival_image,$holiday->festival_image['media_id']);
             }
             $imagePath = $this->fileUploadService->upload($request->file('festival_image'), 'uploads', $request->user->id);
             $holiday->festival_image = $imagePath;
@@ -124,8 +124,7 @@ class HolidayController extends Controller
             $media = Media::find($holiday->festival_image['media_id']);
 
             if ($media) {
-                $this->fileUploadService->delete($media->file_path); // Delete file from storage
-                $media->delete(); // Remove media record from database
+                $this->fileUploadService->delete($media->file_path,$holiday->festival_image['media_id']); // Delete file from storage and record from Media Table
             }
         }
 
