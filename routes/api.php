@@ -25,6 +25,7 @@ use App\Http\Controllers\ClientsController;
 use App\Http\Controllers\MilestoneController;
 use App\Http\Controllers\TaskStatusController;
 use App\Http\Controllers\TasksController;
+use App\Http\Controllers\TimesheetController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -191,6 +192,14 @@ Route::middleware('api')->group(function () {
             Route::delete('/{id}', [HolidayController::class, 'destroy']); // Delete a holiday
         });
 
+        //Timesheet Module
+        Route::prefix('timesheet')->group(function () {
+            Route::get('/', [TimesheetController::class, 'index']); // Get all timesheets
+            Route::post('/', [TimesheetController::class, 'store']); // Create a timesheet
+            Route::get('/{id}', [TimesheetController::class, 'show']); // Get timesheet by ID
+            Route::post('/{id}', [TimesheetController::class, 'update']); // Update a timesheet
+            Route::delete('/{id}', [TimesheetController::class, 'destroy']); // Delete a timesheet
 
+        });
     });
 });
