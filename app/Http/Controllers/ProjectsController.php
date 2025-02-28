@@ -231,7 +231,7 @@ class ProjectsController extends Controller
         if ($request->hasFile('other_details')) {
             // Delete old profile photo if exists
             if ($project->other_details) {
-                $service->delete($project->other_details['file_path']);
+                $service->delete($project->other_details['file_path'],$project->other_details['media_id']);
             }
             $other_details = $service->upload($request->file('other_details'), 'uploads', $request->user->id);
             $project->other_details = $other_details;
