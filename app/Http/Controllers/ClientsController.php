@@ -170,8 +170,7 @@ class ClientsController extends Controller
             $media = Media::find($holiday->festival_image['media_id']);
 
             if ($media) {
-                $this->fileUploadService->delete($media->file_path); // Delete file from storage
-                $media->delete(); // Remove media record from database
+                $this->fileUploadService->delete($media->file_path,$holiday->festival_image['media_id']); // Delete file from storage and record from Media Table
             }
         }
 
