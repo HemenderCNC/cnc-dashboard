@@ -11,6 +11,7 @@ class Project extends Eloquent
     protected $collection = 'projects';
 
     protected $fillable = [
+        'project_code',
         'project_name',
         'project_industry',
         'project_type',
@@ -35,10 +36,18 @@ class Project extends Eloquent
     protected static function boot()
     {
         parent::boot();
-
+        static::creating(function ($project) {
+            $project->project_code = self::generateSequentialProjectCode();
+        });
         static::deleting(function ($project) {
             Milestones::where('project_id', $project->_id)->update(['project_id' => null]);
         });
+    }
+    private static function generateSequentialProjectCode()
+    {
+        $lastProject = self::orderBy('project_code', 'desc')->first();
+        $nextNumber = $lastProject ? ((int)substr($lastProject->project_code, 3)) + 1 : 1;
+        return 'cnc' . str_pad($nextNumber, 2, '0', STR_PAD_LEFT);
     }
     public function createdBy()
     {
