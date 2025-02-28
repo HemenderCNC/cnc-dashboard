@@ -76,11 +76,11 @@ Route::middleware('api')->group(function () {
             Route::post('users', [UserController::class, 'addUser']);
             Route::post('users/{id}', [UserController::class, 'editUser']);  // Edit user
             //User profile picture
-            Route::post('users/{id}/update-profile-picture', [UserController::class, 'updateProfilePicture']); //update user profile picture
-            Route::delete('users/{id}/delete-profile-picture', [UserController::class, 'deleteProfilePicture']); //update user profile picture
-            //User qualification document
-            Route::post('users/{id}/update-qualification-document', [UserController::class, 'updateQualificationDocument']); //update user profile picture
-            Route::delete('users/{id}/delete-qualification-document', [UserController::class, 'deleteQualificationDocument']); //update user profile picture
+            // Route::post('users/{id}/update-profile-picture', [UserController::class, 'updateProfilePicture']); //update user profile picture
+            // Route::delete('users/{id}/delete-profile-picture', [UserController::class, 'deleteProfilePicture']); //update user profile picture
+            // //User qualification document
+            // Route::post('users/{id}/update-qualification-document', [UserController::class, 'updateQualificationDocument']); //update user profile picture
+            // Route::delete('users/{id}/delete-qualification-document', [UserController::class, 'deleteQualificationDocument']); //update user profile picture
 
             //Delete User
             Route::delete('users/{id}', [UserController::class, 'deleteUser']);

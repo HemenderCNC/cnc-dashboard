@@ -231,7 +231,7 @@ class TasksController extends Controller
         if ($request->hasFile('attachment')) {
             // Delete old profile photo if exists
             if ($task->attachment) {
-                $service->delete($task->attachment['file_path']);
+                $service->delete($task->attachment['file_path'],$task->attachment['media_id']);
             }
             $attachment = $service->upload($request->file('attachment'), 'uploads', $request->user->id);
             $task->attachment = $attachment;

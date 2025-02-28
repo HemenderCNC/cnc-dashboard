@@ -64,9 +64,13 @@ class FileUploadService
         ];
     }
 
-    public function delete($filePath)
+    public function delete($filePath,$mediaID)
     {
         if ($filePath && file_exists(public_path($filePath))) {
+            $media = Media::find($mediaID);
+            if ($media){
+                $media->delete(); // Remove media record from database
+            }
             return unlink(public_path($filePath));
         }
 
