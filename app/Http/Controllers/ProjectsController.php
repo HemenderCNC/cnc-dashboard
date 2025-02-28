@@ -7,7 +7,8 @@ use App\Models\Platform;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use App\Services\FileUploadService;
-
+use Carbon\Carbon;
+use MongoDB\BSON\UTCDateTime;
 class ProjectsController extends Controller
 {
     /**
@@ -47,6 +48,15 @@ class ProjectsController extends Controller
             $matchStage->languages = ['$in' => array_map('strval', (array) $request->languages)];
         }
 
+        if ($request->has('start_date') && $request->has('end_date')) {
+            $startDate = new UTCDateTime(Carbon::parse($request->start_date)->getTimestampMs());
+            $endDate = new UTCDateTime(Carbon::parse($request->end_date)->getTimestampMs());
+
+            $matchStage->created_at = [
+                '$gte' => $startDate,
+                '$lte' => $endDate
+            ];
+        }
         // Ensure matchStage is not empty
         if (empty((array) $matchStage)) {
             $matchStage = (object)[]; // Empty object for MongoDB
