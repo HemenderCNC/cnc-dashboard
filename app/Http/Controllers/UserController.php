@@ -274,7 +274,7 @@ class UserController extends Controller
 
             // Delete old profile photo if exists
             if ($user->profile_photo) {
-                $service->delete($user->profile_photo['file_path']);
+                $service->delete($user->profile_photo['file_path'],$user->profile_photo['media_id']);
             }
 
             $profilePhoto = $service->upload($request->file('profile_photo'), 'uploads', $request->user->id);
@@ -285,7 +285,7 @@ class UserController extends Controller
 
             // Delete old qualification document if exists
             if ($user->qualification_document) {
-                $service->delete($user->qualification_document['file_path']);
+                $service->delete($user->qualification_document['file_path'],$user->qualification_document['media_path']);
             }
 
             $qualificationDocument = $service->upload($request->file('qualification_document'), 'uploads', $request->user->id);
@@ -536,170 +536,170 @@ class UserController extends Controller
 
 
     //Update user profile picture
-    public function updateProfilePicture(Request $request, $id)
-    {
-        // Find user by ID
-        $user = User::find($id);
+    // public function updateProfilePicture(Request $request, $id)
+    // {
+    //     // Find user by ID
+    //     $user = User::find($id);
 
-        if (!$user) {
-            return response()->json([
-                'message' => 'User not found',
-            ], 404);
-        }
+    //     if (!$user) {
+    //         return response()->json([
+    //             'message' => 'User not found',
+    //         ], 404);
+    //     }
 
-        // Validate the incoming data
-        $validator = Validator::make($request->all(), [
-            'profile_photo' => 'required|image|mimes:jpeg,png,jpg|max:2048', // Validate image type and size
-        ]);
+    //     // Validate the incoming data
+    //     $validator = Validator::make($request->all(), [
+    //         'profile_photo' => 'required|image|mimes:jpeg,png,jpg|max:2048', // Validate image type and size
+    //     ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
+    //     if ($validator->fails()) {
+    //         return response()->json([
+    //             'message' => 'Validation failed',
+    //             'errors' => $validator->errors()
+    //         ], 422);
+    //     }
 
-        // Handle profile picture upload
-        $service = app(FileUploadService::class);
-        $newProfilePhoto = $service->upload($request->file('profile_photo'), 'uploads', $request->user->id);
+    //     // Handle profile picture upload
+    //     $service = app(FileUploadService::class);
+    //     $newProfilePhoto = $service->upload($request->file('profile_photo'), 'uploads', $request->user->id);
 
-        if ($user->profile_photo) {
-            // Delete the old profile picture
-            $service->delete($user->profile_photo['file_path']);
-        }
+    //     if ($user->profile_photo) {
+    //         // Delete the old profile picture
+    //         $service->delete($user->profile_photo['file_path']);
+    //     }
 
-        // Update the user's profile photo
-        $user->update([
-            'profile_photo' => $newProfilePhoto,
-        ]);
+    //     // Update the user's profile photo
+    //     $user->update([
+    //         'profile_photo' => $newProfilePhoto,
+    //     ]);
 
-        // Return a success message
-        return response()->json([
-            'message' => 'Profile picture updated successfully!',
-            'user' => $user,
-            'profile_picture_url' => $newProfilePhoto,
-        ], 200);
-    }
+    //     // Return a success message
+    //     return response()->json([
+    //         'message' => 'Profile picture updated successfully!',
+    //         'user' => $user,
+    //         'profile_picture_url' => $newProfilePhoto,
+    //     ], 200);
+    // }
 
     //Update user profile picture
-    public function deleteProfilePicture(Request $request, $id)
-    {
-        // Find user by ID
-        $user = User::find($id);
+    // public function deleteProfilePicture(Request $request, $id)
+    // {
+    //     // Find user by ID
+    //     $user = User::find($id);
 
-        if (!$user) {
-            return response()->json([
-                'message' => 'User not found',
-            ], 404);
-        }
+    //     if (!$user) {
+    //         return response()->json([
+    //             'message' => 'User not found',
+    //         ], 404);
+    //     }
 
-        // Handle profile picture upload
-        $service = app(FileUploadService::class);
+    //     // Handle profile picture upload
+    //     $service = app(FileUploadService::class);
 
-        if ($user->profile_photo) {
-            // Delete the profile photo
-            $deleted = $service->delete($user->profile_photo['file_path']);
+    //     if ($user->profile_photo) {
+    //         // Delete the profile photo
+    //         $deleted = $service->delete($user->profile_photo['file_path']);
 
-            if ($deleted) {
-                // Remove profile photo data from the user record
-                $user->update(['profile_photo' => null]);
-                return response()->json(['message' => 'Profile photo deleted successfully!'], 200);
-            } else {
-                return response()->json(['message' => 'Failed to delete profile photo'], 500);
-            }
-        }
+    //         if ($deleted) {
+    //             // Remove profile photo data from the user record
+    //             $user->update(['profile_photo' => null]);
+    //             return response()->json(['message' => 'Profile photo deleted successfully!'], 200);
+    //         } else {
+    //             return response()->json(['message' => 'Failed to delete profile photo'], 500);
+    //         }
+    //     }
 
-        // Update the user's profile photo
-        // $user->update([
-        //     'profile_photo' => '',
-        // ]);
+    //     // Update the user's profile photo
+    //     // $user->update([
+    //     //     'profile_photo' => '',
+    //     // ]);
 
-        // Return a success message
-        return response()->json(['message' => 'No profile photo to delete'], 404);
-    }
-
-    //Update user Qualification document
-    public function updateQualificationDocument(Request $request, $id)
-    {
-        // Find user by ID
-        $user = User::find($id);
-
-        if (!$user) {
-            return response()->json([
-                'message' => 'User not found',
-            ], 404);
-        }
-
-        // Validate the incoming data
-        $validator = Validator::make($request->all(), [
-            'qualification_document' => 'required|file|mimes:pdf,jpeg,png|max:2048', // Validate image type and size
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        // Handle profile picture upload
-        $service = app(FileUploadService::class);
-        $newProfilePhoto = $service->upload($request->file('qualification_document'), 'uploads', $request->user->id);
-
-        if ($user->profile_photo) {
-            // Delete the old profile picture
-            $service->delete($user->profile_photo['file_path']);
-        }
-
-        // Update the user's profile photo
-        $user->update([
-            'qualification_document' => $newProfilePhoto,
-        ]);
-
-        // Return a success message
-        return response()->json([
-            'message' => 'Qualification document updated successfully!',
-            'user' => $user,
-            'profile_picture_url' => $newProfilePhoto,
-        ], 200);
-    }
+    //     // Return a success message
+    //     return response()->json(['message' => 'No profile photo to delete'], 404);
+    // }
 
     //Update user Qualification document
-    public function deleteQualificationDocument(Request $request, $id)
-    {
-        // Find user by ID
-        $user = User::find($id);
+    // public function updateQualificationDocument(Request $request, $id)
+    // {
+    //     // Find user by ID
+    //     $user = User::find($id);
 
-        if (!$user) {
-            return response()->json([
-                'message' => 'User not found',
-            ], 404);
-        }
+    //     if (!$user) {
+    //         return response()->json([
+    //             'message' => 'User not found',
+    //         ], 404);
+    //     }
 
-        // Handle profile picture upload
-        $service = app(FileUploadService::class);
+    //     // Validate the incoming data
+    //     $validator = Validator::make($request->all(), [
+    //         'qualification_document' => 'required|file|mimes:pdf,jpeg,png|max:2048', // Validate image type and size
+    //     ]);
 
-        if ($user->qualification_document) {
-            // Delete the profile photo
-            $deleted = $service->delete($user->qualification_document['file_path']);
+    //     if ($validator->fails()) {
+    //         return response()->json([
+    //             'message' => 'Validation failed',
+    //             'errors' => $validator->errors()
+    //         ], 422);
+    //     }
 
-            if ($deleted) {
-                // Remove profile photo data from the user record
-                $user->update(['qualification_document' => null]);
-                return response()->json(['message' => 'Qualification document deleted successfully!'], 200);
-            } else {
-                return response()->json(['message' => 'Failed to delete Qualification document'], 500);
-            }
-        }
+    //     // Handle profile picture upload
+    //     $service = app(FileUploadService::class);
+    //     $newProfilePhoto = $service->upload($request->file('qualification_document'), 'uploads', $request->user->id);
 
-        // Update the user's profile photo
-        // $user->update([
-        //     'profile_photo' => '',
-        // ]);
+    //     if ($user->profile_photo) {
+    //         // Delete the old profile picture
+    //         $service->delete($user->profile_photo['file_path']);
+    //     }
 
-        // Return a success message
-        return response()->json(['message' => 'No profile photo to delete'], 404);
-    }
+    //     // Update the user's profile photo
+    //     $user->update([
+    //         'qualification_document' => $newProfilePhoto,
+    //     ]);
+
+    //     // Return a success message
+    //     return response()->json([
+    //         'message' => 'Qualification document updated successfully!',
+    //         'user' => $user,
+    //         'profile_picture_url' => $newProfilePhoto,
+    //     ], 200);
+    // }
+
+    //Update user Qualification document
+    // public function deleteQualificationDocument(Request $request, $id)
+    // {
+    //     // Find user by ID
+    //     $user = User::find($id);
+
+    //     if (!$user) {
+    //         return response()->json([
+    //             'message' => 'User not found',
+    //         ], 404);
+    //     }
+
+    //     // Handle profile picture upload
+    //     $service = app(FileUploadService::class);
+
+    //     if ($user->qualification_document) {
+    //         // Delete the profile photo
+    //         $deleted = $service->delete($user->qualification_document['file_path']);
+
+    //         if ($deleted) {
+    //             // Remove profile photo data from the user record
+    //             $user->update(['qualification_document' => null]);
+    //             return response()->json(['message' => 'Qualification document deleted successfully!'], 200);
+    //         } else {
+    //             return response()->json(['message' => 'Failed to delete Qualification document'], 500);
+    //         }
+    //     }
+
+    //     // Update the user's profile photo
+    //     // $user->update([
+    //     //     'profile_photo' => '',
+    //     // ]);
+
+    //     // Return a success message
+    //     return response()->json(['message' => 'No profile photo to delete'], 404);
+    // }
 
 
     /**
@@ -725,12 +725,12 @@ class UserController extends Controller
 
         // Delete profile photo if exists
         if (!empty($user->profile_photo['file_path'])) {
-            $service->delete($user->profile_photo['file_path']);
+            $service->delete($user->profile_photo['file_path'],$user->profile_photo['media_id']);
         }
 
         // Delete qualification document if exists
         if (!empty($user->qualification_document['file_path'])) {
-            $service->delete($user->qualification_document['file_path']);
+            $service->delete($user->qualification_document['file_path'],$user->qualification_document['media_id']);
         }
 
         // Delete the user
