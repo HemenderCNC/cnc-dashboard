@@ -6,6 +6,7 @@ use App\Models\Tasks;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use App\Services\FileUploadService;
+use Carbon\Carbon;
 
 class TasksController extends Controller
 {
@@ -51,11 +52,27 @@ class TasksController extends Controller
         if (empty((array) $matchStage)) {
             $matchStage = (object)[]; // Empty object for MongoDB
         }
+        $sortStage = ['$sort' => ['created_at' => -1]]; // Default sorting by created_at (Descending)
+        $matchDueDate=null;
+        if ($request->has('sort') && $request->sort === 'due_date') {
+            $todayTimestamp = Carbon::today()->toIso8601String(); // Convert to milliseconds
+            $matchDueDate = ['$match' => ['due_date' => ['$gte' => $todayTimestamp]]];
+            $sortStage = ['$sort' => ['due_date' => 1]];
+        }
+
 
         // MongoDB Aggregation Pipeline
-        $projects = Tasks::raw(function ($collection) use ($matchStage) {
-            return $collection->aggregate([
+        $projects = Tasks::raw(function ($collection) use ($matchStage, $sortStage, $matchDueDate) {
+            $pipeline = [
                 ['$match' => $matchStage],  // Apply Filters
+            ];
+
+            if ($matchDueDate) {
+                $pipeline[] = $matchDueDate;
+            }
+
+            // Lookup operations
+            $pipeline = array_merge($pipeline, [
                 ['$lookup' => [
                     'from' => 'projects',
                     'let' => ['statusId' => ['$toObjectId' => '$project_id']], // Convert to ObjectId
@@ -65,53 +82,54 @@ class TasksController extends Controller
                     'as' => 'project'
                 ]],
                 ['$lookup' => [
-                    'from' => 'milestones',   // Collection name for Clients
-                    'let' => ['milestoneId' => ['$toObjectId' => '$milestone_id']], // Convert to ObjectId
+                    'from' => 'milestones',
+                    'let' => ['milestoneId' => ['$toObjectId' => '$milestone_id']],
                     'pipeline' => [
                         ['$match' => ['$expr' => ['$eq' => ['$_id', '$$milestoneId']]]]
                     ],
                     'as' => 'milestone'
                 ]],
                 ['$lookup' => [
-                    'from' => 'task_statuses',   // Collection name for Clients
-                    'let' => ['taskStatusId' => ['$toObjectId' => '$status_id']], // Convert to ObjectId
+                    'from' => 'task_statuses',
+                    'let' => ['taskStatusId' => ['$toObjectId' => '$status_id']],
                     'pipeline' => [
                         ['$match' => ['$expr' => ['$eq' => ['$_id', '$$taskStatusId']]]]
                     ],
                     'as' => 'task_status'
                 ]],
                 ['$lookup' => [
-                    'from' => 'task_types',   // Collection name for Clients
-                    'let' => ['taskTypeId' => ['$toObjectId' => '$task_type_id']], // Convert to ObjectId
+                    'from' => 'task_types',
+                    'let' => ['taskTypeId' => ['$toObjectId' => '$task_type_id']],
                     'pipeline' => [
                         ['$match' => ['$expr' => ['$eq' => ['$_id', '$$taskTypeId']]]]
                     ],
                     'as' => 'task_type'
                 ]],
                 ['$lookup' => [
-                    'from' => 'users',   // Collection name for Clients
-                    'let' => ['ownerId' => ['$toObjectId' => '$owner_id']], // Convert to ObjectId
+                    'from' => 'users',
+                    'let' => ['ownerId' => ['$toObjectId' => '$owner_id']],
                     'pipeline' => [
                         ['$match' => ['$expr' => ['$eq' => ['$_id', '$$ownerId']]]]
                     ],
                     'as' => 'owner'
                 ]],
                 ['$lookup' => [
-                    'from' => 'users',   // Collection name for Clients
-                    'let' => ['assigneeId' => ['$toObjectId' => '$assignee_id']], // Convert to ObjectId
+                    'from' => 'users',
+                    'let' => ['assigneeId' => ['$toObjectId' => '$assignee_id']],
                     'pipeline' => [
                         ['$match' => ['$expr' => ['$eq' => ['$_id', '$$assigneeId']]]]
                     ],
                     'as' => 'assignees'
                 ]],
                 ['$lookup' => [
-                    'from' => 'users',   // Collection name for Clients
-                    'let' => ['createdBy' => ['$toObjectId' => '$created_by']], // Convert to ObjectId
+                    'from' => 'users',
+                    'let' => ['createdBy' => ['$toObjectId' => '$created_by']],
                     'pipeline' => [
                         ['$match' => ['$expr' => ['$eq' => ['$_id', '$$createdBy']]]]
                     ],
                     'as' => 'created_bys'
                 ]],
+                $sortStage,
                 ['$project' => [
                     'title' => 1,
                     'project_id' => 1,
@@ -135,6 +153,7 @@ class TasksController extends Controller
                     'created_bys' => 1,
                 ]]
             ]);
+            return $collection->aggregate($pipeline);
         });
 
         return response()->json($projects, 200);
@@ -169,6 +188,7 @@ class TasksController extends Controller
         if ($request->hasFile('attachment')) {
             $attachment = $service->upload($request->file('attachment'), 'uploads', $request->user->id);
         }
+        $dueDate = Carbon::parse($request->due_date)->toIso8601String();
         $platform = Tasks::create([
             'title' => $request->title,
             'project_id' => $request->project_id,
@@ -179,7 +199,7 @@ class TasksController extends Controller
             'owner_id' => $request->owner_id,
             'assignee_id' => $request->assignee_id,
             'description' => $request->description,
-            'due_date' => $request->due_date,
+            'due_date' => $dueDate,
             'estimated_hours' => $request->estimated_hours,
             'attachment' => $attachment,
             'created_by' => $request->user->id,
@@ -209,7 +229,7 @@ class TasksController extends Controller
             return response()->json(['message' => 'Task not found'], 404);
         }
         $validator = Validator::make($request->all(), [
-            'title' => 'required|string|unique:tasks,title',
+            'title' => 'required|string|unique:tasks,title,'.$id,
             'project_id' => 'required|exists:projects,_id',
             'milestone_id' => 'required|exists:milestones,_id',
             'status_id' => 'required|exists:task_statuses,_id',
@@ -236,6 +256,7 @@ class TasksController extends Controller
             $attachment = $service->upload($request->file('attachment'), 'uploads', $request->user->id);
             $task->attachment = $attachment;
         }
+        $dueDate = Carbon::parse($request->due_date)->toIso8601String();
         $task->update(
             [
                 'title' => $request->title,
@@ -247,7 +268,7 @@ class TasksController extends Controller
                 'owner_id' => $request->owner_id,
                 'assignee_id' => $request->assignee_id,
                 'description' => $request->description,
-                'due_date' => $request->due_date,
+                'due_date' => $dueDate,
                 'estimated_hours' => $request->estimated_hours,
             ]
         );
