@@ -18,15 +18,68 @@ class ClientsController extends Controller
     }
 
     // Get all Clients
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json(Clients::all());
+        $matchStage = []; // Initialize as an array
+
+        // Search by name or employee_id
+        if ($request->has('search') && !empty($request->search)) {
+            $search = trim($request->search);
+            $matchStage['$or'] = [
+                ['first_name' => ['$regex' => $search, '$options' => 'i']],  // Case-insensitive name search
+                ['last_name' => ['$regex' => $search, '$options' => 'i']]
+            ];
+        }
+
+        // Filter by industry type
+        if ($request->has('industry_type')) {
+            $matchStage['industry_type'] = ['$regex' => $request->industry_type, '$options' => 'i'];
+        }
+
+        // Filter by status
+        if ($request->has('status')) {
+            $matchStage['status'] = $request->status;
+        }
+
+        // Filter by client priority
+        if ($request->has('client_priority')) {
+            $matchStage['client_priority'] = $request->client_priority;
+        }
+
+        // Ensure $matchStage is not empty
+        $matchCondition = !empty($matchStage) ? [['$match' => $matchStage]] : [];
+
+        // Run aggregation
+        $Clients = Clients::raw(function ($collection) use ($matchCondition) {
+            return $collection->aggregate(array_merge($matchCondition, [
+                ['$project' => [ // Use $project instead of $client
+                    'company_name' => 1,
+                    'first_name' => 1,
+                    'last_name' => 1,
+                    'about_client' => 1,
+                    'client_type' => 1,
+                    'profile_photo' => 1,
+                    'country' => 1,
+                    'state' => 1,
+                    'city' => 1,
+                    'industry_type' => 1,
+                    'status' => 1,
+                    'client_priority' => 1,
+                    'preferred_communication' => 1,
+                    'client_notes' => 1,
+                    'referral_source' => 1,
+                    'account_manager_id' => 1,
+                    '_id' => 1, // Correct field name (MongoDB uses `_id`)
+                ]]
+            ]));
+        });
+
+        return response()->json($Clients, 200);
     }
 
     // Store a new Clients
     public function store(Request $request)
     {
-
         $validator = Validator::make($request->all(), [
             'company_name'=> 'required|string',
             'first_name' => 'required|string',
