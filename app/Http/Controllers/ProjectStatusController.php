@@ -13,7 +13,7 @@ class ProjectStatusController extends Controller
      */
     public function index()
     {
-        return response()->json(ProjectStatus::all(), 200);
+        return response()->json(ProjectStatus::orderBy('created_at', 'desc')->get(), 200);
     }
 
     /**

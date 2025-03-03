@@ -22,7 +22,7 @@ class PermissionController extends Controller
     public function getAllPermissions()
     {
         // Fetch all permissions from the database
-        $permissions = Permission::all();
+        $permissions = Permission::orderBy('created_at', 'desc')->get();
 
         return response()->json(['permissions' => $permissions], 200);
     }
@@ -122,7 +122,7 @@ class PermissionController extends Controller
                 'message' => 'Role not found'
             ], 404);
         }
-    }    
+    }
 
     // Get permission by ID
     public function getPermissionById($id)

@@ -20,7 +20,7 @@ class HolidayController extends Controller
     // Get all holidays
     public function index()
     {
-        return response()->json(Holiday::all());
+        return response()->json(Holiday::orderBy('created_at', 'desc')->get());
     }
 
     // Store a new holiday
