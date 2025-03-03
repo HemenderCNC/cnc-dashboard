@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Validator;
 use App\Services\FileUploadService;
 use Carbon\Carbon;
 use MongoDB\BSON\UTCDateTime;
+use MongoDB\BSON\ObjectId;
 class ProjectsController extends Controller
 {
     /**
@@ -17,7 +18,10 @@ class ProjectsController extends Controller
     public function index(Request $request)
     {
         $matchStage = (object)[]; // Ensure it's an object, not an empty array
-
+        if ($request->user->role->name === 'Employee') {
+            $user_id = $request->user->id;
+            $matchStage->assignee = ['$in' => array_map('strval', (array) $user_id)];
+        }
         // Filter by project name (partial match)
         if ($request->has('project_name')) {
             $matchStage->project_name = ['$regex' => $request->project_name, '$options' => 'i'];

@@ -50,7 +50,8 @@ class UserController extends Controller
             'department_id' => 'nullable|exists:departments,_id',
             'designation_id' => 'nullable|exists:designations,_id',
             'joining_date' => 'nullable|date',
-            'in_out_time' => 'nullable|string',
+            'in_time' => 'nullable|string',
+            'out_time' => 'nullable|string',
             'adharcard_number' => 'nullable|string|size:12',
             'pancard_number' => 'nullable|string',
             'employment_type_id' => 'nullable|exists:employee_types,_id',
@@ -142,7 +143,8 @@ class UserController extends Controller
             'department_id' => $request->department_id,
             'designation_id' => $request->designation_id,
             'joining_date' => $request->joining_date,
-            'in_out_time' => $request->in_out_time,
+            'in_time' => $request->in_time,
+            'out_time' => $request->out_time,
             'adharcard_number' => $request->adharcard_number,
             'pancard_number' => $request->pancard_number,
             'employment_type_id' => $request->employment_type_id,
@@ -222,7 +224,8 @@ class UserController extends Controller
             'department_id' => 'nullable|exists:departments,_id',
             'designation_id' => 'nullable|exists:designations,_id',
             'joining_date' => 'nullable|date',
-            'in_out_time' => 'nullable|string',
+            'in_time' => 'nullable|string',
+            'out_time' => 'nullable|string',
             'adharcard_number' => 'nullable|string|size:12',
             'pancard_number' => 'nullable|string',
             'employment_type_id' => 'nullable|exists:employee_types,_id',
@@ -343,7 +346,8 @@ class UserController extends Controller
             'department_id' => $request->department_id,
             'designation_id' => $request->designation_id,
             'joining_date' => $request->joining_date,
-            'in_out_time' => $request->in_out_time,
+            'in_time' => $request->in_time,
+            'out_time' => $request->out_time,
             'adharcard_number' => $request->adharcard_number,
             'pancard_number' => $request->pancard_number,
             'employment_type_id' => $request->employment_type_id,
@@ -409,45 +413,49 @@ class UserController extends Controller
      * @return \Illuminate\Http\JsonResponse
      */
     public function getAllUsers(Request $request)
-    {
-        $filters = [];
+{
+    $filters = [];
 
-    // 🔍 Search Filter (by name or employee_id)
-    if ($request->has('search') && !empty($request->search)) {
-        $search = trim($request->search);
-        $filters['$or'] = [
-            ['name' => ['$regex' => $search, '$options' => 'i']],  // Case-insensitive name search
-            ['employee_id' => ['$regex' => $search, '$options' => 'i']]
-        ];
+    // Check if the current user's role is "Employee"
+    if ($request->user->role->name === 'Employee') {
+        $filters['_id'] = new ObjectId($request->user->id);
     }
+        // 🔍 Search Filter (by name or employee_id)
+        if ($request->has('search') && !empty($request->search)) {
+            $search = trim($request->search);
+            $filters['$or'] = [
+                ['name' => ['$regex' => $search, '$options' => 'i']],  // Case-insensitive name search
+                ['employee_id' => ['$regex' => $search, '$options' => 'i']]
+            ];
+        }
 
-    // 🏢 Department Filter
-    if ($request->has('department_id') && !empty($request->department_id)) {
-        $filters['department_id'] = $request->department_id;
-    }
+        // 🏢 Department Filter
+        if ($request->has('department_id') && !empty($request->department_id)) {
+            $filters['department_id'] = $request->department_id;
+        }
 
-    // 🎭 Role Filter
-    if ($request->has('role_id') && !empty($request->role_id)) {
-        $filters['role_id'] = $request->role_id;
-    }
+        // 🎭 Role Filter
+        if ($request->has('role_id') && !empty($request->role_id)) {
+            $filters['role_id'] = $request->role_id;
+        }
 
-    // 🏬 Office Location Filter
-    if ($request->has('work_location_id') && !empty($request->work_location_id)) {
-        $filters['work_location_id'] = $request->work_location_id;
-    }
+        // 🏬 Office Location Filter
+        if ($request->has('work_location_id') && !empty($request->work_location_id)) {
+            $filters['work_location_id'] = $request->work_location_id;
+        }
 
-    // 🚀 Employee Status Filter
-    if ($request->has('employee_status_id') && !empty($request->employee_status_id)) {
-        $filters['employee_status_id'] = $request->employee_status_id;
-    }
+        // 🚀 Employee Status Filter
+        if ($request->has('employee_status_id') && !empty($request->employee_status_id)) {
+            $filters['employee_status_id'] = $request->employee_status_id;
+        }
 
-    // 📅 Joining Date Range Filter
-    if ($request->has('joining_date_from') && $request->has('joining_date_to')) {
-        $filters['joining_date'] = [
-            '$gte' => $request->joining_date_from,
-            '$lte' => $request->joining_date_to,
-        ];
-    }
+        // 📅 Joining Date Range Filter
+        if ($request->has('joining_date_from') && $request->has('joining_date_to')) {
+            $filters['joining_date'] = [
+                '$gte' => $request->joining_date_from,
+                '$lte' => $request->joining_date_to,
+            ];
+        }
 
     // 🔄 Fetch users with filters applied
     $users = User::raw(function ($collection) use ($filters) {
@@ -492,9 +500,11 @@ class UserController extends Controller
             ]],
             ['$unwind' => ['path' => '$employee_status', 'preserveNullAndEmptyArrays' => true]],
             ['$sort' => ['created_at' => -1]],
+
             // Project Only Required Fields
             ['$project' => [
                 'name' => 1,
+                '_id' => 1,
                 'last_name' => 1,
                 'gender' => 1,
                 'contact_number' => 1,
@@ -521,6 +531,7 @@ class UserController extends Controller
             ]]
         ]);
     });
+
     // Check if users exist
     if ($users->isEmpty()) {
         return response()->json([
@@ -532,7 +543,8 @@ class UserController extends Controller
         'message' => 'Users retrieved successfully',
         'data' => $users,
     ], 200);
-    }
+}
+
 
 
     //Update user profile picture
