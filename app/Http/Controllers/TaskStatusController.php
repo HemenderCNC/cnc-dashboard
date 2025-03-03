@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\TaskStatus;
+use App\Models\Tasks;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -10,7 +11,17 @@ class TaskStatusController extends Controller
 {
     public function index()
     {
-        return response()->json(TaskStatus::orderBy('created_at', 'desc')->get(), 200);
+        $taskStatuses = TaskStatus::orderBy('created_at', 'desc')->get()->map(function ($status) {
+            $taskCount = Tasks::where('status_id', $status->_id)->count();
+
+            return [
+                'task_status_id' => (string) $status->_id,
+                'task_status' => $status->name,
+                'tasks_count' => $taskCount
+            ];
+        });
+
+        return response()->json($taskStatuses);
     }
 
     /**
