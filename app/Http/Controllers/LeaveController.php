@@ -12,7 +12,14 @@ class LeaveController extends Controller
     public function index(Request $request)
     {
         $employeeId = $request->user->id; // Get authenticated user ID
-        $leaves = Leave::where('employee_id', $employeeId)->orderBy('created_at', 'desc')->get();
+        if ($request->user->role->name === 'Employee') {
+            $leaves = Leave::where('employee_id', $employeeId)
+                ->orderBy('created_at', 'desc')
+                ->get();
+        } else {
+            // Management/Admin: Fetch all leave records
+            $leaves = Leave::orderBy('created_at', 'desc')->get();
+        }
         return response()->json($leaves, 200);
 
 
