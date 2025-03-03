@@ -14,6 +14,9 @@ class TasksController extends Controller
     {
         $matchStage = (object)[]; // Ensure it's an object, not an empty array
 
+        if ($request->user->role->name === 'Employee') {
+            $matchStage->assignee_id = $request->user->id;
+        }
         // Filter by project name (partial match)
         if ($request->has('title')) {
             $matchStage->title = ['$regex' => $request->title, '$options' => 'i'];
