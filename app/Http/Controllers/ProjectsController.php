@@ -94,6 +94,7 @@ class ProjectsController extends Controller
                     'foreignField' => '_id',
                     'as' => 'created_bys'
                 ]],
+                ['$sort' => ['created_at' => -1]],
                 ['$project' => [
                     'project_name' => 1,
                     'project_industry' => 1,
