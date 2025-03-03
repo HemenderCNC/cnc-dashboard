@@ -11,7 +11,7 @@ class QualificationController extends Controller
      */
     public function index()
     {
-        return response()->json(Qualification::all(), 200);
+        return response()->json(Qualification::orderBy('created_at', 'desc')->get(), 200);
     }
 
     /**

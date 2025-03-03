@@ -12,7 +12,7 @@ class SkillController extends Controller
      */
     public function index()
     {
-        return response()->json(Skill::all(), 200);
+        return response()->json(Skill::orderBy('created_at', 'desc')->get(), 200);
     }
 
     /**

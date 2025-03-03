@@ -11,7 +11,7 @@ class MilestoneController extends Controller
     // Get all Milestones
     public function index()
     {
-        return response()->json(Milestones::all());
+        return response()->json(Milestones::orderBy('created_at', 'desc')->get());
     }
 
     // Store a new Milestones
