@@ -40,7 +40,7 @@ class RoleController extends Controller
 
         // Find the role by ID
         $role = Role::find($id);
-        
+
         // Check if role exists
         if (!$role) {
             return response()->json(['message' => 'Role not found.'], 404);
@@ -68,7 +68,7 @@ class RoleController extends Controller
 
         // Find the role by ID
         $role = Role::find($id);
-        
+
         // Check if role exists
         if (!$role) {
             return response()->json(['message' => 'Role not found.'], 404);
@@ -109,7 +109,7 @@ class RoleController extends Controller
     public function getAllRoles()
     {
         // Fetch all roles from the database
-        $roles = Role::all();
+        $roles = Role::orderBy('created_at', 'desc')->get();
 
         return response()->json(['roles' => $roles], 200);
     }

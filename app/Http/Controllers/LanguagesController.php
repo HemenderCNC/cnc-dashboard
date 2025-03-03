@@ -13,7 +13,7 @@ class LanguagesController extends Controller
      */
     public function index()
     {
-        return response()->json(Languages::all(), 200);
+        return response()->json(Languages::orderBy('created_at', 'desc')->get(), 200);
     }
 
     /**

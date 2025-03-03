@@ -13,7 +13,7 @@ class TaskTypeController extends Controller
      */
     public function index()
     {
-        return response()->json(TaskType::all());
+        return response()->json(TaskType::orderBy('created_at', 'desc')->get());
     }
 
     /**
