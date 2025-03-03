@@ -12,7 +12,7 @@ class EmployeeTypesController extends Controller
      */
     public function index()
     {
-        return response()->json(EmployeeType::all(), 200);
+        return response()->json(EmployeeType::orderBy('created_at', 'desc')->get(), 200);
     }
 
     /**

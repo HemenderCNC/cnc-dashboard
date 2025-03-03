@@ -12,7 +12,7 @@ class DesignationController extends Controller
      */
     public function index()
     {
-        return response()->json(Designation::all(), 200);
+        return response()->json(Designation::orderBy('created_at', 'desc')->get(), 200);
     }
 
     /**
