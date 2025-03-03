@@ -13,7 +13,7 @@ class EmployeeStatusController extends Controller
      */
     public function index()
     {
-        return response()->json(EmployeeStatus::all(), 200);
+        return response()->json(EmployeeStatus::orderBy('created_at', 'desc')->get(), 200);
     }
 
     /**

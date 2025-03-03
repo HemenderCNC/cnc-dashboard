@@ -9,7 +9,7 @@ class DepartmentController extends Controller
 {
     public function index()
     {
-        return response()->json(Department::all(), 200);
+        return response()->json(Department::orderBy('created_at', 'desc')->get(), 200);
     }
 
     /**

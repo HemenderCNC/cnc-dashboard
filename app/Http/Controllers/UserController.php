@@ -491,7 +491,7 @@ class UserController extends Controller
                 'as' => 'employee_status'
             ]],
             ['$unwind' => ['path' => '$employee_status', 'preserveNullAndEmptyArrays' => true]],
-
+            ['$sort' => ['created_at' => -1]],
             // Project Only Required Fields
             ['$project' => [
                 'name' => 1,
