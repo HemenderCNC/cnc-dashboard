@@ -26,6 +26,7 @@ use App\Http\Controllers\MilestoneController;
 use App\Http\Controllers\TaskStatusController;
 use App\Http\Controllers\TasksController;
 use App\Http\Controllers\TimesheetController;
+use App\Http\Controllers\GeneralSettingsController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -201,5 +202,12 @@ Route::middleware('api')->group(function () {
             Route::delete('/{id}', [TimesheetController::class, 'destroy']); // Delete a timesheet
 
         });
+
+        //General settings module
+        Route::prefix('updategeneralsettings')->group(function () {
+            //Route::get('/', [GeneralSettingsController::class, 'index']); // Get all settings
+            Route::post('/', [GeneralSettingsController::class, 'update']); // Update settings
+        });
     });
 });
+Route::get('getgeneralsettings/', [GeneralSettingsController::class, 'index']); // Update settings
