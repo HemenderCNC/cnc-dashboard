@@ -45,9 +45,12 @@ class Project extends Eloquent
     }
     private static function generateSequentialProjectCode()
     {
-        $lastProject = self::orderBy('project_code', 'desc')->first();
-        $nextNumber = $lastProject ? ((int)substr($lastProject->project_code, 3)) + 1 : 1;
-        return 'cnc' . str_pad($nextNumber, 2, '0', STR_PAD_LEFT);
+        $lastProject = self::where('project_code', '!=', null)->orderBy('project_code', 'desc')->first();
+        $nextNumber = 1;
+        if ($lastProject && preg_match('/CNC-(\d+)/', $lastProject->project_code, $matches)) {
+            $nextNumber = (int)$matches[1] + 1;
+        }
+        return 'CNC-' . str_pad($nextNumber, 2, '0', STR_PAD_LEFT);
     }
     public function createdBy()
     {
