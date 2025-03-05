@@ -15,9 +15,11 @@ class TaskStatusController extends Controller
             $taskCount = Tasks::where('status_id', $status->_id)->count();
 
             return [
-                'task_status_id' => (string) $status->_id,
-                'task_status' => $status->name,
-                'tasks_count' => $taskCount
+                'id' => (string) $status->_id,
+                'name' => $status->name,
+                'tasks_count' => $taskCount,
+                'created_at' => $status->created_at,
+                'updated_at' => $status->updated_at,
             ];
         });
 

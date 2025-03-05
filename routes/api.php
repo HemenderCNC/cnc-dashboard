@@ -27,6 +27,7 @@ use App\Http\Controllers\TaskStatusController;
 use App\Http\Controllers\TasksController;
 use App\Http\Controllers\TimesheetController;
 use App\Http\Controllers\GeneralSettingsController;
+use App\Http\Controllers\LoginSessionController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -38,6 +39,7 @@ Route::middleware('api')->group(function () {
 
     // Protected routes with auth.token
     Route::middleware('auth.token')->group(function () {
+        Route::get('track-session', [LoginSessionController::class, 'trackSession']);
         Route::post('logout', [AuthController::class, 'logout']);
         Route::get('dashboard', [AuthController::class, 'dashboard']);
 
@@ -198,6 +200,9 @@ Route::middleware('api')->group(function () {
             Route::get('/', [TimesheetController::class, 'index']); // Get all timesheets
             Route::post('/', [TimesheetController::class, 'store']); // Create a timesheet
             Route::get('/{id}', [TimesheetController::class, 'show']); // Get timesheet by ID
+            Route::get('/stop-task/{id}', [TimesheetController::class, 'stopTask']); // Get timesheet by ID
+            Route::get('/run-task/{id}', [TimesheetController::class, 'runTask']); // Get timesheet by ID
+            Route::get('/complete-task/{id}', [TimesheetController::class, 'completeTask']); // Get timesheet by ID
             Route::post('/{id}', [TimesheetController::class, 'update']); // Update a timesheet
             Route::delete('/{id}', [TimesheetController::class, 'destroy']); // Delete a timesheet
 
