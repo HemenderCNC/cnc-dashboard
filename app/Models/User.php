@@ -46,7 +46,6 @@ class User extends Eloquent
         'out_time',
         'adharcard_number',
         'pancard_number',
-        'provided_original_document',
         'employee_id',
         'employment_type_id',
         'employee_status_id',
@@ -71,6 +70,23 @@ class User extends Eloquent
 
 
     protected $hidden = ['password', 'remember_token'];
+
+    protected static function boot()
+    {
+        parent::boot();
+        static::creating(function ($user) {
+            $user->employee_id = self::generateSequentialEmployeeCode();
+        });
+    }
+    private static function generateSequentialEmployeeCode()
+    {
+        $lastProject = self::where('employee_id', '!=', null)->orderBy('employee_id', 'desc')->first();
+        $nextNumber = 1;
+        if ($lastProject && preg_match('/EMP-(\d+)/', $lastProject->employee_id, $matches)) {
+            $nextNumber = (int)$matches[1] + 1;
+        }
+        return 'EMP-' . str_pad($nextNumber, 2, '0', STR_PAD_LEFT);
+    }
 
     // Relationship to Role
     public function role()
