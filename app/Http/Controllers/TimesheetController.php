@@ -107,6 +107,14 @@ class TimesheetController extends Controller
                     'as' => 'user'
                 ]],
 
+                // Extract first start_time and last end_time from time_log array
+                ['$addFields' => [
+                    'start_time' => ['$arrayElemAt' => ['$time_log.start_time', 0]], // First start_time
+                    'end_time' => [
+                        '$arrayElemAt' => ['$time_log.end_time', -1] // Last end_time
+                    ]
+                ]],
+
                 // Process total time spent in minutes
                 ['$addFields' => [
                     'total_time_spent_minutes' => [
@@ -174,6 +182,8 @@ class TimesheetController extends Controller
                     'employee_id' => 1,
                     'date' => 1,
                     'time_log' => 1,
+                    'start_time' => 1,
+                    'end_time' => 1,
                     'total_time_spent' => 1,
                     'work_description' => 1,
                     'status' => 1,
