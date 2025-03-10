@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 use App\Models\Leave;
+use App\Models\GeneralSettings;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -11,20 +12,30 @@ class LeaveController extends Controller
     // Employee can view only their own leave requests
     public function index(Request $request)
     {
-        $employeeId = $request->user->id; // Get authenticated user ID
+        $query = Leave::query();
+
+        // If user is an Employee, restrict to their own records
         if ($request->user->role->name === 'Employee') {
-            $leaves = Leave::where('employee_id', $employeeId)
-                ->orderBy('created_at', 'desc')
-                ->get();
-        } else {
-            // Management/Admin: Fetch all leave records
-            $leaves = Leave::orderBy('created_at', 'desc')->get();
+            $query->where('employee_id', $request->user->id);
         }
+        else if ($request->has('employee_id')) {
+            $query->where('employee_id', $request->employee_id);
+        }
+
+        // Filter by date range (start_date, end_date)
+        if ($request->has('start_date') && $request->has('end_date')) {
+            $query->whereBetween('start_date', [$request->start_date, $request->end_date]);
+        }
+
+        // Filter by status
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        // Order and fetch results
+        $leaves = $query->orderBy('created_at', 'desc')->get();
+
         return response()->json($leaves, 200);
-
-
-        //For management Level permission return all leaves
-        //return response()->json(Leave::all(), 200);
     }
 
     // Employee submits a leave request
@@ -154,12 +165,23 @@ class LeaveController extends Controller
 
     public function getLeaveSummary(Request $request)
     {
-        $userId = $request->user->id; // Get logged-in employee ID
-        $totalLeaves = 12; // Define the total allowed leaves
+        $query = Leave::query();
 
+        // If user is an Employee, restrict to their own records
+        if ($request->user->role->name === 'Employee') {
+            $query->where('employee_id', $request->user->id);
+        }
+        else if ($request->has('employee_id')) {
+            $query->where('employee_id', $request->employee_id);
+        }
+        $totalLeaves = 12; // Define the total allowed leaves
+        $settings = GeneralSettings::firstOrNew([]);
+        $leave_settings = $settings->leave_settings ?? [];
+        if(!empty($leave_settings)){
+            $totalLeaves = $leave_settings['total_leaves_per_person'];
+        }
         // Get the total approved leave days
-        $consumedLeaves = Leave::where('employee_id', $userId)
-            ->where('status', 'approved')
+        $consumedLeaves = $query->where('status', 'approved')
             ->sum('leave_duration'); //leave duration
 
         // Calculate remaining leaves

@@ -25,7 +25,6 @@ class Timesheet extends Eloquent
         'employee_id',
         'status'
     ];
-    protected $appends = ['hours'];
     public function project()
     {
         return $this->belongsTo(Project::class);

@@ -29,7 +29,6 @@ class Project extends Eloquent
         'client_id',
         'assignee',
         'project_manager_id',
-        'other_details',
         'created_by',
     ];
 
