@@ -54,7 +54,7 @@ class ActivityLogController extends Controller
             'email'      => 'nullable|string|email',
             'action'     => 'nullable|string|in:created,updated,deleted',
             'page'       => 'nullable|integer|min:1',
-            'limit'      => 'nullable|integer|min:1|max:100'
+            'per_page'      => 'nullable|integer|min:1|max:100'
         ]);
 
         // Return validation errors if any
@@ -110,9 +110,11 @@ class ActivityLogController extends Controller
         if ($request->has('action')) {
             $query->where('action', $request->action);
         }
-        // Paginate results
-        $perPage = $request->input('per_page', 10); // Default is 10 logs per page
+        $perPage = $request->input('per_page', 10); // Default to 10 per page
+        $page = $request->input('page', 1); // Default to page 1
         $logs = $query->orderBy('created_at', 'desc')->paginate($perPage);
+        // Paginate results
+        //$activityLogs = $query->paginate($perPage, ['*'], 'page', $page);
 
         return response()->json([
             'status' => true,
