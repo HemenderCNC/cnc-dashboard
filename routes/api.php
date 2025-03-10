@@ -31,6 +31,7 @@ use App\Http\Controllers\LoginSessionController;
 use App\Http\Controllers\CountriesController;
 use App\Http\Controllers\IndustryTypesController;
 use App\Http\Controllers\ProjectFilesController;
+use App\Http\Controllers\ActivityLogController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -227,6 +228,10 @@ Route::middleware('api')->group(function () {
             //Route::get('/', [GeneralSettingsController::class, 'index']); // Get all settings
             Route::post('/', [GeneralSettingsController::class, 'update']); // Update settings
         });
+
+
+        //Activity Logs listing
+        Route::get('/activity-logs', [ActivityLogController::class, 'getActivityLogs']);
     });
 });
 Route::get('getgeneralsettings/', [GeneralSettingsController::class, 'index']); // Update settings
