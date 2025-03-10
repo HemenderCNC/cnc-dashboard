@@ -181,7 +181,7 @@ class ClientsController extends Controller
 
             // Delete old profile photo if exists
             if ($client->profile_photo) {
-                $service->delete($client->profile_photo['file_path']);
+                $service->delete($client->profile_photo['file_path'],$client->profile_photo['media_id']);
             }
 
             $profilePhoto = $service->upload($request->file('profile_photo'), 'uploads', $request->user->id);

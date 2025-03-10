@@ -120,7 +120,15 @@ class TasksController extends Controller
                     'from' => 'users',
                     'let' => ['assigneeId' => ['$toObjectId' => '$assignee_id']],
                     'pipeline' => [
-                        ['$match' => ['$expr' => ['$eq' => ['$_id', '$$assigneeId']]]]
+                        ['$match' => ['$expr' => ['$eq' => ['$_id', '$$assigneeId']]]],
+                        ['$lookup' => [
+                            'from' => 'designations', // Replace with the actual name of the designation collection
+                            'let' => ['designationId' => ['$toObjectId' => '$designation_id']],
+                            'pipeline' => [
+                                ['$match' => ['$expr' => ['$eq' => ['$_id', '$$designationId']]]]
+                            ],
+                            'as' => 'designation'
+                        ]]
                     ],
                     'as' => 'assignees'
                 ]],
