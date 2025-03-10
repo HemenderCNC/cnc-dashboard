@@ -3,13 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Project;
-use App\Models\Platform;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-use App\Services\FileUploadService;
 use Carbon\Carbon;
 use MongoDB\BSON\UTCDateTime;
-use MongoDB\BSON\ObjectId;
 class ProjectsController extends Controller
 {
     /**
@@ -155,16 +152,11 @@ class ProjectsController extends Controller
             'assignee' => 'nullable|array',
             'assignee.*' => 'exists:users,_id',
             'project_manager_id' => 'nullable|exists:users,_id',
-            'other_details' => 'nullable|file|mimes:pdf,jpeg,png|max:2048',
         ]);
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-        $service = app(FileUploadService::class);
-        $other_details = '';
-        if ($request->hasFile('other_details')) {
-            $other_details = $service->upload($request->file('other_details'), 'uploads', $request->user->id);
-        }
+
         $platform = Project::create([
             'project_name' => $request->project_name,
             'project_industry' => $request->project_industry,
@@ -183,7 +175,6 @@ class ProjectsController extends Controller
             'client_id' => $request->client_id,
             'assignee' => $request->assignee,
             'project_manager_id' => $request->project_manager_id,
-            'other_details' => $other_details,
             'created_by' => $request->user->id,
         ]);
         return response()->json($platform, 201);
@@ -235,22 +226,12 @@ class ProjectsController extends Controller
             'assignee' => 'nullable|array',
             'assignee.*' => 'exists:users,_id',
             'project_manager_id' => 'nullable|exists:users,_id',
-            'other_details' => 'nullable|file|mimes:pdf,jpeg,png|max:2048',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $service = app(FileUploadService::class);
-        if ($request->hasFile('other_details')) {
-            // Delete old profile photo if exists
-            if ($project->other_details) {
-                $service->delete($project->other_details['file_path'],$project->other_details['media_id']);
-            }
-            $other_details = $service->upload($request->file('other_details'), 'uploads', $request->user->id);
-            $project->other_details = $other_details;
-        }
         $project->update(
             [
                 'project_name' => $request->project_name,

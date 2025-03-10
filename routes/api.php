@@ -28,6 +28,9 @@ use App\Http\Controllers\TasksController;
 use App\Http\Controllers\TimesheetController;
 use App\Http\Controllers\GeneralSettingsController;
 use App\Http\Controllers\LoginSessionController;
+use App\Http\Controllers\CountriesController;
+use App\Http\Controllers\IndustryTypesController;
+use App\Http\Controllers\ProjectFilesController;
 use App\Http\Controllers\ActivityLogController;
 
 Route::middleware('api')->group(function () {
@@ -41,6 +44,7 @@ Route::middleware('api')->group(function () {
     // Protected routes with auth.token
     Route::middleware('auth.token')->group(function () {
         Route::get('track-session', [LoginSessionController::class, 'trackSession']);
+        Route::get('attendance', [LoginSessionController::class, 'attendance']);
         Route::post('logout', [AuthController::class, 'logout']);
         Route::get('dashboard', [AuthController::class, 'dashboard']);
 
@@ -93,6 +97,9 @@ Route::middleware('api')->group(function () {
         //Department API
         Route::apiResource('departments', DepartmentController::class);
 
+        Route::apiResource('countries', CountriesController::class);
+
+        Route::apiResource('industry-types', IndustryTypesController::class);
 
         //Designation API
         Route::apiResource('designations', DesignationController::class);
@@ -185,7 +192,14 @@ Route::middleware('api')->group(function () {
         Route::get('/active-notices', [NoticeController::class, 'getVisibleNotices']);
 
 
-
+        //project files Module
+        Route::prefix('project-files')->group(function () {
+            Route::get('/{id}', [ProjectFilesController::class, 'show']);
+            Route::get('/{id}', [ProjectFilesController::class, 'detail']);
+            Route::post('/', [ProjectFilesController::class, 'store']);
+            Route::post('/{id}', [ProjectFilesController::class, 'update']);
+            Route::delete('/{id}', [ProjectFilesController::class, 'destroy']);
+        });
 
         //Holiday Module
         Route::prefix('holidays')->group(function () {

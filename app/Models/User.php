@@ -3,7 +3,7 @@ namespace App\Models;
 
 use Illuminate\Notifications\Notifiable;
 use MongoDB\Laravel\Eloquent\Model as Eloquent;
-
+use Carbon\Carbon;
 class User extends Eloquent
 {
     use Notifiable;
@@ -70,6 +70,7 @@ class User extends Eloquent
 
 
     protected $hidden = ['password', 'remember_token'];
+    protected $appends = ['role_with_permissions','skills_data', 'working', 'total_work_hours', 'total_projects', 'today_tasks'];
 
     protected static function boot()
     {
@@ -87,15 +88,45 @@ class User extends Eloquent
         }
         return 'EMP-' . str_pad($nextNumber, 2, '0', STR_PAD_LEFT);
     }
+    public function getWorkingAttribute()
+    {
+        $timesheet = Timesheet::where('employee_id', (string) $this->_id) // Ensure it's a string comparison
+            ->where('status', 'running')
+            ->exists();
 
+        return $timesheet ? true : false;
+    }
+    public function getTotalWorkHoursAttribute()
+    {
+        $timesheets = Timesheet::where('employee_id', (string) $this->_id)->get();
+        $totalMinutes = 0;
+        foreach ($timesheets as $timesheet) {
+            foreach ($timesheet->time_log as $log) {
+                $start = Carbon::createFromFormat('H:i', $log['start_time']);
+                $end = Carbon::createFromFormat('H:i', $log['end_time']);
+                $totalMinutes += $end->diffInMinutes($start);
+            }
+        }
+        $hours = floor($totalMinutes / 60);
+        $minutes = $totalMinutes % 60;
+        return "{$hours}h {$minutes}m";
+    }
+    public function getTotalProjectsAttribute()
+    {
+        $projects = Project::whereIn('assignee', [(string) $this->_id])->count();
+        return $projects;
+    }
+    public function getTodayTasksAttribute()
+    {
+        $today = Carbon::now()->toDateString();
+        $projects = Tasks::where('due_date', '>=', $today)->where('assignee_id',(string) $this->_id)->count();
+        return $projects;
+    }
     // Relationship to Role
     public function role()
     {
         return $this->belongsTo(Role::class, 'role_id');
     }
-
-    // Appending custom attribute for role with permissions
-    protected $appends = ['role_with_permissions','skills_data'];
 
     public function getRoleWithPermissionsAttribute()
     {
