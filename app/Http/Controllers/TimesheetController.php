@@ -17,6 +17,10 @@ class TimesheetController extends Controller
         $matchStage = [];
 
         // Filter by Employee
+        if ($request->user->role->name === 'Employee') {
+            $user_id = $request->user->id;
+            $matchStage['employee_id'] = $user_id;
+        }
         if ($request->filled('employee_id')) {
             $matchStage['employee_id'] = $request->employee_id;
         }
@@ -30,7 +34,14 @@ class TimesheetController extends Controller
         if ($request->filled('date')) {
             $matchStage['date'] = $request->date;
         }
-
+        if ($request->has('start_date') && $request->has('end_date')) {
+            $startDate = $request->start_date;
+            $endDate = $request->end_date;
+            $matchStage['date']  = [
+                '$gte' => $startDate,
+                '$lte' => $endDate
+            ];
+        }
         // Search by Task Name (Partial Match)
         if ($request->filled('task_name')) {
             $taskName = $request->task_name;
@@ -55,21 +66,20 @@ class TimesheetController extends Controller
         // MongoDB Aggregation Pipeline
         $timesheets = Timesheet::raw(function ($collection) use ($matchStage) {
             return $collection->aggregate([
-                ['$match' => $matchStage],  // Apply Filters
+                ['$match' => $matchStage],
 
                 // Lookup Task
                 ['$lookup' => [
                     'from' => 'tasks',
-                    'let' => ['taskId' => ['$toObjectId' => '$task_id']], // Convert task_id to ObjectId
+                    'let' => ['taskId' => ['$toObjectId' => '$task_id']],
                     'pipeline' => [
                         ['$match' => ['$expr' => ['$eq' => ['$_id', '$$taskId']]]],
-                        // Lookup Task Type inside Tasks
                         ['$lookup' => [
-                            'from' => 'task_types',  // Assuming the collection name is `task_types`
-                            'let' => ['taskTypeId' => ['$toObjectId' => '$task_type_id']], // Convert task_type_id to ObjectId
+                            'from' => 'task_types',
+                            'let' => ['taskTypeId' => ['$toObjectId' => '$task_type_id']],
                             'pipeline' => [
                                 ['$match' => ['$expr' => ['$eq' => ['$_id', '$$taskTypeId']]]],
-                                ['$project' => ['_id' => 0, 'name' => 1]] // Only fetch task type name
+                                ['$project' => ['_id' => 0, 'name' => 1]]
                             ],
                             'as' => 'task_type'
                         ]],
@@ -80,7 +90,7 @@ class TimesheetController extends Controller
                 // Lookup Project
                 ['$lookup' => [
                     'from' => 'projects',
-                    'let' => ['projectId' => ['$toObjectId' => '$project_id']], // Convert project_id to ObjectId
+                    'let' => ['projectId' => ['$toObjectId' => '$project_id']],
                     'pipeline' => [
                         ['$match' => ['$expr' => ['$eq' => ['$_id', '$$projectId']]]]
                     ],
@@ -90,16 +100,93 @@ class TimesheetController extends Controller
                 // Lookup User
                 ['$lookup' => [
                     'from' => 'users',
-                    'let' => ['userId' => ['$toObjectId' => '$employee_id']], // Convert employee_id to ObjectId
+                    'let' => ['userId' => ['$toObjectId' => '$employee_id']],
                     'pipeline' => [
                         ['$match' => ['$expr' => ['$eq' => ['$_id', '$$userId']]]]
                     ],
                     'as' => 'user'
                 ]],
+
+                // Process total time spent in minutes
+                ['$addFields' => [
+                    'total_time_spent_minutes' => [
+                        '$sum' => [
+                            '$map' => [
+                                'input' => '$time_log',
+                                'as' => 'log',
+                                'in' => [
+                                    '$let' => [
+                                        'vars' => [
+                                            'start' => [
+                                                '$dateFromParts' => [
+                                                    'year' => 2025, 'month' => 3, 'day' => 6,
+                                                    'hour' => ['$toInt' => ['$substr' => ['$$log.start_time', 0, 2]]],
+                                                    'minute' => ['$toInt' => ['$substr' => ['$$log.start_time', 3, 2]]]
+                                                ]
+                                            ],
+                                            'end' => [
+                                                '$dateFromParts' => [
+                                                    'year' => 2025, 'month' => 3, 'day' => 6,
+                                                    'hour' => ['$toInt' => ['$substr' => ['$$log.end_time', 0, 2]]],
+                                                    'minute' => ['$toInt' => ['$substr' => ['$$log.end_time', 3, 2]]]
+                                                ]
+                                            ]
+                                        ],
+                                        'in' => [
+                                            '$divide' => [
+                                                ['$subtract' => ['$$end', '$$start']],
+                                                60000 // Convert milliseconds to minutes
+                                            ]
+                                        ]
+                                    ]
+                                ]
+                            ]
+                        ]
+                    ]
+                ]],
+
+                // Convert minutes to HH:MM format
+                ['$addFields' => [
+                    'total_hours' => ['$floor' => ['$divide' => ['$total_time_spent_minutes', 60]]],
+                    'total_minutes' => ['$mod' => ['$total_time_spent_minutes', 60]]
+                ]],
+
+                // Fixing the $concat syntax issue by replacing {} with []
+                ['$addFields' => [
+                    'total_time_spent' => [
+                        '$concat' => [
+                            ['$toString' => '$total_hours'],
+                            ':',
+                            ['$toString' => [
+                                '$cond' => [
+                                    'if' => ['$lt' => ['$total_minutes', 10]],
+                                    'then' => ['$concat' => ['0', ['$toString' => '$total_minutes']]],
+                                    'else' => ['$toString' => '$total_minutes']
+                                ]
+                            ]]
+                        ]
+                    ]
+                ]],
+
+                // Final projection
+                ['$project' => [
+                    '_id' => 1,
+                    'employee_id' => 1,
+                    'date' => 1,
+                    'time_log' => 1,
+                    'total_time_spent' => 1,
+                    'work_description' => 1,
+                    'status' => 1,
+                    'project' => 1,
+                    'task' => 1,
+                    'user' => 1,
+                ]]
             ]);
         });
 
         return response()->json($timesheets, 200);
+
+
     }
 
     // Store new timesheet entry
@@ -154,20 +241,7 @@ class TimesheetController extends Controller
         $timesheet->save();
 
         $userId = $request->user->id; // Get authenticated user ID
-        $currentDate = Carbon::now()->toDateString();
-        $session = LoginSession::where('employee_id', $userId)->where('date', $currentDate)->first();
-        if ($session) {
-            $session->break = true;
-            $breakLog = $session->break_log;
-            $currentTime = Carbon::now()->format('H:i');
-            $endTime = Carbon::now()->addMinute()->format('H:i');
-            $breakLog[] = [
-                'start_time' => $currentTime,
-                'end_time' => $endTime,
-            ];
-            $session->break_log = $breakLog;
-            $session->save();
-        }
+        $this->userBreakLogStart($userId);
         return response()->json($timesheet);
     }
     public function runTask(Request $request,$id){
@@ -183,23 +257,23 @@ class TimesheetController extends Controller
         );
         $timesheet->time_log = $time_log;
         $userId = $request->user->id; // Get authenticated user ID
-        $currentDate = Carbon::now()->toDateString();
-        $session = LoginSession::where('employee_id', $userId)->where('date', $currentDate)->first();
-        if ($session) {
-            $session->break = false;
-            $session->save();
-        }
+        $this->userBreakLogStop($userId);
         $timesheet->save();
         return response()->json($timesheet);
     }
     public function completeTask(Request $request,$id){
         $userId = $request->user->id;
-        $currentDate = Carbon::now()->toDateString();
         $timesheet = Timesheet::where('id', $id)->first();
         if (!$timesheet) {
             return response()->json(['message' => 'Timesheet not found'], 404);
         }
         $timesheet->status = 'completed';
+        $this->userBreakLogStart($userId);
+        $timesheet->save();
+        return response()->json($timesheet);
+    }
+    public function userBreakLogStart($userId){
+        $currentDate = Carbon::now()->toDateString();
         $session = LoginSession::where('employee_id', $userId)->where('date', $currentDate)->first();
         if ($session) {
             $session->break = true;
@@ -213,10 +287,15 @@ class TimesheetController extends Controller
             $session->break_log = $breakLog;
             $session->save();
         }
-        $timesheet->save();
-        return response()->json($timesheet);
     }
-
+    public function userBreakLogStop($userId){
+        $currentDate = Carbon::now()->toDateString();
+        $session = LoginSession::where('employee_id', $userId)->where('date', $currentDate)->first();
+        if ($session) {
+            $session->break = false;
+            $session->save();
+        }
+    }
     // Show a specific timesheet entry
     public function show($id)
     {
