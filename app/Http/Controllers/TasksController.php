@@ -17,6 +17,9 @@ class TasksController extends Controller
         if ($request->user->role->name === 'Employee') {
             $matchStage->assignee_id = $request->user->id;
         }
+        else if ($request->has('employee_id')) {
+            $matchStage->assignee_id = $request->employee_id;
+        }
         // Filter by project name (partial match)
         if ($request->has('title')) {
             $matchStage->title = ['$regex' => $request->title, '$options' => 'i'];
@@ -50,7 +53,14 @@ class TasksController extends Controller
         if ($request->has('assignee_id')) {
             $matchStage->assignee_id = ['$in' => array_map('strval', (array) $request->assignee_id)];
         }
-
+        if ($request->has('start_date') && $request->has('end_date')) {
+            $startDate = $request->start_date;
+            $endDate = $request->end_date;
+            $matchStage->due_date  = [
+                '$gte' => $startDate,
+                '$lte' => $endDate
+            ];
+        }
         // Ensure matchStage is not empty
         if (empty((array) $matchStage)) {
             $matchStage = (object)[]; // Empty object for MongoDB
@@ -65,7 +75,7 @@ class TasksController extends Controller
 
 
         // MongoDB Aggregation Pipeline
-        $projects = Tasks::raw(function ($collection) use ($matchStage, $sortStage, $matchDueDate) {
+        $tasks = Tasks::raw(function ($collection) use ($matchStage, $sortStage, $matchDueDate) {
             $pipeline = [
                 ['$match' => $matchStage],  // Apply Filters
             ];
@@ -167,7 +177,36 @@ class TasksController extends Controller
             return $collection->aggregate($pipeline);
         });
 
-        return response()->json($projects, 200);
+        $projectsAssigned = Tasks::where('assignee_id', $request->user->id ?? $request->employee_id)
+        ->distinct('project_id')
+        ->count();
+
+        $taskStatuses = Tasks::raw(function ($collection) use ($matchStage) {
+            return $collection->aggregate([
+                ['$match' => $matchStage],
+                ['$group' => [
+                    '_id' => '$status_id',
+                    'total' => ['$sum' => 1]
+                ]],
+                ['$lookup' => [
+                    'from' => 'task_statuses',
+                    'let' => ['statusId' => ['$toObjectId' => '$_id']],
+                    'pipeline' => [['$match' => ['$expr' => ['$eq' => ['$_id', '$$statusId']]]]],
+                    'as' => 'task_status'
+                ]],
+                ['$unwind' => '$task_status'],
+                ['$project' => [
+                    'name' => '$task_status.name',
+                    'total' => 1
+                ]]
+            ]);
+        });
+
+        return response()->json([
+            'projects_assigned' => $projectsAssigned,
+            'task_statuses' => $taskStatuses,
+            'tasks_list' => $tasks,
+        ], 200);
     }
 
 

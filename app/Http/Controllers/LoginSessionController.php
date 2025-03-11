@@ -99,6 +99,10 @@ class LoginSessionController extends Controller
         // Get working days (Monday-Friday) excluding Saturday & Sunday
         $startDate = $now->startOfMonth();
         $endDate = $now->copy()->endOfMonth();
+        if ($request->has('start_date') && $request->has('end_date')){
+            $startDate = Carbon::parse($request->start_date);
+            $endDate = Carbon::parse($request->end_date);
+        }
         $workingDays = collect(CarbonPeriod::create($startDate, $endDate))
             ->filter(fn($date) => !in_array($date->dayOfWeek, [Carbon::SATURDAY, Carbon::SUNDAY]))
             ->count();
