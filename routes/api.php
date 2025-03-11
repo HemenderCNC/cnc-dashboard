@@ -32,6 +32,7 @@ use App\Http\Controllers\CountriesController;
 use App\Http\Controllers\IndustryTypesController;
 use App\Http\Controllers\ProjectFilesController;
 use App\Http\Controllers\ActivityLogController;
+use App\Http\Controllers\DashboardController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -147,6 +148,11 @@ Route::middleware('api')->group(function () {
             Route::delete('/{id}', [ClientsController::class, 'destroy']); // Delete a holiday
         });
 
+        //Dashboard API
+        Route::prefix('dashboard')->group(function () {
+            Route::get('/', [DashboardController::class, 'index']); // Get all holidays
+        });
+
         //Tasks API
         Route::prefix('tasks')->group(function () {
             Route::get('/', [TasksController::class, 'index']); // Get all holidays
@@ -158,6 +164,7 @@ Route::middleware('api')->group(function () {
 
         //Projects API
         Route::prefix('projects')->group(function () {
+            Route::get('/summary', [ProjectsController::class, 'summary']); // Get all holidays
             Route::get('/', [ProjectsController::class, 'index']); // Get all holidays
             Route::post('/', [ProjectsController::class, 'store']); // Create a holiday
             Route::get('/{id}', [ProjectsController::class, 'show']); // Get holiday by ID

@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
 use MongoDB\BSON\UTCDateTime;
+use MongoDB\BSON\ObjectId;
 class ProjectsController extends Controller
 {
     /**
@@ -123,6 +124,96 @@ class ProjectsController extends Controller
 
         return response()->json($projects, 200);
     }
+
+    public function summary(Request $request)
+    {
+        $matchStage = [];
+
+        // Filter by client_id if provided
+        if ($request->has('client_id')) {
+            $matchStage['client_id'] = strval($request->client_id);
+        }
+
+        $summary = Project::raw(function ($collection) use ($matchStage) {
+            return $collection->aggregate([
+                // Filter by client_id
+                ['$match' => $matchStage],
+
+                // Group by client_id and project_status_id
+                [
+                    '$group' => [
+                        '_id' => [
+                            'client_id' => '$client_id',
+                            'project_status_id' => '$project_status_id'
+                        ],
+                        'total_projects' => ['$sum' => 1]
+                    ]
+                ],
+
+                // Reshape data to bring client_id as the top-level key
+                [
+                    '$group' => [
+                        '_id' => '$_id.client_id',
+                        'total_projects' => ['$sum' => '$total_projects'],
+                        'statuses' => [
+                            '$push' => [
+                                'status_id' => [
+                                    '$toObjectId' => '$_id.project_status_id' // Convert to ObjectId
+                                ],
+                                'total_projects' => '$total_projects'
+                            ]
+                        ]
+                    ]
+                ],
+
+                // Unwind the statuses array
+                ['$unwind' => '$statuses'],
+
+                // Lookup project status details from project_statuses collection
+                [
+                    '$lookup' => [
+                        'from' => 'project_statuses',
+                        'localField' => 'statuses.status_id',
+                        'foreignField' => '_id',
+                        'as' => 'status_info'
+                    ]
+                ],
+
+                // Unwind the status_info array (Correct syntax)
+                ['$unwind' => ['path' => '$status_info', 'preserveNullAndEmptyArrays' => true]],
+
+                // Restructure the statuses array with status_name
+                [
+                    '$group' => [
+                        '_id' => '$_id',
+                        'total_projects' => ['$first' => '$total_projects'],
+                        'statuses' => [
+                            '$push' => [
+                                'status_id' => '$statuses.status_id',
+                                'status_name' => ['$ifNull' => ['$status_info.name', 'Unknown']], // Handle missing status names
+                                'total_projects' => '$statuses.total_projects'
+                            ]
+                        ]
+                    ]
+                ],
+
+                // Format the final output
+                [
+                    '$project' => [
+                        '_id' => 0,
+                        'client_id' => '$_id',
+                        'total_projects' => 1,
+                        'statuses' => 1
+                    ]
+                ]
+            ]);
+        });
+
+        return response()->json($summary, 200);
+    }
+
+
+
 
 
 
