@@ -51,23 +51,27 @@ class ActivityLogObserver
         // $user = auth()->user();
         $user = $userData;
         $userId = $user ? $user->_id : null;
+        if($userData){
+            // Prepare log data
+            $logData = [
+                'user'       => [
+                    '_id'        => $userId,
+                    'first_name'    => $user->name,
+                    'last_name'    => $user->last_name,
+                    'email'    => $user->email,
+                ],
+                'action'     => $action,
+                'model'      => get_class($model),
+                'model_id'   => $model->_id,
+                'old_values' => $action === 'created' ? null : $model->getOriginal(),
+                'new_values' => $action === 'deleted' ? null : $model->getAttributes(),
+                'ip_address' => Request::ip(),
+                'user_agent' => Request::header('User-Agent'),
+            ];
+        }else{
+            return;
+        }
 
-        // Prepare log data
-        $logData = [
-            'user'       => [
-                '_id'        => $userId,
-                'first_name'    => $user->name,
-                'last_name'    => $user->last_name,
-                'email'    => $user->email,
-            ],
-            'action'     => $action,
-            'model'      => get_class($model),
-            'model_id'   => $model->_id,
-            'old_values' => $action === 'created' ? null : $model->getOriginal(),
-            'new_values' => $action === 'deleted' ? null : $model->getAttributes(),
-            'ip_address' => Request::ip(),
-            'user_agent' => Request::header('User-Agent'),
-        ];
 
         // Prevent logging itself to avoid infinite loops
         if ($model instanceof ActivityLog) {
