@@ -31,4 +31,13 @@ class Leave extends Eloquent
     {
         return $this->belongsTo(User::class, 'employee_id');
     }
+    public function designation()
+    {
+        return $this->belongsTo(Designation::class, 'designation_id');
+    }
+
+    public function timesheets()
+    {
+        return $this->hasMany(Timesheet::class, 'employee_id');
+    }
 }

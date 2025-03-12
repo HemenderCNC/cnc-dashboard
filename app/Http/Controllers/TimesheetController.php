@@ -207,12 +207,12 @@ class TimesheetController extends Controller
         $session = LoginSession::where('employee_id', $userId)
             ->where('date', $currentDate)
             ->first();
-        if ($session) {
-            if ($session->break === true && !empty($session->break_log)) {
-                $session->break = false;
-                $session->save();
+            if ($session) {
+                if ($session->break === true && !empty($session->break_log)) {
+                    $session->break = false;
+                    $session->save();
+                }
             }
-        }
         $validator = Validator::make($request->all(), [
             'project_id' => 'required|exists:projects,id',
             'task_id' => 'required|exists:tasks,id',
@@ -225,10 +225,17 @@ class TimesheetController extends Controller
                 'errors' => $validator->errors()
             ], 422);
         }
+        $timesheet = Timesheet::where('date', $currentDate)->where('task_id', $request->task_id)->first();
+        if ($timesheet) {
+            return response()->json(['message' => 'Timesheet already created.'], 401);
+        }
+
         $time_log[] = array(
             'start_time' => now()->format('H:i'),
             'end_time' => now()->addMinute()->format('H:i'),
         );
+        Timesheet::where('employee_id', $request->user->id)
+            ->update(['status' => 'paused']);
         $timesheet = Timesheet::create([
             'project_id' => $request->project_id,
             'task_id' => $request->task_id,
@@ -281,6 +288,16 @@ class TimesheetController extends Controller
         $this->userBreakLogStart($userId);
         $timesheet->save();
         return response()->json($timesheet);
+    }
+    public function startBreak(Request $request){
+        $userId = $request->user->id;
+        $this->userBreakLogStart($userId);
+        return response()->json(['message' => 'Break Start'], 200);
+    }
+    public function stopBreak(Request $request){
+        $userId = $request->user->id;
+        $this->userBreakLogStop($userId);
+        return response()->json(['message' => 'Break Stop'], 200);
     }
     public function userBreakLogStart($userId){
         $currentDate = Carbon::now()->toDateString();

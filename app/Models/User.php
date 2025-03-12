@@ -66,6 +66,7 @@ class User extends Eloquent
         'reporting_manager_id',
         'document_type_id',
         'document',
+        'fcm_token'
     ];
 
 
@@ -151,7 +152,10 @@ class User extends Eloquent
         return Skill::whereIn('_id', $this->skills ?? [])->get();
     }
 
-
+    public function latestTimesheet()
+    {
+        return $this->hasOne(Timesheet::class, 'employee_id')->latest();
+    }
     public function department()
     {
         return $this->belongsTo(Department::class, 'department_id');

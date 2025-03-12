@@ -54,7 +54,7 @@ class ProjectFilesController extends Controller
         $validator = Validator::make($request->all(), [
             'project_id' => 'required|string',
             'document_name' => 'required|string',
-            'document' =>  'required|file|max:102400',
+            'document' =>  'nullable|file|max:102400',
         ]);
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
@@ -99,12 +99,15 @@ class ProjectFilesController extends Controller
     }
     public function destroy(string $id)
     {
-        $project = ProjectFiles::find($id);
-        if (!$project) {
+        $ProjectFiles = ProjectFiles::find($id);
+        if (!$ProjectFiles) {
             return response()->json(['message' => 'Project Files not found'], 404);
         }
-
-        $project->delete();
+        $service = app(FileUploadService::class);
+        if ($ProjectFiles->document) {
+            $service->delete($ProjectFiles->document['file_path'],$ProjectFiles->document['media_id']);
+        }
+        $ProjectFiles->delete();
         return response()->json(['message' => 'Project Files deleted successfully'], 200);
     }
 }

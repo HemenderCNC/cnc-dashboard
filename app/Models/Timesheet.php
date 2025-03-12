@@ -27,14 +27,21 @@ class Timesheet extends Eloquent
     ];
     public function project()
     {
-        return $this->belongsTo(Project::class);
+        return $this->belongsTo(Project::class, 'project_id', '_id');
     }
 
+    public function scopeLatestForEmployee($query)
+    {
+        return $query->orderBy('created_at', 'desc')->limit(1);
+    }
     public function task()
     {
         return $this->belongsTo(Tasks::class);
     }
-
+    public function employee()
+    {
+        return $this->belongsTo(User::class, 'employee_id');
+    }
     public function user()
     {
         return $this->belongsTo(User::class, 'employee_id', '_id');

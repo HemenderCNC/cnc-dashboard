@@ -33,6 +33,7 @@ use App\Http\Controllers\IndustryTypesController;
 use App\Http\Controllers\ProjectFilesController;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\HelpingHandController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -197,15 +198,24 @@ Route::middleware('api')->group(function () {
 
         //Public rout for notice board
         Route::get('/active-notices', [NoticeController::class, 'getVisibleNotices']);
+        Route::get('/send-notification', [HelpingHandController::class, 'sendNotification']);
+        Route::post('/set-token', [HelpingHandController::class, 'setToken']);
 
 
         //project files Module
         Route::prefix('project-files')->group(function () {
             Route::get('/{id}', [ProjectFilesController::class, 'show']);
-            Route::get('/{id}', [ProjectFilesController::class, 'detail']);
+            Route::get('/detail/{id}', [ProjectFilesController::class, 'detail']);
             Route::post('/', [ProjectFilesController::class, 'store']);
             Route::post('/{id}', [ProjectFilesController::class, 'update']);
             Route::delete('/{id}', [ProjectFilesController::class, 'destroy']);
+        });
+
+        //Helping Hand Module
+        Route::prefix('helping-hand')->group(function () {
+            Route::post('/create', [HelpingHandController::class, 'create']);
+            Route::post('/{id}', [HelpingHandController::class, 'updateStatus']);
+            Route::get('/', [HelpingHandController::class, 'index']);
         });
 
         //Holiday Module
@@ -229,6 +239,8 @@ Route::middleware('api')->group(function () {
             Route::delete('/{id}', [TimesheetController::class, 'destroy']); // Delete a timesheet
 
         });
+        Route::get('/start-break', [TimesheetController::class, 'startBreak']);
+        Route::get('/stop-break', [TimesheetController::class, 'stopBreak']);
 
         //General settings module
         Route::prefix('updategeneralsettings')->group(function () {

@@ -24,9 +24,24 @@ class DashboardController extends Controller
             ->orderBy('festival_date', 'asc')
             ->get();
         $upcomingLeaves = Leave::where('start_date', '>=', $today)
-            ->where('status', 'approved')
-            ->orderBy('start_date', 'asc')->with('employee')
-            ->get();
+        ->where('status', 'approved')
+        ->orderBy('start_date', 'asc')
+        ->with([
+            'employee' => function ($query) {
+                $query->select('_id', 'name', 'email', 'profile_photo', 'birthdate', 'blood_group', 'designation_id')
+                    ->with('designation:_id,name')
+                    ->with([
+                        'latestTimesheet' => function ($q) {
+                            $q->select('employee_id', 'project_id', 'created_at')
+                                ->latestForEmployee()
+                                ->with(['project' => function ($p) {
+                                    $p->select('_id', 'project_name'); // Ensure name is selected
+                                }]);
+                        }
+                    ]);
+            }
+        ])
+        ->get();
 
         return response()->json([
             'total_users' => $totalUsers,

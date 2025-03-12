@@ -8,6 +8,7 @@
         "php": "^8.1",
         "guzzlehttp/guzzle": "^7.0",
         "jenssegers/mongodb": "*",
+        "kreait/laravel-firebase": "^5.10",
         "laravel/breeze": "^1.8",
         "laravel/framework": "^10.0",
         "laravel/tinker": "^2.8",
