@@ -20,7 +20,7 @@ class HolidayController extends Controller
     // Get all holidays
     public function index()
     {
-        return response()->json(Holiday::all());
+        return response()->json(Holiday::orderBy('created_at', 'desc')->get());
     }
 
     // Store a new holiday
@@ -101,7 +101,7 @@ class HolidayController extends Controller
                 }
             }
             if ($holiday->festival_image) {
-                $this->fileUploadService->delete($holiday->festival_image,$holiday->festival_image['media_id']);
+                $this->fileUploadService->delete($holiday->festival_image['file_path'],$holiday->festival_image['media_id']);
             }
             $imagePath = $this->fileUploadService->upload($request->file('festival_image'), 'uploads', $request->user->id);
             $holiday->festival_image = $imagePath;

@@ -13,8 +13,7 @@ use App\Http\Controllers\SkillController;
 use App\Http\Controllers\EmployeeTypesController;
 use App\Http\Controllers\WorkLocationController;
 use App\Http\Controllers\EmployeeStatusController;
-use App\Http\Controllers\EmployeeLeaveController;
-use App\Http\Controllers\ManagementLeaveController;
+use App\Http\Controllers\LeaveController;
 use App\Http\Controllers\NoticeController;
 use App\Http\Controllers\DocumentTypeController;
 use App\Http\Controllers\HolidayController;
@@ -26,6 +25,15 @@ use App\Http\Controllers\ClientsController;
 use App\Http\Controllers\MilestoneController;
 use App\Http\Controllers\TaskStatusController;
 use App\Http\Controllers\TasksController;
+use App\Http\Controllers\TimesheetController;
+use App\Http\Controllers\GeneralSettingsController;
+use App\Http\Controllers\LoginSessionController;
+use App\Http\Controllers\CountriesController;
+use App\Http\Controllers\IndustryTypesController;
+use App\Http\Controllers\ProjectFilesController;
+use App\Http\Controllers\ActivityLogController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\HelpingHandController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -37,6 +45,8 @@ Route::middleware('api')->group(function () {
 
     // Protected routes with auth.token
     Route::middleware('auth.token')->group(function () {
+        Route::get('track-session', [LoginSessionController::class, 'trackSession']);
+        Route::get('attendance', [LoginSessionController::class, 'attendance']);
         Route::post('logout', [AuthController::class, 'logout']);
         Route::get('dashboard', [AuthController::class, 'dashboard']);
 
@@ -89,6 +99,9 @@ Route::middleware('api')->group(function () {
         //Department API
         Route::apiResource('departments', DepartmentController::class);
 
+        Route::apiResource('countries', CountriesController::class);
+
+        Route::apiResource('industry-types', IndustryTypesController::class);
 
         //Designation API
         Route::apiResource('designations', DesignationController::class);
@@ -136,6 +149,11 @@ Route::middleware('api')->group(function () {
             Route::delete('/{id}', [ClientsController::class, 'destroy']); // Delete a holiday
         });
 
+        //Dashboard API
+        Route::prefix('dashboard')->group(function () {
+            Route::get('/', [DashboardController::class, 'index']); // Get all holidays
+        });
+
         //Tasks API
         Route::prefix('tasks')->group(function () {
             Route::get('/', [TasksController::class, 'index']); // Get all holidays
@@ -147,6 +165,7 @@ Route::middleware('api')->group(function () {
 
         //Projects API
         Route::prefix('projects')->group(function () {
+            Route::get('/summary', [ProjectsController::class, 'summary']); // Get all holidays
             Route::get('/', [ProjectsController::class, 'index']); // Get all holidays
             Route::post('/', [ProjectsController::class, 'store']); // Create a holiday
             Route::get('/{id}', [ProjectsController::class, 'show']); // Get holiday by ID
@@ -154,24 +173,18 @@ Route::middleware('api')->group(function () {
             Route::delete('/{id}', [ProjectsController::class, 'destroy']); // Delete a holiday
         });
 
-        //Employee Leave Module
-        Route::prefix('employee/leaves')->group(function () {
-            Route::get('/leaves-summary', [EmployeeLeaveController::class, 'getLeaveSummary']);
-            Route::get('/', [EmployeeLeaveController::class, 'index']); // Employee views own leaves
-            Route::post('/', [EmployeeLeaveController::class, 'store']); // Employee requests leave
-            Route::get('/{id}', [EmployeeLeaveController::class, 'show']); // View specific leave request
-            Route::put('/{id}', [EmployeeLeaveController::class, 'update']); // Update leave request (only if pending)
-            Route::patch('/{id}/cancel', [EmployeeLeaveController::class, 'cancel']); // Cancel leave request (only if start date not passed)
-
+        //Leave Module
+        Route::prefix('leaves')->group(function () {
+            Route::get('/leaves-summary', [LeaveController::class, 'getLeaveSummary']);
+            Route::get('/', [LeaveController::class, 'index']); // Employee views own leaves
+            Route::post('/', [LeaveController::class, 'store']); // Employee requests leave
+            Route::get('/{id}', [LeaveController::class, 'show']); // View specific leave request
+            Route::put('/{id}', [LeaveController::class, 'update']); // Update leave request (only if pending)
+            Route::post('/{id}/cancel', [LeaveController::class, 'cancel']); // Cancel leave request (only if start date not passed)
+            Route::put('/{id}/approve', [LeaveController::class, 'approve']);
+            Route::put('/{id}/reject', [LeaveController::class, 'reject']);
         });
 
-        //Management Leave Module
-        Route::prefix('management/leaves')->group(function () {
-            Route::get('/', [ManagementLeaveController::class, 'index']);
-            Route::get('/{id}', [ManagementLeaveController::class, 'show']); // View details of a specific leave request
-            Route::put('/{id}/approve', [ManagementLeaveController::class, 'approve']);
-            Route::put('/{id}/reject', [ManagementLeaveController::class, 'reject']);
-        });
 
         //Notice Module
         Route::prefix('notices')->group(function () {
@@ -185,9 +198,25 @@ Route::middleware('api')->group(function () {
 
         //Public rout for notice board
         Route::get('/active-notices', [NoticeController::class, 'getVisibleNotices']);
+        Route::get('/send-notification', [HelpingHandController::class, 'sendNotification']);
+        Route::post('/set-token', [HelpingHandController::class, 'setToken']);
 
 
+        //project files Module
+        Route::prefix('project-files')->group(function () {
+            Route::get('/{id}', [ProjectFilesController::class, 'show']);
+            Route::get('/detail/{id}', [ProjectFilesController::class, 'detail']);
+            Route::post('/', [ProjectFilesController::class, 'store']);
+            Route::post('/{id}', [ProjectFilesController::class, 'update']);
+            Route::delete('/{id}', [ProjectFilesController::class, 'destroy']);
+        });
 
+        //Helping Hand Module
+        Route::prefix('helping-hand')->group(function () {
+            Route::post('/create', [HelpingHandController::class, 'create']);
+            Route::post('/{id}', [HelpingHandController::class, 'updateStatus']);
+            Route::get('/', [HelpingHandController::class, 'index']);
+        });
 
         //Holiday Module
         Route::prefix('holidays')->group(function () {
@@ -198,6 +227,30 @@ Route::middleware('api')->group(function () {
             Route::delete('/{id}', [HolidayController::class, 'destroy']); // Delete a holiday
         });
 
+        //Timesheet Module
+        Route::prefix('timesheet')->group(function () {
+            Route::get('/', [TimesheetController::class, 'index']); // Get all timesheets
+            Route::post('/', [TimesheetController::class, 'store']); // Create a timesheet
+            Route::get('/{id}', [TimesheetController::class, 'show']); // Get timesheet by ID
+            Route::get('/stop-task/{id}', [TimesheetController::class, 'stopTask']); // Get timesheet by ID
+            Route::get('/run-task/{id}', [TimesheetController::class, 'runTask']); // Get timesheet by ID
+            Route::get('/complete-task/{id}', [TimesheetController::class, 'completeTask']); // Get timesheet by ID
+            Route::post('/{id}', [TimesheetController::class, 'update']); // Update a timesheet
+            Route::delete('/{id}', [TimesheetController::class, 'destroy']); // Delete a timesheet
 
+        });
+        Route::get('/start-break', [TimesheetController::class, 'startBreak']);
+        Route::get('/stop-break', [TimesheetController::class, 'stopBreak']);
+
+        //General settings module
+        Route::prefix('updategeneralsettings')->group(function () {
+            //Route::get('/', [GeneralSettingsController::class, 'index']); // Get all settings
+            Route::post('/', [GeneralSettingsController::class, 'update']); // Update settings
+        });
+
+
+        //Activity Logs listing
+        Route::get('/activity-logs', [ActivityLogController::class, 'getActivityLogs']);
     });
 });
+Route::get('getgeneralsettings/', [GeneralSettingsController::class, 'index']); // Update settings

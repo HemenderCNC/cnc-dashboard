@@ -13,7 +13,7 @@ class PlatformController extends Controller
      */
     public function index()
     {
-        return response()->json(Platform::all(), 200);
+        return response()->json(Platform::orderBy('created_at', 'desc')->get(), 200);
     }
 
     /**

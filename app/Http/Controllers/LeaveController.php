@@ -2,16 +2,39 @@
 
 namespace App\Http\Controllers;
 use App\Models\Leave;
+use App\Models\GeneralSettings;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
-class EmployeeLeaveController extends Controller
+class LeaveController extends Controller
 {
     // Employee can view only their own leave requests
     public function index(Request $request)
     {
-        $employeeId = $request->user->id; // Get authenticated user ID
-        $leaves = Leave::where('employee_id', $employeeId)->get();
+        $query = Leave::query();
+
+        // If user is an Employee, restrict to their own records
+        if ($request->user->role->name === 'Employee') {
+            $query->where('employee_id', $request->user->id);
+        }
+        else if ($request->has('employee_id')) {
+            $query->where('employee_id', $request->employee_id);
+        }
+
+        // Filter by date range (start_date, end_date)
+        if ($request->has('start_date') && $request->has('end_date')) {
+            $query->whereBetween('start_date', [$request->start_date, $request->end_date]);
+        }
+
+        // Filter by status
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        // Order and fetch results
+        $leaves = $query->orderBy('created_at', 'desc')->get();
+
         return response()->json($leaves, 200);
     }
 
@@ -19,7 +42,11 @@ class EmployeeLeaveController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'start_date' => 'required|date',
+            'start_date' => [
+                'required',
+                'date',
+                Rule::when($request->half_day, ['same:end_date']), // Ensures same start and end date if half-day is true
+            ],
             'end_date' => 'required|date|after_or_equal:start_date',
             'half_day' => 'boolean',
             'half_day_type' => 'nullable|in:first_half,second_half',
@@ -138,12 +165,23 @@ class EmployeeLeaveController extends Controller
 
     public function getLeaveSummary(Request $request)
     {
-        $userId = $request->user->id; // Get logged-in employee ID
-        $totalLeaves = 12; // Define the total allowed leaves
+        $query = Leave::query();
 
+        // If user is an Employee, restrict to their own records
+        if ($request->user->role->name === 'Employee') {
+            $query->where('employee_id', $request->user->id);
+        }
+        else if ($request->has('employee_id')) {
+            $query->where('employee_id', $request->employee_id);
+        }
+        $totalLeaves = 12; // Define the total allowed leaves
+        $settings = GeneralSettings::firstOrNew([]);
+        $leave_settings = $settings->leave_settings ?? [];
+        if(!empty($leave_settings)){
+            $totalLeaves = $leave_settings['total_leaves_per_person'];
+        }
         // Get the total approved leave days
-        $consumedLeaves = Leave::where('employee_id', $userId)
-            ->where('status', 'approved')
+        $consumedLeaves = $query->where('status', 'approved')
             ->sum('leave_duration'); //leave duration
 
         // Calculate remaining leaves
@@ -157,4 +195,65 @@ class EmployeeLeaveController extends Controller
         ], 200);
     }
 
+    // HR approves a leave request
+    public function approve(Request $request, $id)
+    {
+        $leave = Leave::find($id);
+
+        if (!$leave) {
+            return response()->json(['message' => 'Leave request not found'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'leave_type' => 'required|string',
+            'approve_comment' => 'nullable|string',
+            // 'approved_by' => 'required|string'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $leave->update([
+            'status' => 'approved',
+            'leave_type' => $request->leave_type,
+            'approve_comment' => $request->approve_comment,
+            'approved_by' => $request->user->id
+        ]);
+
+        return response()->json(['message' => 'Leave approved successfully', 'leave' => $leave], 200);
+    }
+
+    // HR rejects a leave request
+    public function reject(Request $request, $id)
+    {
+        $leave = Leave::find($id);
+
+        if (!$leave) {
+            return response()->json(['message' => 'Leave request not found'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'approve_comment' => 'required|string',
+            // 'approved_by' => 'required|string'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $leave->update([
+            'status' => 'rejected',
+            'approve_comment' => $request->approve_comment,
+            'approved_by' => $request->user->id
+        ]);
+
+        return response()->json(['message' => 'Leave rejected', 'leave' => $leave], 200);
+    }
 }

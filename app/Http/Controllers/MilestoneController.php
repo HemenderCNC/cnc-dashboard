@@ -9,9 +9,29 @@ use Illuminate\Http\Request;
 class MilestoneController extends Controller
 {
     // Get all Milestones
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json(Milestones::all());
+        $query = Milestones::query();
+
+        // If user is an Employee, restrict to their own records
+        if ($request->has('project_id')) {
+            $query->where('project_id', $request->project_id);
+        }
+
+        // Filter by date range (start_date, end_date)
+        if ($request->has('start_date') && $request->has('end_date')) {
+            $query->whereBetween('start_date', [$request->start_date, $request->end_date]);
+        }
+
+        // Filter by status
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        // Order and fetch results
+        $leaves = $query->orderBy('created_at', 'desc')->get();
+
+        return response()->json($leaves, 200);
     }
 
     // Store a new Milestones

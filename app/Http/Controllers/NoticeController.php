@@ -12,14 +12,14 @@ class NoticeController extends Controller
     // Get all notices
     public function index()
     {
-        $notices = Notice::all();
+        $notices = Notice::orderBy('created_at', 'desc')->get();
         if ($notices->isEmpty()) {
             return response()->json([
                 'message' => 'No notices found',
                 'notices' => []
             ], 200);
         }
-    
+
         return response()->json([
             'message' => 'Notices fetched successfully',
             'notices' => $notices
@@ -143,14 +143,14 @@ class NoticeController extends Controller
             ->where('start_date', '<=', $today)
             ->where('end_date', '>=', $today)
             ->get();
-    
+
         if ($notices->isEmpty()) {
             return response()->json([
                 'message' => 'No visible notices found',
                 'notices' => []
             ], 200);
         }
-    
+
         return response()->json([
             'message' => 'Visible notices retrieved successfully',
             'notices' => $notices
