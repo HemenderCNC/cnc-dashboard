@@ -227,7 +227,7 @@ class TimesheetController extends Controller
         }
         $timesheet = Timesheet::where('date', $currentDate)->where('task_id', $request->task_id)->first();
         if ($timesheet) {
-            return response()->json(['message' => 'Timesheet already created.'], 401);
+            return response()->json(['message' => 'Timesheet already created.'], 422);
         }
 
         $time_log[] = array(
