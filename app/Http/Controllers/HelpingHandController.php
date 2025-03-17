@@ -7,19 +7,24 @@ use App\Models\HelpingHand;
 use Illuminate\Http\Request;
 use App\Notifications\PushNotification;
 use App\Models\User;
+use App\Models\Project;
 use Illuminate\Support\Facades\Log;
 
 class HelpingHandController extends Controller
 {
     public function index(Request $request){
         $matchStage = (object)[]; // Ensure it's an object, not an empty array
+        $userId = $request->user->id;
         if ($request->user->role->name === 'Employee') {
-            $userId = $request->user->id;
             $matchStage->{'$or'} = [
                 (object) ['from_id' => $userId],
                 (object) ['to_id' => $userId]
             ];
         }
+        $matchStage->{'$or'} = [
+            (object) ['from_id' => $userId],
+            (object) ['to_id' => $userId]
+        ];
         // Filter by client ID
         if ($request->has('project_id')) {
             $matchStage->project_id = $request->project_id;
@@ -36,30 +41,76 @@ class HelpingHandController extends Controller
         $HelpingHand = HelpingHand::raw(function ($collection) use ($matchStage) {
             return $collection->aggregate([
                 ['$match' => $matchStage],
+
+                // Convert IDs to ObjectId
                 ['$addFields' => [
                     'project_id' => ['$toObjectId' => '$project_id'],
                     'from_id' => ['$toObjectId' => '$from_id'],
                     'to_id' => ['$toObjectId' => '$to_id']
                 ]],
+
+                // Lookup for Project
                 ['$lookup' => [
-                    'from' => 'projects',   // Collection name for Users (Project Manager)
+                    'from' => 'projects',
                     'localField' => 'project_id',
                     'foreignField' => '_id',
                     'as' => 'project'
                 ]],
+
+                // Lookup for 'from' user
                 ['$lookup' => [
-                    'from' => 'users',   // Collection name for Users (Project Manager)
+                    'from' => 'users',
                     'localField' => 'from_id',
                     'foreignField' => '_id',
                     'as' => 'from'
                 ]],
+                ['$unwind' => ['path' => '$from', 'preserveNullAndEmptyArrays' => true]],
+
+                // Lookup for 'to' user
                 ['$lookup' => [
-                    'from' => 'users',   // Collection name for Users (Created By)
+                    'from' => 'users',
                     'localField' => 'to_id',
                     'foreignField' => '_id',
                     'as' => 'to'
                 ]],
+
+                // Unwind 'to' to access 'designation_id'
+                ['$unwind' => ['path' => '$to', 'preserveNullAndEmptyArrays' => true]],
+
+                // Convert 'to.designation_id' to ObjectId
+                ['$addFields' => [
+                    'to.designation_id' => ['$toObjectId' => '$to.designation_id'],
+                    'from.designation_id' => ['$toObjectId' => '$from.designation_id']
+                ]],
+
+                // Lookup for Designation
+                ['$lookup' => [
+                    'from' => 'designations',
+                    'localField' => 'to.designation_id',
+                    'foreignField' => '_id',
+                    'as' => 'to_designation'
+                ]],
+                ['$lookup' => [
+                    'from' => 'designations',
+                    'localField' => 'from.designation_id',
+                    'foreignField' => '_id',
+                    'as' => 'from_designation'
+                ]],
+
+                // Unwind 'to_designation' to get name
+                ['$unwind' => ['path' => '$to_designation', 'preserveNullAndEmptyArrays' => true]],
+                ['$unwind' => ['path' => '$from_designation', 'preserveNullAndEmptyArrays' => true]],
+
+                // Add Designation Name to 'to'
+                ['$addFields' => [
+                    'to.designation_name' => '$to_designation.name',
+                    'from.designation_name' => '$from_designation.name',
+                ]],
+
+                // Sorting by created_at descending
                 ['$sort' => ['created_at' => -1]],
+
+                // Projection
                 ['$project' => [
                     'project_id' => 1,
                     'project' => 1,
@@ -69,6 +120,8 @@ class HelpingHandController extends Controller
                     'to' => 1,
                     'issue' => 1,
                     'status' => 1,
+                    'schedule_time' => 1,
+                    'time_log' => 1,
                     'updated_at' => 1,
                     'created_at' => 1
                 ]]
@@ -88,7 +141,6 @@ class HelpingHandController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-
         $HelpingHand = HelpingHand::create([
             'project_id' => $request->project_id,
             'from_id' => $request->from_id,
@@ -96,6 +148,7 @@ class HelpingHandController extends Controller
             'issue' => $request->issue,
             'status' => 'pending',
         ]);
+        $this->sendPushNotification($HelpingHand);
         return response()->json($HelpingHand, 201);
     }
 
@@ -112,6 +165,11 @@ class HelpingHandController extends Controller
         }
         $status = $request->status;
         if($status == 'accepted'){
+            $user_id = $request->user->id;
+            $HelpingHandCount = HelpingHand::where('status','accepted')->where('to_id',$user_id)->count();
+            if($HelpingHandCount > 0){
+                return response()->json(['message' => 'You are already working on a task. Please complete or cancel it before starting another.'], 409);
+            }
             $timelog = array(
                 'start_time' => now()->format('H:i'),
                 'end_time' => now()->addMinute()->format('H:i'),
@@ -133,11 +191,22 @@ class HelpingHandController extends Controller
         return response()->json($HelpingHand, 200);
     }
 
-    public function sendNotification(Request $request){
-        Log::info('FCM token');
-        $title = 'CP GET OUT';
-        $body = 'This fully integrates FCM push notifications from Laravel to React. 🚀';
-        $user = User::find('678e3c50dc822828470e8c42');
+    public function sendPushNotification($HelpingHand){
+        if(empty($HelpingHand)){
+            return;
+        }
+        $status = $HelpingHand->status;
+        $from_id = $HelpingHand->from_id;
+        $to_id = $HelpingHand->to_id;
+        if($status == 'pending'){
+            $from = User::find($from_id);
+            $from_name = $from->name.' '.$from->last_name;
+            $project = Project::find($HelpingHand->project_id);
+            $project_name = $project->project_name;
+            $title = '🤝 New Help Request!';
+            $body = '✋ Employee '.$from_name.' has requested your help on 📌'.$project_name.'.               🚀Tap to respond!';
+        }
+        $user = User::find($to_id);
         if (!$user) {
             return response()->json(['error' => 'User not found'], 404);
         }

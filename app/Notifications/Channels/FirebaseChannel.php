@@ -28,7 +28,7 @@ class FirebaseChannel {
         Log::info("Sending FCM notification to: " . $token);
 
         try {
-            $messaging->send(CloudMessage::withTarget('token', $token)->withNotification($message));
+            $messaging->send($message);
         } catch (\Exception $e) {
             Log::error('FCM Notification Error: ' . $e->getMessage());
         }

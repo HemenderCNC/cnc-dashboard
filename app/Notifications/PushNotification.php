@@ -25,10 +25,29 @@ class PushNotification extends Notification {
     }
 
     public function toFcm($notifiable) {
-        Log::info('FCM token for user: ' . $notifiable->fcm_token);
+        // Log::info('FCM token for user: ' . $notifiable->fcm_token);
 
-        return FirebaseNotification::create($this->title, $this->body);
+        if (!$notifiable->fcm_token) {
+            // Log::error('No FCM token found for user.');
+            return null; // Stop processing if no token is available
+        }
+
+        // Create Firebase Notification instance
+        $firebaseNotification = FirebaseNotification::create($this->title, $this->body, null);
+        $payload = CloudMessage::fromArray([
+            'token' => $notifiable->fcm_token,
+            'data' => [
+                'title' => $this->title,
+                'body' => $this->body,
+                'icon' => url('/logo192.png'),
+                'click_action' => url('/'),
+                'extraInfo' => $this->title,
+            ],
+        ]);
+
+        return $payload;
     }
+
 
     public function toArray($notifiable) {
         return [
