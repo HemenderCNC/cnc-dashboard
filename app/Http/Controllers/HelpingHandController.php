@@ -198,6 +198,7 @@ class HelpingHandController extends Controller
         $status = $HelpingHand->status;
         $from_id = $HelpingHand->from_id;
         $to_id = $HelpingHand->to_id;
+
         if($status == 'pending'){
             $from = User::find($from_id);
             $from_name = $from->name.' '.$from->last_name;
@@ -205,12 +206,72 @@ class HelpingHandController extends Controller
             $project_name = $project->project_name;
             $title = '🤝 New Help Request!';
             $body = '✋ Employee '.$from_name.' has requested your help on 📌'.$project_name.'.               🚀Tap to respond!';
+            $user = User::find($to_id);
+            $user->notify(new PushNotification($title, $body));
         }
-        $user = User::find($to_id);
-        if (!$user) {
-            return response()->json(['error' => 'User not found'], 404);
+        if($status == 'accepted'){
+            $to = User::find($to_id);
+            $to_name = $to->name.' '.$to->last_name;
+            $project = Project::find($HelpingHand->project_id);
+            $project_name = $project->project_name;
+            $title = '✅ Help Request Accepted!';
+            $body = '🎉 ' . $to_name . ' has accepted your help request for 📌 ' . $project_name . '. 🏆 Time to collaborate and get things done! 🚀';
+            $user = User::find($from_id);
+            $user->notify(new PushNotification($title, $body));
         }
-        $user->notify(new PushNotification($title, $body));
+        if($status == 'declined'){
+            $to = User::find($to_id);
+            $to_name = $to->name.' '.$to->last_name;
+            $project = Project::find($HelpingHand->project_id);
+            $project_name = $project->project_name;
+            $title = '❌ Help Request Declined';
+            $body = '⚠️ ' . $to_name . ' has declined your help request for 📌 ' . $project_name . '. Don\'t worry! You can ask someone else for assistance. 💡';
+            $user = User::find($from_id);
+            $user->notify(new PushNotification($title, $body));
+        }
+        if($status == 'canceled') {
+            $from = User::find($from_id);
+            $from_name = $from->name . ' ' . $from->last_name;
+            $project = Project::find($HelpingHand->project_id);
+            $project_name = $project->project_name;
+            $title = '❌ Help Request Canceled';
+            $body = '🔔 ' . $from_name . ' has canceled the help request for 📌 ' . $project_name . '. You’re no longer assigned to assist on this task.';
+            $user = User::find($to_id);
+            $user->notify(new PushNotification($title, $body));
+        }
+        if ($status == 'completed') {
+            $from = User::find($from_id);
+            $to = User::find($to_id);
+            $project = Project::find($HelpingHand->project_id);
+            $project_name = $project->project_name;
+
+            $title = '✅ Help Request Completed';
+            $body = '🎉 The help request for 📌 ' . $project_name . ' has been successfully completed. Great teamwork! 🚀';
+
+            // Notify both users
+            if ($from) {
+                $from->notify(new PushNotification($title, $body));
+            }
+            if ($to) {
+                $to->notify(new PushNotification($title, $body));
+            }
+        }
+        if ($status == 'rescheduled') {
+            $to = User::find($to_id);
+            $from = User::find($from_id);
+            $project = Project::find($HelpingHand->project_id);
+            $project_name = $project->project_name;
+            $to_name = $to->name . ' ' . $to->last_name;
+            $new_time = $HelpingHand->schedule_time; // Assuming you store the rescheduled time in the model
+
+            $title = '⏳ Help Request Rescheduled';
+            $body = '🔄 Employee ' . $to_name . ' has rescheduled your help request for 📌 ' . $project_name . ' to 🕒 ' . $new_time . '. 📅 Tap to check the updated schedule!';
+
+            // Notify requester
+            if ($from) {
+                $from->notify(new PushNotification($title, $body));
+            }
+        }
 
         return response()->json(['message' => 'Notification sent successfully']);
     }

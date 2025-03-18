@@ -251,6 +251,7 @@ Route::middleware('api')->group(function () {
 
         //Activity Logs listing
         Route::get('/activity-logs', [ActivityLogController::class, 'getActivityLogs']);
+        Route::get('getgeneralsettings/protected', [GeneralSettingsController::class, 'index']); // Update settings
     });
 });
 Route::get('getgeneralsettings/', [GeneralSettingsController::class, 'index']); // Update settings
