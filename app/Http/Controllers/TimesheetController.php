@@ -204,15 +204,6 @@ class TimesheetController extends Controller
     {
         $userId = $request->user->id;
         $currentDate = Carbon::now()->toDateString();
-        $session = LoginSession::where('employee_id', $userId)
-            ->where('date', $currentDate)
-            ->first();
-            if ($session) {
-                if ($session->break === true && !empty($session->break_log)) {
-                    $session->break = false;
-                    $session->save();
-                }
-            }
         $validator = Validator::make($request->all(), [
             'project_id' => 'required|exists:projects,id',
             'task_id' => 'required|exists:tasks,id',
@@ -229,22 +220,30 @@ class TimesheetController extends Controller
         if ($timesheet) {
             return response()->json(['message' => 'Timesheet already created.'], 422);
         }
-
-        $time_log[] = array(
+        $timeLogEntry = [
             'start_time' => now()->format('H:i'),
             'end_time' => now()->addMinute()->format('H:i'),
-        );
+        ];
         Timesheet::where('employee_id', $request->user->id)
             ->update(['status' => 'paused']);
         $timesheet = Timesheet::create([
             'project_id' => $request->project_id,
             'task_id' => $request->task_id,
             'date' => now()->format('Y-m-d'),
-            'time_log' => $time_log,
+            'time_log' => [$timeLogEntry],
             'work_description' => $request->work_description,
             'employee_id' => $request->user->id,
             'status' => 'running',
         ]);
+        $session = LoginSession::where('employee_id', $userId)
+            ->where('date', $currentDate)
+            ->first();
+            if ($session) {
+                if ($session->break === true && !empty($session->break_log)) {
+                    $session->break = false;
+                    $session->save();
+                }
+            }
 
         return response()->json($timesheet, 201);
     }
@@ -343,9 +342,6 @@ class TimesheetController extends Controller
         $validator = Validator::make($request->all(), [
             'project_id' => 'required|exists:projects,id',
             'task_id' => 'required|exists:tasks,id',
-            'date' => 'required|date',
-            'start_time' => 'required|date_format:H:i',  // Ensures HH:MM format
-            'end_time' => 'required|date_format:H:i|after:start_time',
             'work_description' => 'required|string',
         ]);
 
@@ -359,7 +355,6 @@ class TimesheetController extends Controller
         $timesheet->update([
             'project_id' => $request->project_id,
             'task_id' => $request->task_id,
-            'date' => $request->date,
             'start_time' => $request->start_time,
             'end_time' => $request->end_time,
             'work_description' => $request->work_description,

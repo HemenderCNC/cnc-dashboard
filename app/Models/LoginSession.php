@@ -21,7 +21,7 @@ class LoginSession extends Eloquent
         'break',
         'break_log',
     ];
-    protected $appends = ['check_in_time', 'check_out_time', 'total_login_time','total_working_time'];
+    protected $appends = ['check_in_time', 'check_out_time', 'total_login_time','total_working_time','total_break_time'];
 
     public function getCheckInTimeAttribute()
     {
@@ -52,7 +52,30 @@ class LoginSession extends Eloquent
         $hours = floor($totalMinutes / 60);
         $minutes = $totalMinutes % 60;
 
-        return sprintf("%02d Hrs. %02d min", $hours, $minutes);
+        return sprintf("%02d:%02d", $hours, $minutes);
+    }
+    public function getTotalBreakTimeAttribute()
+    {
+        $totalMinutes = 0;
+
+        if (!empty($this->break_log)) {
+            foreach ($this->break_log as $log) {
+                $start = Carbon::createFromFormat('H:i', $log['start_time']);
+                $end = Carbon::createFromFormat('H:i', $log['end_time']);
+
+                // Handle past-midnight checkout
+                if ($end->lt($start)) {
+                    $end->addDay();
+                }
+
+                $totalMinutes += $start->diffInMinutes($end);
+            }
+        }
+
+        $hours = floor($totalMinutes / 60);
+        $minutes = $totalMinutes % 60;
+
+        return sprintf("%02d:%02d", $hours, $minutes);
     }
     public function getTotalWorkingTimeAttribute()
     {
@@ -95,6 +118,6 @@ class LoginSession extends Eloquent
         $hours = floor($totalWorkingMinutes / 60);
         $minutes = $totalWorkingMinutes % 60;
 
-        return sprintf("%02d Hrs. %02d min", $hours, $minutes);
+        return sprintf("%02d:%02d", $hours, $minutes);
     }
 }
