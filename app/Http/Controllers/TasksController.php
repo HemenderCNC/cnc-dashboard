@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Tasks;
+use App\Models\Milestones;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use App\Services\FileUploadService;
@@ -338,4 +339,224 @@ class TasksController extends Controller
         $task->delete();
         return response()->json(['message' => 'Task deleted successfully'], 200);
     }
+
+    public function getTasksByProject(Request $request)
+    {
+        $userId = $request->user->id; // Get logged-in user's ID
+        $projectId = $request->project_id; // Get project ID from request
+        $perPage = (int) ($request->query('per_page', 10)); // Number of results per page (default: 10)
+
+        // Validate input
+        if (!$projectId) {
+            return response()->json(['error' => 'Project ID is required'], 400);
+        }
+
+        // Use aggregation pipeline for grouping
+        $tasksByStatus = Tasks::raw(function ($collection) use ($projectId, $userId, $perPage, $request) {
+            $page = (int) $request->query('page', 1);
+            $skip = ($page - 1) * $perPage;
+        
+            return $collection->aggregate([
+                ['$match' => [
+                    'project_id' => (string) $projectId,  // Ensure it's treated as a string
+                    // 'assignee_id' => (string) $userId
+                ]],
+                // Convert status_id to ObjectId
+                ['$addFields' => [
+                    'status_id' => ['$toObjectId' => '$status_id']
+                ]],
+                ['$lookup' => [
+                    'from' => 'task_statuses',
+                    'localField' => 'status_id',
+                    'foreignField' => '_id',
+                    'as' => 'status_info'
+                ]],
+        
+                ['$unwind' => [
+                    'path' => '$status_info',
+                    'preserveNullAndEmptyArrays' => true // Avoid errors if no matching status
+                ]],
+        
+                // ['$group' => [
+                //     '_id' => '$status_id',
+                //     'status_name' => ['$first' => '$status_info.name'],
+                //     'tasks' => ['$push' => [
+                //         'task_id' => '$_id',
+                //         'title' => '$title',
+                //         'description' => '$description',
+                //         'due_date' => '$due_date',
+                //         'estimated_hours' => '$estimated_hours'
+                //     ]]
+                // ]],
+
+                ['$group' => [
+                    '_id' => '$status_id',
+                    'status_name' => ['$first' => '$status_info.name'],
+                    'task_count' => ['$sum' => 1]  // Count tasks instead of listing them
+                ]],
+        
+                ['$sort' => ['status_name' => 1]],
+                ['$skip' => $skip],
+                ['$limit' => $perPage]
+            ]);
+        });
+
+
+        $tasksByAssignee = Tasks::raw(function ($collection) use ($projectId, $userId, $perPage, $request) {
+            $page = (int) $request->query('page', 1);
+            $skip = ($page - 1) * $perPage;
+        
+            return $collection->aggregate([
+                ['$match' => [
+                    'project_id' => (string) $projectId,  // Ensure it's treated as a string
+                    // 'assignee_id' => (string) $userId
+                ]],
+                // Convert status_id to ObjectId
+                ['$addFields' => [
+                    'assignee_id' => ['$toObjectId' => '$assignee_id']
+                ]],
+                ['$lookup' => [
+                    'from' => 'users',
+                    'localField' => 'assignee_id',
+                    'foreignField' => '_id',
+                    'as' => 'assignee_info'
+                ]],
+        
+                ['$unwind' => [
+                    'path' => '$assignee_info',
+                    'preserveNullAndEmptyArrays' => true // Avoid errors if no matching status
+                ]],
+        
+                ['$group' => [
+                    '_id' => '$assignee_id',
+                    'assignee_name' => ['$first' => '$assignee_info.name'],
+                    'task_count' => ['$sum' => 1]  // Count tasks instead of listing them
+                ]],
+        
+                ['$sort' => ['assignee_name' => 1]],
+                ['$skip' => $skip],
+                ['$limit' => $perPage]
+            ]);
+        });
+
+
+        // New Query: Get tasks by assignee where status is "To Do"
+        $tasksByAssigneeTodo = Tasks::raw(function ($collection) use ($projectId, $perPage, $request) {
+            $page = (int) $request->query('page', 1);
+            $skip = ($page - 1) * $perPage;
+        
+            return $collection->aggregate([
+                ['$match' => [
+                    'project_id' => (string) $projectId
+                ]],
+                ['$addFields' => [
+                    'status_id' => ['$toObjectId' => '$status_id'],
+                    'assignee_id' => ['$toObjectId' => '$assignee_id']
+                ]],
+                // Lookup status name from task_statuses
+                ['$lookup' => [
+                    'from' => 'task_statuses',
+                    'localField' => 'status_id',
+                    'foreignField' => '_id',
+                    'as' => 'status_info'
+                ]],
+                ['$unwind' => [
+                    'path' => '$status_info',
+                    'preserveNullAndEmptyArrays' => true
+                ]],
+                // ['$match' => [
+                //     'status_info.name' => 'To Do' // Only fetch tasks with "To Do" status
+                // ]],
+                ['$match' => [
+                    '$expr' => [
+                        '$eq' => [['$toLower' => '$status_info.name'], 'to do']
+                    ]
+                ]],
+                ['$group' => [
+                    '_id' => '$assignee_id',
+                    'task_count' => ['$sum' => 1]
+                ]],
+                // Lookup user details for assignee
+                ['$lookup' => [
+                    'from' => 'users', // Replace with your actual users collection name
+                    'localField' => '_id',
+                    'foreignField' => '_id',
+                    'as' => 'assignee_info'
+                ]],
+                ['$unwind' => [
+                    'path' => '$assignee_info',
+                    'preserveNullAndEmptyArrays' => true
+                ]],
+                ['$project' => [
+                    'task_count' => 1,
+                    'assignee_name' => '$assignee_info.name',
+                    'assignee_email' => '$assignee_info.email',
+                ]],
+                ['$sort' => ['assignee_name' => 1]], // Sort by assignee name
+                ['$skip' => $skip],
+                ['$limit' => $perPage]
+            ]);
+        });
+        
+        //Project Milestone summary
+        $projectMilestones = Milestones::raw(function ($collection) use ($projectId) {
+            return $collection->aggregate([
+                // Match milestones by project_id
+                ['$match' => [
+                    'project_id' => (string) $projectId
+                ]],
+                // Convert status to lowercase and group by project_id
+                ['$group' => [
+                    '_id' => '$project_id',
+                    'total_milestones' => ['$sum' => 1], // Count total milestones
+                    'pending_milestones' => [
+                        '$sum' => [
+                            '$cond' => [['$eq' => [['$toLower' => '$status'], 'pending']], 1, 0]
+                        ]
+                    ],
+                    'milestones' => ['$push' => [
+                        'id' => '$_id',
+                        'name' => '$name',
+                        'start_date' => '$start_date',
+                        'end_date' => '$end_date',
+                        'status' => '$status',
+                        'color' => '$color'
+                    ]]
+                ]],
+                // Calculate completion percentage
+                ['$addFields' => [
+                    'completion_percentage' => [
+                        '$multiply' => [
+                            ['$divide' => [
+                                ['$subtract' => ['$total_milestones', '$pending_milestones']],
+                                '$total_milestones'
+                            ]],
+                            100
+                        ]
+                    ]
+                ]]
+            ]);
+        });
+        
+        
+
+
+        // Convert results to arrays
+        $tasksByStatusArray = iterator_to_array($tasksByStatus);
+        $tasksByAssigneeArray = iterator_to_array($tasksByAssignee);
+        $tasksByAssigneeTodoArray = iterator_to_array($tasksByAssigneeTodo);
+        $projectMilestonesArray = iterator_to_array($projectMilestones);
+
+        // Merge both results
+        $response = [
+            'tasks_by_status' => $tasksByStatusArray,
+            'tasks_by_assignee' => $tasksByAssigneeArray,
+            'tasks_by_assignee_todo' => $tasksByAssigneeTodoArray,
+            'project_milestones_summary' => $projectMilestonesArray
+        ];
+        
+        return response()->json($response);
+
+    }
+
 }
