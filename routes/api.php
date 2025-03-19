@@ -156,6 +156,9 @@ Route::middleware('api')->group(function () {
 
         //Tasks API
         Route::prefix('tasks')->group(function () {
+            //Get task of a project for logedin user
+            Route::get('/project-tasks', [TasksController::class, 'getTasksByProject']);
+            
             Route::get('/', [TasksController::class, 'index']); // Get all holidays
             Route::post('/', [TasksController::class, 'store']); // Create a holiday
             Route::get('/{id}', [TasksController::class, 'show']); // Get holiday by ID
