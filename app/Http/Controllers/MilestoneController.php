@@ -61,7 +61,7 @@ class MilestoneController extends Controller
         $nextOrder = $maxOrder !== null ? $maxOrder + 1 : 1;
 
         $milestones = Milestones::create([
-            'name' => $request->name,
+            'name' => strtolower(trim($request->name)),
             'start_date' => $request->start_date,
             'end_date' => $request->end_date,
             'color' => $request->color,
@@ -107,7 +107,14 @@ class MilestoneController extends Controller
         }
 
 
-        $milestone->update($request->only(['name', 'start_date', 'end_date', 'color', 'project_id', 'status']));
+        $data = $request->only(['name', 'start_date', 'end_date', 'color', 'project_id', 'status']);
+
+        // Apply trim and lowercase to 'name'
+        if (isset($data['name'])) {
+            $data['name'] = strtolower(trim($data['name']));
+        }
+    
+        $milestone->update($data);
 
         return response()->json(['message' => 'Milestone updated successfully', 'data' => $milestone]);
     }

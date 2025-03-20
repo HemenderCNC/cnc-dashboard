@@ -37,7 +37,11 @@ class TaskStatusController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-        $taskstatus = TaskStatus::create($request->only('name'));
+
+        $name = strtolower(trim($request->name)); // Trim spaces and convert to lowercase
+
+        $taskstatus = TaskStatus::create(['name' => $name]);
+        // $taskstatus = TaskStatus::create($request->only('name'));
         return response()->json($taskstatus, 201);
     }
 
@@ -69,7 +73,10 @@ class TaskStatusController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $taskstatus->update($request->only('name'));
+        $name = strtolower(trim($request->name)); // Trim spaces and convert to lowercase
+
+        $taskstatus->update(['name' => $name]);
+        // $taskstatus->update($request->only('name'));
         return response()->json($taskstatus, 200);
     }
 

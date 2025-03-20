@@ -18,7 +18,7 @@ class RoleController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
         $role = Role::create([
-            'name' => $request->name,
+            'name' => strtolower(trim($request->name)),
             'permissions' => $request->permissions,
         ]);
         return response()->json(['message' => 'Role created successfully', 'role' => $role], 201);
@@ -47,7 +47,7 @@ class RoleController extends Controller
         }
 
         // Update the role
-        $role->name = $request->name;
+        $role->name = strtolower(trim($request->name));
         $role->permissions = $request->permissions;
         $role->save();
 

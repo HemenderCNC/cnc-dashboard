@@ -27,7 +27,9 @@ class LanguagesController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-        $languages = Languages::create($request->only('name'));
+        $name = strtolower(trim($request->name)); // Trim spaces and convert to lowercase
+        $languages = Languages::create(['name' => $name]);
+        // $languages = Languages::create($request->only('name'));
         return response()->json($languages, 201);
     }
 
@@ -58,8 +60,9 @@ class LanguagesController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-
-        $languages->update($request->only('name'));
+        $name = strtolower(trim($request->name)); // Trim spaces and convert to lowercase
+        $languages->update(['name' => $name]);
+        // $languages->update($request->only('name'));
         return response()->json($languages, 200);
     }
 

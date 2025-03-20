@@ -28,7 +28,7 @@ class IndustryTypesController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
         $IndustryTypes = IndustryTypes::create([
-            'name' => $request->name,
+            'name' => strtolower(trim($request->name)),
         ]);
 
         return response()->json($IndustryTypes, 201);
@@ -61,7 +61,7 @@ class IndustryTypesController extends Controller
             'name' => 'required|unique:industry_types,name,' . $id,
         ]);
 
-        $IndustryTypes->update(['name' => $request->name]);
+        $IndustryTypes->update(['name' => strtolower(trim($request->name))]);
 
         return response()->json($IndustryTypes);
     }

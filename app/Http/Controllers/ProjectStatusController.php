@@ -27,7 +27,11 @@ class ProjectStatusController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-        $projectstatus = ProjectStatus::create($request->only('name'));
+
+        $name = strtolower(trim($request->name)); // Trim spaces and convert to lowercase
+
+        $projectstatus = ProjectStatus::create(['name' => $name]);
+        // $projectstatus = ProjectStatus::create($request->only('name'));
         return response()->json($projectstatus, 201);
     }
 
@@ -59,7 +63,10 @@ class ProjectStatusController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $projectstatus->update($request->only('name'));
+        $name = strtolower(trim($request->name)); // Trim spaces and convert to lowercase
+
+        $projectstatus->update(['name' => $name]);
+        // $projectstatus->update($request->only('name'));
         return response()->json($projectstatus, 200);
     }
 
