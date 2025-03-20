@@ -277,7 +277,8 @@ class HelpingHandController extends Controller
     }
     public function setToken(Request $request){
         $fcm_token = $request->fcm_token;
-        $user = User::find('678e3c50dc822828470e8c42');
+        $userId = $request->user->id;
+        $user = User::find($userId);
         $user->fcm_token = $fcm_token;
         $user->save();
     }
