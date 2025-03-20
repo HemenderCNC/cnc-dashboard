@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Tasks;
+use App\Models\TaskStatus;
 use App\Models\Milestones;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -62,6 +63,17 @@ class TasksController extends Controller
                 '$lte' => $endDate
             ];
         }
+
+        // Exclude "Complete" tasks (case-insensitive check)
+        $completedStatus = TaskStatus::whereRaw([
+            'name' => ['$regex' => '^complete$', '$options' => 'i']
+        ])->first();
+
+        if ($completedStatus) {
+            $matchStage->status_id = ['$ne' => (string) $completedStatus->_id];
+        }
+        // Exclude "Complete" tasks END
+
         // Ensure matchStage is not empty
         if (empty((array) $matchStage)) {
             $matchStage = (object)[]; // Empty object for MongoDB
