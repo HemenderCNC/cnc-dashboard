@@ -29,9 +29,12 @@ class MilestoneController extends Controller
         }
 
         // Order and fetch results
-        $leaves = $query->orderBy('created_at', 'desc')->get();
+        // $milestones = $query->orderBy('created_at', 'desc')->get();
 
-        return response()->json($leaves, 200);
+        // Order by "order" field in ascending order
+        $milestones = $query->orderBy('order', 'asc')->get();
+
+        return response()->json($milestones, 200);
     }
 
     // Store a new Milestones
@@ -53,6 +56,9 @@ class MilestoneController extends Controller
                 'errors' => $validator->errors()
             ], 422);
         }
+        // Find the highest order number for the project
+        $maxOrder = Milestones::where('project_id', $request->project_id)->max('order');
+        $nextOrder = $maxOrder !== null ? $maxOrder + 1 : 1;
 
         $milestones = Milestones::create([
             'name' => $request->name,
@@ -61,7 +67,8 @@ class MilestoneController extends Controller
             'color' => $request->color,
             'project_id' => $request->project_id,
             'status' => $request->status,
-            'created_by' => $request->user->id
+            'created_by' => $request->user->id,
+            'order' => $nextOrder
         ]);
 
         return response()->json(['message' => 'Milestone created successfully', 'data' => $milestones], 201);
@@ -117,4 +124,42 @@ class MilestoneController extends Controller
 
         return response()->json(['message' => 'Milestone deleted successfully']);
     }
+
+
+    /**
+     * Set Milestone order
+     */
+    public function updateMilestoneOrder(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'project_id' => 'required|exists:projects,_id',
+            'milestones' => 'required|array',
+            'milestones.*.id' => 'required|exists:milestones,_id',
+            'milestones.*.order' => 'required|integer|min:1'
+        ]);
+    
+        if ($validator->fails()) {
+            return response()->json(['message' => 'Validation failed', 'errors' => $validator->errors()], 422);
+        }
+    
+        foreach ($request->milestones as $milestoneData) {
+            Milestones::where('_id', $milestoneData['id'])
+                ->where('project_id', $request->project_id)
+                ->update(['order' => $milestoneData['order']]);
+
+            // Add to response list
+            $updatedMilestones[] = [
+                'id' => $milestoneData['id'],
+                'order' => $milestoneData['order']
+            ];
+        }
+    
+        return response()->json([
+            'success' => true,
+            'message' => 'Milestone order updated successfully',
+            'project_id' => $request->project_id,
+            'updated_milestones' => $updatedMilestones
+        ], 200);
+    }
+    
 }

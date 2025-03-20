@@ -340,175 +340,202 @@ class TasksController extends Controller
         return response()->json(['message' => 'Task deleted successfully'], 200);
     }
 
-    public function getTasksByProject(Request $request)
+    /**
+     * For each milestone get the tasks that has task status as 
+     * complete and send response accordingly
+     */
+    public function getProjectMilestonesSummary(Request $request)
     {
-        $userId = $request->user->id; // Get logged-in user's ID
-        $projectId = $request->project_id; // Get project ID from request
-        $perPage = (int) ($request->query('per_page', 10)); // Number of results per page (default: 10)
-
-        // Validate input
+        $projectId = $request->project_id;
+    
         if (!$projectId) {
             return response()->json(['error' => 'Project ID is required'], 400);
         }
-
-        // Use aggregation pipeline for grouping
-        $tasksByStatus = Tasks::raw(function ($collection) use ($projectId, $userId, $perPage, $request) {
-            $page = (int) $request->query('page', 1);
-            $skip = ($page - 1) * $perPage;
-        
+    
+        $milestoneSummary = Tasks::raw(function ($collection) use ($projectId) {
             return $collection->aggregate([
-                ['$match' => [
-                    'project_id' => (string) $projectId,  // Ensure it's treated as a string
-                    // 'assignee_id' => (string) $userId
-                ]],
-                // Convert status_id to ObjectId
+                // Filter tasks by project_id
+                ['$match' => ['project_id' => (string) $projectId]],
+    
+                // Convert milestone_id and status_id to ObjectId
                 ['$addFields' => [
-                    'status_id' => ['$toObjectId' => '$status_id']
+                    'milestone_id' => ['$toObjectId' => '$milestone_id'],
+                    'status_id' => ['$toObjectId' => '$status_id'],
                 ]],
+    
+                // Lookup status details from task_statuses collection
                 ['$lookup' => [
                     'from' => 'task_statuses',
                     'localField' => 'status_id',
                     'foreignField' => '_id',
                     'as' => 'status_info'
                 ]],
-        
+    
                 ['$unwind' => [
                     'path' => '$status_info',
                     'preserveNullAndEmptyArrays' => true // Avoid errors if no matching status
                 ]],
-        
-                // ['$group' => [
-                //     '_id' => '$status_id',
-                //     'status_name' => ['$first' => '$status_info.name'],
-                //     'tasks' => ['$push' => [
-                //         'task_id' => '$_id',
-                //         'title' => '$title',
-                //         'description' => '$description',
-                //         'due_date' => '$due_date',
-                //         'estimated_hours' => '$estimated_hours'
-                //     ]]
-                // ]],
+    
+                // Normalize status name (fixing the $trim issue)
+                ['$addFields' => [
+                    'normalized_status' => [
+                        '$toLower' => ['$ifNull' => ['$status_info.name', '']]
+                    ]
+                ]],
+    
+                // Group tasks by milestone_id, counting total and completed tasks
+                ['$group' => [
+                    '_id' => '$milestone_id',
+                    'total_tasks' => ['$sum' => 1],
+                    'completed_tasks' => [
+                        '$sum' => [
+                            '$cond' => [['$eq' => ['$normalized_status', 'complete']], 1, 0]
+                        ]
+                    ]
+                ]],
+    
+                // Calculate milestone completion percentage
+                ['$addFields' => [
+                    'completion_percentage' => [
+                        '$cond' => [
+                            ['$eq' => ['$total_tasks', 0]], 0,
+                            ['$multiply' => [['$divide' => ['$completed_tasks', '$total_tasks']], 100]]
+                        ]
+                    ]
+                ]],
+    
+                // Lookup milestone details from milestones collection
+                ['$lookup' => [
+                    'from' => 'milestones',
+                    'localField' => '_id',
+                    'foreignField' => '_id',
+                    'as' => 'milestone_info'
+                ]],
+    
+                ['$unwind' => [
+                    'path' => '$milestone_info',
+                    'preserveNullAndEmptyArrays' => true // Avoid errors if no matching milestone
+                ]],
+    
+                // Project final output
+                ['$project' => [
+                    '_id' => 0,
+                    'milestone_id' => ['$_id'],
+                    'milestone_name' => '$milestone_info.name',
+                    'start_date' => '$milestone_info.start_date',
+                    'end_date' => '$milestone_info.end_date',
+                    'status' => '$milestone_info.status',
+                    'total_tasks' => 1,
+                    'completed_tasks' => 1,
+                    'completion_percentage' => 1
+                ]]
+            ]);
+        });
+    
+        return response()->json(['milestone_summary' => $milestoneSummary]);
+    }
+    
 
+    public function getTasksByProject(Request $request)
+    {
+        $userId = $request->user->id; // Get logged-in user's ID
+        $projectId = $request->project_id; // Get project ID from request
+    
+        // Validate input
+        if (!$projectId) {
+            return response()->json(['error' => 'Project ID is required'], 400);
+        }
+    
+        // Tasks grouped by status
+        $tasksByStatus = Tasks::raw(function ($collection) use ($projectId) {
+            return $collection->aggregate([
+                ['$match' => ['project_id' => (string) $projectId]],
+                ['$addFields' => ['status_id' => ['$toObjectId' => '$status_id']]],
+                ['$lookup' => [
+                    'from' => 'task_statuses',
+                    'localField' => 'status_id',
+                    'foreignField' => '_id',
+                    'as' => 'status_info'
+                ]],
+                ['$unwind' => ['path' => '$status_info', 'preserveNullAndEmptyArrays' => true]],
                 ['$group' => [
                     '_id' => '$status_id',
                     'status_name' => ['$first' => '$status_info.name'],
-                    'task_count' => ['$sum' => 1]  // Count tasks instead of listing them
+                    'task_count' => ['$sum' => 1]
                 ]],
-        
-                ['$sort' => ['status_name' => 1]],
-                ['$skip' => $skip],
-                ['$limit' => $perPage]
+                ['$sort' => ['status_name' => 1]]
             ]);
         });
-
-
-        $tasksByAssignee = Tasks::raw(function ($collection) use ($projectId, $userId, $perPage, $request) {
-            $page = (int) $request->query('page', 1);
-            $skip = ($page - 1) * $perPage;
-        
+    
+        // Tasks grouped by assignee
+        $tasksByAssignee = Tasks::raw(function ($collection) use ($projectId) {
             return $collection->aggregate([
-                ['$match' => [
-                    'project_id' => (string) $projectId,  // Ensure it's treated as a string
-                    // 'assignee_id' => (string) $userId
-                ]],
-                // Convert status_id to ObjectId
-                ['$addFields' => [
-                    'assignee_id' => ['$toObjectId' => '$assignee_id']
-                ]],
+                ['$match' => ['project_id' => (string) $projectId]],
+                ['$addFields' => ['assignee_id' => ['$toObjectId' => '$assignee_id']]],
                 ['$lookup' => [
                     'from' => 'users',
                     'localField' => 'assignee_id',
                     'foreignField' => '_id',
                     'as' => 'assignee_info'
                 ]],
-        
-                ['$unwind' => [
-                    'path' => '$assignee_info',
-                    'preserveNullAndEmptyArrays' => true // Avoid errors if no matching status
-                ]],
-        
+                ['$unwind' => ['path' => '$assignee_info', 'preserveNullAndEmptyArrays' => true]],
                 ['$group' => [
                     '_id' => '$assignee_id',
                     'assignee_name' => ['$first' => '$assignee_info.name'],
-                    'task_count' => ['$sum' => 1]  // Count tasks instead of listing them
+                    'task_count' => ['$sum' => 1]
                 ]],
-        
-                ['$sort' => ['assignee_name' => 1]],
-                ['$skip' => $skip],
-                ['$limit' => $perPage]
+                ['$sort' => ['assignee_name' => 1]]
             ]);
         });
-
-
-        // New Query: Get tasks by assignee where status is "To Do"
-        $tasksByAssigneeTodo = Tasks::raw(function ($collection) use ($projectId, $perPage, $request) {
-            $page = (int) $request->query('page', 1);
-            $skip = ($page - 1) * $perPage;
-        
+    
+        // Tasks grouped by assignee where status is "To Do" OR Open tasks
+        $tasksByAssigneeTodo = Tasks::raw(function ($collection) use ($projectId) {
             return $collection->aggregate([
-                ['$match' => [
-                    'project_id' => (string) $projectId
-                ]],
+                ['$match' => ['project_id' => (string) $projectId]],
                 ['$addFields' => [
                     'status_id' => ['$toObjectId' => '$status_id'],
                     'assignee_id' => ['$toObjectId' => '$assignee_id']
                 ]],
-                // Lookup status name from task_statuses
                 ['$lookup' => [
                     'from' => 'task_statuses',
                     'localField' => 'status_id',
                     'foreignField' => '_id',
                     'as' => 'status_info'
                 ]],
-                ['$unwind' => [
-                    'path' => '$status_info',
-                    'preserveNullAndEmptyArrays' => true
-                ]],
-                // ['$match' => [
-                //     'status_info.name' => 'To Do' // Only fetch tasks with "To Do" status
-                // ]],
+                ['$unwind' => ['path' => '$status_info', 'preserveNullAndEmptyArrays' => true]],
                 ['$match' => [
-                    '$expr' => [
-                        '$eq' => [['$toLower' => '$status_info.name'], 'to do']
-                    ]
+                    '$expr' => ['$eq' => [['$toLower' => '$status_info.name'], 'to do']]
                 ]],
                 ['$group' => [
                     '_id' => '$assignee_id',
                     'task_count' => ['$sum' => 1]
                 ]],
-                // Lookup user details for assignee
                 ['$lookup' => [
-                    'from' => 'users', // Replace with your actual users collection name
+                    'from' => 'users',
                     'localField' => '_id',
                     'foreignField' => '_id',
                     'as' => 'assignee_info'
                 ]],
-                ['$unwind' => [
-                    'path' => '$assignee_info',
-                    'preserveNullAndEmptyArrays' => true
-                ]],
+                ['$unwind' => ['path' => '$assignee_info', 'preserveNullAndEmptyArrays' => true]],
                 ['$project' => [
                     'task_count' => 1,
                     'assignee_name' => '$assignee_info.name',
                     'assignee_email' => '$assignee_info.email',
                 ]],
-                ['$sort' => ['assignee_name' => 1]], // Sort by assignee name
-                ['$skip' => $skip],
-                ['$limit' => $perPage]
+                ['$sort' => ['assignee_name' => 1]]
             ]);
         });
-        
-        //Project Milestone summary
+    
+        // Project milestones summary OR Project Progress
+        /**
+         * Calculates all milestones that are in pending status and return result accordingly
+         */
         $projectMilestones = Milestones::raw(function ($collection) use ($projectId) {
             return $collection->aggregate([
-                // Match milestones by project_id
-                ['$match' => [
-                    'project_id' => (string) $projectId
-                ]],
-                // Convert status to lowercase and group by project_id
+                ['$match' => ['project_id' => (string) $projectId]],
                 ['$group' => [
                     '_id' => '$project_id',
-                    'total_milestones' => ['$sum' => 1], // Count total milestones
+                    'total_milestones' => ['$sum' => 1],
                     'pending_milestones' => [
                         '$sum' => [
                             '$cond' => [['$eq' => [['$toLower' => '$status'], 'pending']], 1, 0]
@@ -523,7 +550,6 @@ class TasksController extends Controller
                         'color' => '$color'
                     ]]
                 ]],
-                // Calculate completion percentage
                 ['$addFields' => [
                     'completion_percentage' => [
                         '$multiply' => [
@@ -537,26 +563,23 @@ class TasksController extends Controller
                 ]]
             ]);
         });
-        
-        
-
-
+    
         // Convert results to arrays
         $tasksByStatusArray = iterator_to_array($tasksByStatus);
         $tasksByAssigneeArray = iterator_to_array($tasksByAssignee);
         $tasksByAssigneeTodoArray = iterator_to_array($tasksByAssigneeTodo);
         $projectMilestonesArray = iterator_to_array($projectMilestones);
-
-        // Merge both results
+    
+        // Prepare response
         $response = [
             'tasks_by_status' => $tasksByStatusArray,
             'tasks_by_assignee' => $tasksByAssigneeArray,
-            'tasks_by_assignee_todo' => $tasksByAssigneeTodoArray,
+            'tasks_by_assignee_todo_open' => $tasksByAssigneeTodoArray,
             'project_milestones_summary' => $projectMilestonesArray
         ];
-        
+    
         return response()->json($response);
-
     }
+    
 
 }
