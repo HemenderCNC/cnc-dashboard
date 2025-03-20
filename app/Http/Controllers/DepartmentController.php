@@ -24,7 +24,10 @@ class DepartmentController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $department = Department::create($request->only('name'));
+        $name = strtolower(trim($request->name)); // Trim spaces and convert to lowercase
+
+        $department = Department::create(['name' => $name]);
+        // $department = Department::create($request->only('name'));
         return response()->json($department, 201);
     }
 
@@ -57,7 +60,10 @@ class DepartmentController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $department->update($request->only('name'));
+        $name = strtolower(trim($request->name)); // Trim spaces and convert to lowercase
+
+        $department->update(['name' => $name]);
+        // $department->update($request->only('name'));
         return response()->json($department, 200);
     }
 

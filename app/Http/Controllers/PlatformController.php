@@ -27,7 +27,11 @@ class PlatformController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-        $platform = Platform::create($request->only('name'));
+
+        $name = strtolower(trim($request->name)); // Trim spaces and convert to lowercase
+
+        $platform = Platform::create(['name' => $name]);
+        // $platform = Platform::create($request->only('name'));
         return response()->json($platform, 201);
     }
 
@@ -59,7 +63,10 @@ class PlatformController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $platform->update($request->only('name'));
+        $name = strtolower(trim($request->name)); // Trim spaces and convert to lowercase
+
+        $platform->update(['name' => $name]);
+        // $platform->update($request->only('name'));
         return response()->json($platform, 200);
     }
 

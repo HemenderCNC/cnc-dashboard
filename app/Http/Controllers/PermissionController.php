@@ -49,7 +49,7 @@ class PermissionController extends Controller
 
         // Update permission
         $permission->update([
-            'name' => $request->name,
+            'name' => strtolower(trim($request->name)),
         ]);
 
         return response()->json([
@@ -100,7 +100,7 @@ class PermissionController extends Controller
         // Step 1: Create the new permission
         // Create new permission
         $permission = Permission::create([
-            'name' => $request->name,
+            'name' => strtolower(trim($request->name)),
         ]);
 
         // Step 2: Update the permissions array in the "roles" collection
