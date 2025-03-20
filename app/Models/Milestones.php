@@ -10,7 +10,7 @@ class Milestones extends Eloquent
     use HasFactory;
     protected $connection = 'mongodb'; // Specify MongoDB connection
     protected $collection = 'milestones'; // Collection name
-    protected $fillable = ['name','project_id','start_date','end_date','color','status','created_by']; // Allow mass assignment
+    protected $fillable = ['name','project_id','start_date','end_date','color','status','created_by','order']; // Allow mass assignment
 
 
     public function project()

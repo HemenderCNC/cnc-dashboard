@@ -135,6 +135,8 @@ Route::middleware('api')->group(function () {
 
         //Milestones API
         Route::apiResource('milestones', MilestoneController::class);
+        Route::post('/project-milestones/update-order', [MilestoneController::class, 'updateMilestoneOrder']);
+
 
         //TaskStatus API
         Route::apiResource('task-status', TaskStatusController::class);
@@ -157,7 +159,8 @@ Route::middleware('api')->group(function () {
         //Tasks API
         Route::prefix('tasks')->group(function () {
             //Get task of a project for logedin user
-            Route::get('/project-tasks', [TasksController::class, 'getTasksByProject']);
+            Route::get('/project-tasks-summary', [TasksController::class, 'getTasksByProject']);
+            Route::get('/project-milstones-summary', [TasksController::class, 'getProjectMilestonesSummary']);
             
             Route::get('/', [TasksController::class, 'index']); // Get all holidays
             Route::post('/', [TasksController::class, 'store']); // Create a holiday
