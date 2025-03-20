@@ -56,7 +56,6 @@ class UserController extends Controller
             'employment_type_id' => 'nullable|exists:employee_types,_id',
             'employee_status_id' => 'nullable|exists:employee_statuses,_id',
             'work_location_id' => 'nullable|exists:work_locations,_id',
-            'office_location' => 'required|string',
             'created_by' => 'required|exists:users,_id',
 
             //Skills
@@ -227,7 +226,6 @@ class UserController extends Controller
             'employee_status_id' => 'nullable|exists:employee_statuses,_id',
             'work_location_id' => 'nullable|exists:work_locations,_id',
             // 'created_by' => 'required|exists:users,_id',
-            'office_location' => 'required|string',
 
 
             //Skills
