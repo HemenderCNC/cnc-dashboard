@@ -43,6 +43,41 @@ class DashboardController extends Controller
         ])
         ->get();
 
+
+        // ✅ Upcoming Birthdays (Next 2 Months)
+        $today = now();
+
+        $upcomingBirthdays = User::select('_id', 'name', 'last_name', 'email', 'profile_photo', 'birthdate')
+            ->get()
+            ->filter(function ($user) use ($today) {
+                if (!$user->birthdate) {
+                    return false; // Skip users without a birthdate
+                }
+                
+                $birthdate = Carbon::parse($user->birthdate);
+                $thisYearBirthday = Carbon::create($today->year, $birthdate->month, $birthdate->day);
+        
+                return $thisYearBirthday->gte($today); // ✅ Only upcoming birthdays
+            })
+            ->sortBy(function ($user) use ($today) {
+                $birthdate = Carbon::parse($user->birthdate);
+                return Carbon::create($today->year, $birthdate->month, $birthdate->day)->timestamp;
+            })
+            ->map(function ($user) {
+                return [
+                    '_id' => $user->_id,
+                    'name' => $user->name,
+                    'last_name' => $user->last_name,
+                    'email' => $user->email,
+                    'profile_photo' => $user->profile_photo,
+                    'birthdate' => $user->birthdate,
+                ];
+            })
+            ->values() // Reset array indexes
+            ->toArray();
+        
+        
+
         return response()->json([
             'total_users' => $totalUsers,
             'total_clients' => $totalClients,
@@ -50,6 +85,7 @@ class DashboardController extends Controller
             'notices' => $notices,
             'upcoming_holidays' => $upcomingHolidays,
             'upcoming_leaves' => $upcomingLeaves,
+            'upcoming_birthdays' => $upcomingBirthdays,
         ]);
     }
 }
