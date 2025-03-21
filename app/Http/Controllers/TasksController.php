@@ -364,79 +364,67 @@ class TasksController extends Controller
             return response()->json(['error' => 'Project ID is required'], 400);
         }
     
-        $milestoneSummary = Tasks::raw(function ($collection) use ($projectId) {
+        $milestoneSummary = Milestones::raw(function ($collection) use ($projectId) {
             return $collection->aggregate([
-                // Filter tasks by project_id
+                // Match milestones for the given project
                 ['$match' => ['project_id' => (string) $projectId]],
     
-                // Convert milestone_id and status_id to ObjectId
-                ['$addFields' => [
-                    'milestone_id' => ['$toObjectId' => '$milestone_id'],
-                    'status_id' => ['$toObjectId' => '$status_id'],
-                ]],
-    
-                // Lookup status details from task_statuses collection
+                // Lookup tasks associated with this milestone
                 ['$lookup' => [
-                    'from' => 'task_statuses',
-                    'localField' => 'status_id',
-                    'foreignField' => '_id',
-                    'as' => 'status_info'
+                    'from' => 'tasks',
+                    'localField' => '_id',
+                    'foreignField' => 'milestone_id',
+                    'as' => 'tasks'
                 ]],
     
-                ['$unwind' => [
-                    'path' => '$status_info',
-                    'preserveNullAndEmptyArrays' => true // Avoid errors if no matching status
-                ]],
-    
-                // Normalize status name (fixing the $trim issue)
+                // Convert _id to Object format for consistency
                 ['$addFields' => [
-                    'normalized_status' => [
-                        '$toLower' => ['$ifNull' => ['$status_info.name', '']]
+                    'milestone_id' => [
+                        ['$toString' => '$_id']
                     ]
                 ]],
     
-                // Group tasks by milestone_id, counting total and completed tasks
-                ['$group' => [
-                    '_id' => '$milestone_id',
-                    'total_tasks' => ['$sum' => 1],
+                // Calculate total tasks and completed tasks
+                ['$addFields' => [
+                    'total_tasks' => ['$size' => '$tasks'],
                     'completed_tasks' => [
-                        '$sum' => [
-                            '$cond' => [['$eq' => ['$normalized_status', 'complete']], 1, 0]
+                        '$size' => [
+                            '$filter' => [
+                                'input' => '$tasks',
+                                'as' => 'task',
+                                'cond' => [
+                                    '$eq' => [
+                                        ['$toLower' => ['$ifNull' => ['$$task.status', '']]], 
+                                        'complete'
+                                    ]
+                                ]
+                            ]
                         ]
                     ]
                 ]],
     
-                // Calculate milestone completion percentage
+                // Calculate completion percentage
                 ['$addFields' => [
                     'completion_percentage' => [
                         '$cond' => [
-                            ['$eq' => ['$total_tasks', 0]], 0,
+                            ['$eq' => ['$total_tasks', 0]], 0, // If no tasks, percentage = 0
                             ['$multiply' => [['$divide' => ['$completed_tasks', '$total_tasks']], 100]]
                         ]
                     ]
                 ]],
     
-                // Lookup milestone details from milestones collection
-                ['$lookup' => [
-                    'from' => 'milestones',
-                    'localField' => '_id',
-                    'foreignField' => '_id',
-                    'as' => 'milestone_info'
-                ]],
+                // Sort milestones by 'order' field (ascending)
+                ['$sort' => ['order' => 1]],
     
-                ['$unwind' => [
-                    'path' => '$milestone_info',
-                    'preserveNullAndEmptyArrays' => true // Avoid errors if no matching milestone
-                ]],
-    
-                // Project final output
+                // Project the final output fields
                 ['$project' => [
                     '_id' => 0,
-                    'milestone_id' => ['$_id'],
-                    'milestone_name' => '$milestone_info.name',
-                    'start_date' => '$milestone_info.start_date',
-                    'end_date' => '$milestone_info.end_date',
-                    'status' => '$milestone_info.status',
+                    'milestone_id' => ['$arrayElemAt' => [['$milestone_id'], 0]], // Ensure consistent format
+                    'milestone_name' => '$name',
+                    'start_date' => '$start_date',
+                    'end_date' => '$end_date',
+                    'status' => '$status',
+                    'color' => '$color',  // ✅ Include milestone color
                     'total_tasks' => 1,
                     'completed_tasks' => 1,
                     'completion_percentage' => 1
@@ -446,6 +434,7 @@ class TasksController extends Controller
     
         return response()->json(['milestone_summary' => $milestoneSummary]);
     }
+    
     
 
     public function getTasksByProject(Request $request)
