@@ -46,6 +46,7 @@ Route::middleware('api')->group(function () {
 
     // Protected routes with auth.token
     Route::middleware('auth.token')->group(function () {
+        Route::get('logout', [AuthController::class, 'logout']);
         Route::get('track-session', [LoginSessionController::class, 'trackSession']);
         Route::get('attendance', [LoginSessionController::class, 'attendance']);
         Route::post('logout', [AuthController::class, 'logout']);
@@ -169,7 +170,7 @@ Route::middleware('api')->group(function () {
             //Get task of a project for logedin user
             Route::get('/project-tasks-summary', [TasksController::class, 'getTasksByProject']);
             Route::get('/project-milstones-summary', [TasksController::class, 'getProjectMilestonesSummary']);
-            
+
             Route::get('/', [TasksController::class, 'index']); // Get all holidays
             Route::post('/', [TasksController::class, 'store']); // Create a holiday
             Route::get('/{id}', [TasksController::class, 'show']); // Get holiday by ID
