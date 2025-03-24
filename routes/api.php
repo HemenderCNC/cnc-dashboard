@@ -35,6 +35,7 @@ use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HelpingHandController;
 use App\Http\Controllers\PermissionModulesController;
+use App\Http\Controllers\MovieTicketController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -158,6 +159,15 @@ Route::middleware('api')->group(function () {
             Route::get('/{id}', [ClientsController::class, 'show']); // Get holiday by ID
             Route::post('/{id}', [ClientsController::class, 'update']); // Update a holiday
             Route::delete('/{id}', [ClientsController::class, 'destroy']); // Delete a holiday
+        });
+
+        //Movie Tickets API
+        Route::prefix('movie-tickets')->group(function () {
+            Route::post('/', [MovieTicketController::class, 'store']); // Create
+            Route::get('/', [MovieTicketController::class, 'index']); // Get All
+            Route::get('/{id}', [MovieTicketController::class, 'show']); // Get Single
+            Route::post('/{id}', [MovieTicketController::class, 'update']); // Update
+            Route::delete('/{id}', [MovieTicketController::class, 'destroy']); // Delete
         });
 
         //Dashboard API
