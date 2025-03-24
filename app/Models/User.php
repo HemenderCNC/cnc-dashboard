@@ -135,13 +135,14 @@ class User extends Eloquent
             return null;
         }
 
-        $permissions = Permission::whereIn('_id', $this->role->permissions ?? [])->get(['_id', 'name']);
+        $permissions = Permission::whereIn('_id', $this->role->permissions ?? [])->get(['_id', 'name', 'module_id']);
 
         return [
             'role_name' => $this->role->name,
             'permissions' => $permissions->map(fn($permission) => [
                 'id' => (string) $permission->_id,
                 'name' => $permission->name,
+                'module' => optional($permission->module)->name, // Get module name
             ]),
         ];
     }

@@ -239,7 +239,16 @@ class TasksController extends Controller
             'owner_id' => 'required|exists:users,_id',
             'assignee_id' => 'required|exists:users,_id',
             'description' => 'nullable|string',
-            'due_date' => 'required|date',
+            'start_date' => 'required|date',
+            'due_date' => [
+                'required',
+                'date',
+                function ($attribute, $value, $fail) use ($request) {
+                    if (isset($request->start_date) && $value < $request->start_date) {
+                        $fail('The due date cannot be earlier than the start date.');
+                    }
+                }
+            ],
             'estimated_hours' => 'required|string',
             'attachment' => 'nullable|file|mimes:pdf,jpeg,jpg,png|max:2048',
         ]);
@@ -252,6 +261,7 @@ class TasksController extends Controller
             $attachment = $service->upload($request->file('attachment'), 'uploads', $request->user->id);
         }
         $dueDate = Carbon::parse($request->due_date)->toIso8601String();
+        $startDate = Carbon::parse($request->start_date)->toIso8601String();
         $platform = Tasks::create([
             'title' => $request->title,
             'project_id' => $request->project_id,
@@ -262,6 +272,7 @@ class TasksController extends Controller
             'owner_id' => $request->owner_id,
             'assignee_id' => $request->assignee_id,
             'description' => $request->description,
+            'start_date' => $startDate,
             'due_date' => $dueDate,
             'estimated_hours' => $request->estimated_hours,
             'attachment' => $attachment,
@@ -301,7 +312,16 @@ class TasksController extends Controller
             'owner_id' => 'required|exists:users,_id',
             'assignee_id' => 'required|exists:users,_id',
             'description' => 'nullable|string',
-            'due_date' => 'required|date',
+            'start_date' => 'required|date',
+            'due_date' => [
+                'required',
+                'date',
+                function ($attribute, $value, $fail) use ($request) {
+                    if (isset($request->start_date) && $value < $request->start_date) {
+                        $fail('The due date cannot be earlier than the start date.');
+                    }
+                }
+            ],
             'estimated_hours' => 'required|string',
             'attachment' => 'nullable|file|mimes:pdf,jpeg,jpg,png|max:2048',
         ]);
@@ -320,6 +340,7 @@ class TasksController extends Controller
             $task->attachment = $attachment;
         }
         $dueDate = Carbon::parse($request->due_date)->toIso8601String();
+        $startDate = Carbon::parse($request->start_date)->toIso8601String();
         $task->update(
             [
                 'title' => $request->title,
@@ -331,6 +352,7 @@ class TasksController extends Controller
                 'owner_id' => $request->owner_id,
                 'assignee_id' => $request->assignee_id,
                 'description' => $request->description,
+                'start_date' => $startDate,
                 'due_date' => $dueDate,
                 'estimated_hours' => $request->estimated_hours,
             ]
