@@ -14,6 +14,9 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use App\Models\PersonalAccessToken;
 use App\Helpers\MailHelper;
+use App\Http\Controllers\TimesheetController;
+use App\Models\Timesheet;
+use Carbon\Carbon;
 
 class AuthController extends Controller
 {
@@ -212,9 +215,24 @@ class AuthController extends Controller
         ]);
     }
 
-    public function logout()
+    public function logout(Request $request)
     {
-        Auth::logout();
-        return redirect()->route('login');
+        $userID = $request->user->id;
+        if($userID){
+            $currentDate = Carbon::now()->toDateString();
+            $timesheet = Timesheet::where('employee_id', $userID)
+            ->where('date', $currentDate)
+            ->where('status', 'running')
+            ->first();
+            if ($timesheet) {
+                $timesheet->status = 'paused';
+                $timesheet->save();
+                $timesheetController = new TimesheetController();
+                $timesheetController->userBreakLogStart($userID);
+            }
+        }
+        return response()->json([
+            'message' => 'Logout successfully.',
+        ]);
     }
 }
