@@ -34,6 +34,7 @@ use App\Http\Controllers\ProjectFilesController;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HelpingHandController;
+use App\Http\Controllers\PermissionModulesController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -70,6 +71,13 @@ Route::middleware('api')->group(function () {
             Route::get('role/{id}', [RoleController::class, 'getRoleById']); // Get all roles
         });
 
+        Route::middleware(['permission:678e3b79b9a4b5377a0d1793'])->group(function () {
+            Route::get('/permissionsmodule/grouped', [PermissionModulesController::class, 'getGroupedPermissions']);
+        });
+
+
+        
+        
 
         //Permissions group
         Route::middleware(['permission:678e3b79b9a4b5377a0d1794'])->group(function () {

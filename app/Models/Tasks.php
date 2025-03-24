@@ -8,7 +8,7 @@ class Tasks extends Eloquent
 {
     protected $connection = 'mongodb';
     protected $collection = 'tasks';
-    protected $fillable = ['title','project_id','milestone_id','status_id','task_type_id','priority','owner_id','assignee_id','description','due_date','estimated_hours','attachment','created_by'];
+    protected $fillable = ['title','project_id','milestone_id','status_id','task_type_id','priority','owner_id','assignee_id','description','due_date','estimated_hours','attachment','created_by','start_date'];
 
     public function createdBy()
     {
