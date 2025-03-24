@@ -232,7 +232,7 @@ class TasksController extends Controller
         $validator = Validator::make($request->all(), [
             'title' => 'required|string|unique:tasks,title',
             'project_id' => 'required|exists:projects,_id',
-            'milestone_id' => 'required|exists:milestones,_id',
+            'milestone_id' => 'nullable|exists:milestones,_id',
             'status_id' => 'required|exists:task_statuses,_id',
             'task_type_id' => 'required|exists:task_types,_id',
             'priority' => 'required|string',
@@ -305,7 +305,7 @@ class TasksController extends Controller
         $validator = Validator::make($request->all(), [
             'title' => 'required|string|unique:tasks,title,'.$id,
             'project_id' => 'required|exists:projects,_id',
-            'milestone_id' => 'required|exists:milestones,_id',
+            'milestone_id' => 'nullable|exists:milestones,_id',
             'status_id' => 'required|exists:task_statuses,_id',
             'task_type_id' => 'required|exists:task_types,_id',
             'priority' => 'required|string',
