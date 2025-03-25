@@ -79,7 +79,7 @@ class PermissionController extends Controller
 
     // Fetch the updated permission with related module details
     $permission = Permission::with('module')->find($permission->_id);
-        
+
         return response()->json([
             'message' => 'Permission updated successfully!',
             'permission' => $permission
@@ -145,33 +145,15 @@ class PermissionController extends Controller
             ], 422);
         }
 
-        // Step 1: Create the new permission
         // Create new permission
         $permission = Permission::create([
             'name' => strtolower(trim($request->name)),
             'slug' => $slug,
             'module_id' => $request->module_id,
         ]);
-
-        // Step 2: Update the permissions array in the "roles" collection
-        $role = Role::find('678e3b7ab9a4b5377a0d1799');
-
-        if ($role) {
-            // Add the newly created permission to the role's permissions array
-            $role->permissions = array_merge($role->permissions, [$permission->_id]);
-            $role->save();
-
-            return response()->json([
-                'message' => 'Permission added and role updated successfully!',
-                'permission' => $permission,
-                'role' => $role
-            ], 201);
-        } else {
-            // If role is not found
-            return response()->json([
-                'message' => 'Role not found'
-            ], 404);
-        }
+        return response()->json([
+            'permission' => $permission
+        ], 200);
     }
 
     // Get permission by ID
@@ -182,7 +164,7 @@ class PermissionController extends Controller
 
         // Find permission by ID with module details
         $permission = Permission::with('module')->find($id);
-        
+
 
         if (!$permission) {
             return response()->json(['message' => 'Permission not found'], 404);
