@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Role;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 class RoleController extends Controller
 {
     public function addRole(Request $request)
@@ -46,8 +47,16 @@ class RoleController extends Controller
             return response()->json(['message' => 'Role not found.'], 404);
         }
 
+        // Generate slug from name
+        $slug = Str::slug(trim($request->name), '_');
+        // Ensure slug is unique
+        if (Role::where('slug', $slug)->where('_id', '!=', $id)->exists()) {
+            return response()->json(['error' => 'Slug must be unique'], 400);
+        }
+
         // Update the role
         $role->name = strtolower(trim($request->name));
+        $role->slug = $slug;
         $role->permissions = $request->permissions;
         $role->save();
 

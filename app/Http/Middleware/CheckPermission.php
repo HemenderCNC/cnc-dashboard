@@ -26,12 +26,22 @@ class CheckPermission
         }
 
         // Get the user's permissions
-        $permissions = collect($request->user->role->permissions ?? []);
+        // $permissions = collect($request->user->role->permissions ?? []);
 
         // Check if the required permission exists
-        $hasPermission = $permissions->contains(function ($permissionId) use ($requiredPermission) {
-            return $permissionId === $requiredPermission;
+        // $hasPermission = $permissions->contains(function ($permissionId) use ($requiredPermission) {
+        //     return $permissionId === $requiredPermission;
+        // });
+
+
+        // Get the user's permissions from role_with_permissions
+        $permissions = collect($user->role_with_permissions['permissions']);
+
+        // Check if the required permission exists in the permission_slug field
+        $hasPermission = $permissions->contains(function ($permission) use ($requiredPermission) {
+            return isset($permission['permission_slug']) && $permission['permission_slug'] === $requiredPermission;
         });
+
 
         if (!$hasPermission) {
             return response()->json(['error' => 'You do not have permission to perform this action.'], 403);

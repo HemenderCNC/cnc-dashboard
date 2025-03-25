@@ -113,10 +113,29 @@ class PermissionController extends Controller
     // Add permission
     public function addPermission(Request $request)
     {
+
+        // Generate slug from name
+        $slug = Str::slug(trim($request->name), '_');
+        // Ensure slug is unique
+        if (Permission::where('slug', $slug)->exists()) {
+            return response()->json(['error' => 'Slug must be unique'], 400);
+        }
+
+
         // Validate the incoming data
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255|unique:permissions,name',
-            'module_id' => 'required|string|max:255|exists:permissions_modules,_id',
+            // 'module_id' => 'required|string|max:255|exists:permissions_modules,_id',
+            'module_id' => [
+                'required',
+                'string',
+                'max:255',
+                function ($attribute, $value, $fail) {
+                    if (!PermissionModule::where('_id', $value)->exists()) {
+                        $fail('The selected module id is invalid.');
+                    }
+                },
+            ],
         ]);
 
         if ($validator->fails()) {
@@ -130,6 +149,8 @@ class PermissionController extends Controller
         // Create new permission
         $permission = Permission::create([
             'name' => strtolower(trim($request->name)),
+            'slug' => $slug,
+            'module_id' => $request->module_id,
         ]);
 
         // Step 2: Update the permissions array in the "roles" collection

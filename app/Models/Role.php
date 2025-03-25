@@ -8,7 +8,7 @@ use App\Models\Permission;  // Import the Permission model
 class Role extends Eloquent
 {
     protected $connection = 'mongodb';  // Specify MongoDB connection
-    protected $fillable = ['name', 'permissions'];  // Define the fields you need
+    protected $fillable = ['name', 'permissions', 'slug'];  // Define the fields you need
 
     // Define the relationship to permissions (many-to-many)
     public function get_permissions()
