@@ -90,7 +90,11 @@ class LoginSessionController extends Controller
             // Optionally, you may want to create a new timesheet or simply return.
             return;
         }
-
+        $lastUpdatedTime = Carbon::parse($timesheet->updated_at)->timestamp;
+        $now = Carbon::now()->timestamp;
+        if (($now - $lastUpdatedTime) < 60) {
+            return response()->json(['message' => 'Already updated recently'], 200);
+        }
         // Get the timesheet's last updated time BEFORE we make any changes.
         $lastUpdated = Carbon::parse($timesheet->updated_at);
         $now = Carbon::now();

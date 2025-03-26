@@ -142,24 +142,31 @@ class User extends Eloquent
     }
 
     public function getRoleWithPermissionsAttribute()
-    {
-        if (!$this->role) {
-            return null;
-        }
-
-        $permissions = Permission::whereIn('_id', $this->role->permissions ?? [])->get(['_id', 'name', 'slug', 'module_id']);
-
-        return [
-            'role_name' => $this->role->name,
-            'permissions' => $permissions->map(fn($permission) => [
-                'id' => (string) $permission->_id,
-                'name' => $permission->name,
-                'permission_slug' => $permission->slug,
-                'module' => optional($permission->module)->name, // Get module name
-                'module_slug' => optional($permission->module)->slug, // Get module name
-            ]),
-        ];
+{
+    if (!$this->role) {
+        return null;
     }
+
+    // Check if the relationship is loaded; if not, load it along with each permission’s module.
+    if (!$this->role->relationLoaded('get_permissions')) {
+        $this->role->load('get_permissions.module');
+    }
+
+    $permissions = $this->role->get_permissions;
+
+    return [
+        'role_name' => $this->role->name,
+        'permissions' => $permissions->map(function ($permission) {
+            return [
+                'id'              => (string) $permission->_id,
+                'name'            => $permission->name,
+                'permission_slug' => $permission->slug,
+                'module'          => optional($permission->module)->name,
+                'module_slug'     => optional($permission->module)->slug,
+            ];
+        }),
+    ];
+}
 
     public function getSkillsDataAttribute()
     {
