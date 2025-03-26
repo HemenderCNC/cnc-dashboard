@@ -101,17 +101,29 @@ class User extends Eloquent
     {
         $timesheets = Timesheet::where('employee_id', (string) $this->_id)->get();
         $totalMinutes = 0;
+
         foreach ($timesheets as $timesheet) {
-            foreach ($timesheet->time_log as $log) {
-                $start = Carbon::createFromFormat('H:i', $log['start_time']);
-                $end = Carbon::createFromFormat('H:i', $log['end_time']);
-                $totalMinutes += $end->diffInMinutes($start);
+            // Ensure there is a dates array
+            if (!empty($timesheet->dates) && is_array($timesheet->dates)) {
+                foreach ($timesheet->dates as $dateEntry) {
+                    if (isset($dateEntry['time_log']) && is_array($dateEntry['time_log'])) {
+                        foreach ($dateEntry['time_log'] as $log) {
+                            // Parse start_time and end_time with the expected format "H:i"
+                            $start = Carbon::createFromFormat('H:i', $log['start_time']);
+                            $end = Carbon::createFromFormat('H:i', $log['end_time']);
+                            $totalMinutes += $end->diffInMinutes($start);
+                        }
+                    }
+                }
             }
         }
+
         $hours = floor($totalMinutes / 60);
         $minutes = $totalMinutes % 60;
+
         return "{$hours}h {$minutes}m";
     }
+
     public function getTotalProjectsAttribute()
     {
         $projects = Project::whereIn('assignee', [(string) $this->_id])->count();
