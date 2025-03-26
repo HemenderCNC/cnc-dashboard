@@ -15,7 +15,14 @@ class Role extends Eloquent
     {
         return $this->belongsToMany(Permission::class, 'role_permissions', 'role_id', 'permission_id');
     }
-
+    public function getPermissionObjectsAttribute()
+    {
+        // Ensure $this->permissions is an array of IDs
+        $permissionIds = $this->permissions ?? [];
+        return Permission::whereIn('_id', $permissionIds)
+                    ->with('module')  // eager load module if needed
+                    ->get();
+    }
     // Relationship to users
     public function users()
     {
