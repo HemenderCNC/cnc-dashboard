@@ -77,23 +77,76 @@ class LoginSessionController extends Controller
             ]);
         }
     }
-    public function trackTimesheetSession($userId){
-        $currentDate = Carbon::now()->toDateString(); // Uses default timezone from config
+    public function trackTimesheetSession($userId)
+    {
+        $currentDate = Carbon::now()->toDateString(); // e.g. "2025-03-26"
+
+        // Retrieve the running timesheet for this user.
         $timesheet = Timesheet::where('employee_id', $userId)
-            ->where('date', $currentDate)
-            ->where('status', 'running')
-            ->first();
-        if ($timesheet) {
-            $time_log = $timesheet->time_log;
-            $lastIndex = count($time_log) - 1;
-            if ($lastIndex >= 0) {
-                $time_log[$lastIndex]['end_time'] = Carbon::now()->addMinute()->format('H:i');
-            }
-            $timesheet->time_log = $time_log;
-            $timesheet->save();
+                            ->where('status', 'running')
+                            ->first();
+
+        if (!$timesheet) {
+            // Optionally, you may want to create a new timesheet or simply return.
+            return;
         }
 
+        // Get the timesheet's last updated time BEFORE we make any changes.
+        $lastUpdated = Carbon::parse($timesheet->updated_at);
+        $now = Carbon::now();
+        $diffMinutes = $lastUpdated->diffInMinutes($now);
+
+        // Ensure the timesheet dates are available as an array.
+        $dates = $timesheet->dates ?? [];
+
+        // Find today's entry in the dates array.
+        $existingDateKey = array_search($currentDate, array_column($dates, 'date'));
+
+        // Format the current time values.
+        $formattedStart = $now->format('H:i');
+        $formattedEnd = $now->copy()->addMinute()->format('H:i');
+
+        if ($existingDateKey !== false) {
+            // Today's date entry exists.
+            $timeLogs = $dates[$existingDateKey]['time_log'] ?? [];
+            if (!empty($timeLogs)) {
+                // Decide if we need to create a new time log or update the last one.
+                if ($diffMinutes >= 5) {
+                    // More than 5 minutes since last update; append a new time log.
+                    $timeLogs[] = [
+                        'start_time' => $formattedStart,
+                        'end_time'   => $formattedEnd,
+                    ];
+                } else {
+                    // Less than 5 minutes; update the end_time of the last log.
+                    $lastIndex = count($timeLogs) - 1;
+                    $timeLogs[$lastIndex]['end_time'] = $formattedEnd;
+                }
+            } else {
+                // No time logs exist for today; create one.
+                $timeLogs[] = [
+                    'start_time' => $formattedStart,
+                    'end_time'   => $formattedEnd,
+                ];
+            }
+            // Update today's date entry with the new/updated time logs.
+            $dates[$existingDateKey]['time_log'] = $timeLogs;
+        } else {
+            // No entry for today; create a new one.
+            $dates[] = [
+                'date'     => $currentDate,
+                'time_log' => [[
+                    'start_time' => $formattedStart,
+                    'end_time'   => $formattedEnd,
+                ]]
+            ];
+        }
+
+        // Assign the modified dates array back to the timesheet and save.
+        $timesheet->dates = $dates;
+        $timesheet->save();
     }
+
     public function attendance(Request $request){
         $now = Carbon::now(); // Get current date
         // Get working days (Monday-Friday) excluding Saturday & Sunday

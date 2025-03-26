@@ -219,9 +219,7 @@ class AuthController extends Controller
     {
         $userID = $request->user->id;
         if($userID){
-            $currentDate = Carbon::now()->toDateString();
             $timesheet = Timesheet::where('employee_id', $userID)
-            ->where('date', $currentDate)
             ->where('status', 'running')
             ->first();
             if ($timesheet) {
