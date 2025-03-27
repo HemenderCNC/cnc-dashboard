@@ -152,7 +152,9 @@ class User extends Eloquent
         $this->role->load('get_permissions.module');
     }
 
-    $permissions = $this->role->get_permissions;
+    /**Modified code */
+    // Load permissions manually
+    $permissions = Permission::whereIn('_id', $this->role->permissions ?? [])->with('module')->get();
 
     return [
         'role_name' => $this->role->name,
@@ -166,6 +168,24 @@ class User extends Eloquent
             ];
         }),
     ];
+
+
+    /**Milans code */
+
+    // $permissions = $this->role->get_permissions;
+
+    // return [
+    //     'role_name' => $this->role->name,
+    //     'permissions' => $permissions->map(function ($permission) {
+    //         return [
+    //             'id'              => (string) $permission->_id,
+    //             'name'            => $permission->name,
+    //             'permission_slug' => $permission->slug,
+    //             'module'          => optional($permission->module)->name,
+    //             'module_slug'     => optional($permission->module)->slug,
+    //         ];
+    //     }),
+    // ];
 }
 
     public function getSkillsDataAttribute()
