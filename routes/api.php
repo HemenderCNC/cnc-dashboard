@@ -56,7 +56,7 @@ Route::middleware('api')->group(function () {
         Route::get('permissions', [PermissionController::class, 'getAllPermissions']); // Get all permissions
 
         Route::prefix('task-types')->group(function () {
-            Route::get('/', [TaskTypeController::class, 'index'])->middleware('permission:view_task_type');
+            Route::get('/', [TaskTypeController::class, 'index']);
             Route::post('/', [TaskTypeController::class, 'store'])->middleware('permission:add_task_type');
             Route::get('/{id}', [TaskTypeController::class, 'show'])->middleware('permission:view_task_type');
             Route::put('/{id}', [TaskTypeController::class, 'update'])->middleware('permission:edit_task_type');
@@ -109,8 +109,8 @@ Route::middleware('api')->group(function () {
 
         //User API group for Admin panel
         Route::get('getuserfieldoptions', [UserFieldOptionController::class, 'getOptions']);        // Get all options for User Employee field options
-        Route::get('users', [UserController::class, 'getAllUsers'])->middleware('permission:view_user'); //Get all users
-        Route::get('user/{id}', [UserController::class, 'getUserById'])->middleware('permission:view_user'); // Get a user details by user ID
+        Route::get('users', [UserController::class, 'getAllUsers']); //Get all users
+        Route::get('user/{id}', [UserController::class, 'getUserById']); // Get a user details by user ID
         Route::post('users', [UserController::class, 'addUser'])->middleware('permission:add_user');
         Route::post('users/{id}', [UserController::class, 'editUser'])->middleware('permission:edit_user');  // Edit user
         Route::delete('users/{id}', [UserController::class, 'deleteUser'])->middleware('permission:delete_user');
@@ -392,7 +392,7 @@ Route::middleware('api')->group(function () {
         // Route::apiResource('milestones', MilestoneController::class);
         Route::prefix('milestones')->group(function () {
             // Get all milestones
-            Route::get('/', [MilestoneController::class, 'index'])->middleware('permission:view_milestone');
+            Route::get('/', [MilestoneController::class, 'index']);
 
             // Create a new milestone
             Route::post('/', [MilestoneController::class, 'store'])->middleware('permission:add_milestone');
@@ -415,7 +415,7 @@ Route::middleware('api')->group(function () {
         // Route::apiResource('task-status', TaskStatusController::class);
         Route::prefix('task-status')->group(function () {
             // Get all task statuses
-            Route::get('/', [TaskStatusController::class, 'index'])->middleware('permission:view_task_status');
+            Route::get('/', [TaskStatusController::class, 'index']);
 
             // Create a new task status
             Route::post('/', [TaskStatusController::class, 'store'])->middleware('permission:add_task_status');
@@ -487,10 +487,10 @@ Route::middleware('api')->group(function () {
         //Tasks API
         Route::prefix('tasks')->group(function () {
             // View tasks
+            Route::get('/project-milstones-summary', [TasksController::class, 'getProjectMilestonesSummary']);
+            Route::get('/project-tasks-summary', [TasksController::class, 'getTasksByProject']);
+            Route::get('/', [TasksController::class, 'index']); // Get all tasks
             Route::middleware(['permission:view_task'])->group(function () {
-                Route::get('/project-tasks-summary', [TasksController::class, 'getTasksByProject']);
-                Route::get('/project-milstones-summary', [TasksController::class, 'getProjectMilestonesSummary']);
-                Route::get('/', [TasksController::class, 'index']); // Get all tasks
                 Route::get('/{id}', [TasksController::class, 'show']); // Get task by ID
             });
 
@@ -520,9 +520,9 @@ Route::middleware('api')->group(function () {
         //Projects API
         Route::prefix('projects')->group(function () {
             // View project routes
+            Route::get('/', [ProjectsController::class, 'index']); // Get all projects
             Route::middleware(['permission:view_project'])->group(function () {
                 Route::get('/summary', [ProjectsController::class, 'summary']); // Get summary
-                Route::get('/', [ProjectsController::class, 'index']); // Get all projects
                 Route::get('/{id}', [ProjectsController::class, 'show']); // Get single project
             });
 
@@ -549,9 +549,9 @@ Route::middleware('api')->group(function () {
         //Leave Module
         Route::prefix('leaves')->group(function () {
 
+            Route::get('/', [LeaveController::class, 'index']); // Employee views own leaves
+            Route::get('/leaves-summary', [LeaveController::class, 'getLeaveSummary']); // Get summary
             Route::middleware(['permission:view_leave'])->group(function () {
-                Route::get('/leaves-summary', [LeaveController::class, 'getLeaveSummary']); // Get summary
-                Route::get('/', [LeaveController::class, 'index']); // Employee views own leaves
                 Route::get('/{id}', [LeaveController::class, 'show']); // View specific leave request
             });
             Route::middleware(['permission:add_leave'])->group(function () {
