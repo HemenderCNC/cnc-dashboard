@@ -164,6 +164,7 @@ class TimesheetController extends Controller
                 'work_description' => ['$first' => '$work_description'],
                 'status' => ['$first' => '$status'],
                 'total_time_spent_minutes' => ['$sum' => '$duration_minutes'],
+                'created_at' => ['$first' => '$created_at'],
                 // You can push back lookups if needed:
                 'task' => ['$first' => '$task'],
                 'project' => ['$first' => '$project'],
@@ -191,7 +192,7 @@ class TimesheetController extends Controller
                     ]
                 ]
             ]],
-
+            ['$sort' => ['created_at' => -1]],
             // 10. Final projection
             ['$project' => [
                 '_id' => 1,
@@ -244,31 +245,32 @@ class TimesheetController extends Controller
                 'time_log' => [$timeLogEntry],
             ]];
             if ($timesheet) {
-                // Decode dates if it's stored as a string (for existing records)
-                if (is_string($timesheet->dates)) {
-                    $timesheet->dates = json_decode($timesheet->dates, true);
-                }
+                // // Decode dates if it's stored as a string (for existing records)
+                // if (is_string($timesheet->dates)) {
+                //     $timesheet->dates = json_decode($timesheet->dates, true);
+                // }
 
-                // Ensure it's an array
-                $existingDates = is_array($timesheet->dates) ? $timesheet->dates : [];
+                // // Ensure it's an array
+                // $existingDates = is_array($timesheet->dates) ? $timesheet->dates : [];
 
-                // Check if the current date already exists
-                $existingDateKey = array_search($currentDate, array_column($existingDates, 'date'));
+                // // Check if the current date already exists
+                // $existingDateKey = array_search($currentDate, array_column($existingDates, 'date'));
 
-                if ($existingDateKey !== false) {
-                    // Append the new time log to the existing date
-                    $existingDates[$existingDateKey]['time_log'][] = $timeLogEntry;
-                } else {
-                    // Add a new date entry with time log
-                    $existingDates[] = [
-                        'date' => $currentDate,
-                        'time_log' => [$timeLogEntry],
-                    ];
-                }
+                // if ($existingDateKey !== false) {
+                //     // Append the new time log to the existing date
+                //     $existingDates[$existingDateKey]['time_log'][] = $timeLogEntry;
+                // } else {
+                //     // Add a new date entry with time log
+                //     $existingDates[] = [
+                //         'date' => $currentDate,
+                //         'time_log' => [$timeLogEntry],
+                //     ];
+                // }
 
-                $timesheet->dates = $existingDates;
-                $timesheet->status = 'running';
-                $timesheet->save();
+                // $timesheet->dates = $existingDates;
+                // $timesheet->status = 'running';
+                // $timesheet->save();
+                return response()->json(['message' => 'Task already created.'], 404);
             } else {
                 // Create a new timesheet entry
                 $timesheet = Timesheet::create([
