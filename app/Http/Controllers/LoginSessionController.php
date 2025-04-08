@@ -58,23 +58,42 @@ class LoginSessionController extends Controller
             $session->save();
         } else {
             // Create new session entry
-            LoginSession::create([
-                'employee_id' => $userId,
-                'date' => $currentDate,
-                'time_log' => [
-                    [
-                        'start_time' => $currentTime,
-                        'end_time' => $currentTime,
-                    ]
-                ],
-                'break' => true,
-                'break_log' => [
-                    [
-                        'start_time' => $currentTime,
-                        'end_time' => $endTime,
-                    ]
-                ],
-            ]);
+            $timesheet = Timesheet::where('employee_id', $userId)
+                            ->where('status', 'running')
+                            ->first();
+
+            if (!$timesheet) {
+                LoginSession::create([
+                    'employee_id' => $userId,
+                    'date' => $currentDate,
+                    'time_log' => [
+                        [
+                            'start_time' => $currentTime,
+                            'end_time' => $currentTime,
+                        ]
+                    ],
+                    'break' => true,
+                    'break_log' => [
+                        [
+                            'start_time' => $currentTime,
+                            'end_time' => $endTime,
+                        ]
+                    ],
+                ]);
+            }
+            else{
+                LoginSession::create([
+                    'employee_id' => $userId,
+                    'date' => $currentDate,
+                    'time_log' => [
+                        [
+                            'start_time' => $currentTime,
+                            'end_time' => $currentTime,
+                        ]
+                    ],
+                    'break' => false
+                ]);
+            }
         }
     }
     public function trackTimesheetSession($userId)

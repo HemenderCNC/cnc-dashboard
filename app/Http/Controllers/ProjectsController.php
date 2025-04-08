@@ -68,35 +68,101 @@ class ProjectsController extends Controller
         $projects = Project::raw(function ($collection) use ($matchStage) {
             return $collection->aggregate([
                 ['$match' => $matchStage],  // Apply Filters
+
+                // Lookup project_status
                 ['$lookup' => [
                     'from' => 'project_statuses',
-                    'let' => ['statusId' => ['$toObjectId' => '$project_status_id']], // Convert to ObjectId
+                    'let' => ['statusId' => ['$toObjectId' => '$project_status_id']],
                     'pipeline' => [
                         ['$match' => ['$expr' => ['$eq' => ['$_id', '$$statusId']]]]
                     ],
                     'as' => 'project_status'
                 ]],
+
+                // Lookup client
                 ['$lookup' => [
-                    'from' => 'clients',   // Collection name for Clients
-                    'let' => ['clientId' => ['$toObjectId' => '$client_id']], // Convert to ObjectId
+                    'from' => 'clients',
+                    'let' => ['clientId' => ['$toObjectId' => '$client_id']],
                     'pipeline' => [
                         ['$match' => ['$expr' => ['$eq' => ['$_id', '$$clientId']]]]
                     ],
                     'as' => 'client'
                 ]],
+
+                // Lookup project_manager
                 ['$lookup' => [
-                    'from' => 'users',   // Collection name for Users (Project Manager)
+                    'from' => 'users',
                     'localField' => 'project_manager_id',
                     'foreignField' => '_id',
                     'as' => 'project_manager'
                 ]],
+
+                // Lookup created_by
                 ['$lookup' => [
-                    'from' => 'users',   // Collection name for Users (Created By)
+                    'from' => 'users',
                     'localField' => 'created_by',
                     'foreignField' => '_id',
                     'as' => 'created_bys'
                 ]],
+
+                // Lookup timesheet for calculating spent hours
+                ['$lookup' => [
+                    'from' => 'timesheets',
+                    'let' => ['projectIdStr' => ['$toString' => '$_id']], // Convert project ObjectId to string
+                    'pipeline' => [
+                        ['$match' => [
+                            '$expr' => ['$eq' => ['$project_id', '$$projectIdStr']]
+                        ]],
+                        ['$unwind' => '$dates'],
+                        ['$unwind' => '$dates.time_log'],
+                        ['$addFields' => [
+                            'start' => [
+                                '$dateFromString' => [
+                                    'dateString' => [
+                                        '$concat' => ['$dates.date', 'T', '$dates.time_log.start_time', ':00']
+                                    ],
+                                    'format' => '%Y-%m-%dT%H:%M:%S'
+                                ]
+                            ],
+                            'end' => [
+                                '$dateFromString' => [
+                                    'dateString' => [
+                                        '$concat' => ['$dates.date', 'T', '$dates.time_log.end_time', ':00']
+                                    ],
+                                    'format' => '%Y-%m-%dT%H:%M:%S'
+                                ]
+                            ]
+                        ]],
+                        ['$addFields' => [
+                            'diff_hours' => [
+                                '$divide' => [
+                                    ['$subtract' => ['$end', '$start']],
+                                    1000 * 60 * 60 // convert milliseconds to hours
+                                ]
+                            ]
+                        ]],
+                        ['$group' => [
+                            '_id' => null,
+                            'total_hours' => ['$sum' => '$diff_hours']
+                        ]]
+                    ],
+                    'as' => 'spent_time'
+                ]],
+
+                // Add spent_hours field to project
+                ['$addFields' => [
+                    'spent_hours' => [
+                        '$round' => [
+                            ['$ifNull' => [['$arrayElemAt' => ['$spent_time.total_hours', 0]], 0]],
+                            2
+                        ]
+                    ]
+                ]],
+
+                // Sort by creation date
                 ['$sort' => ['created_at' => -1]],
+
+                // Project fields
                 ['$project' => [
                     'project_name' => 1,
                     'project_industry' => 1,
@@ -115,9 +181,11 @@ class ProjectsController extends Controller
                     'project_status_id' => 1,
                     'project_status' => 1,
                     'created_by' => 1,
+                    'created_bys' => 1,
                     'platforms' => 1,
                     'languages' => 1,
                     'other_details' => 1,
+                    'spent_hours' => 1
                 ]]
             ]);
         });
