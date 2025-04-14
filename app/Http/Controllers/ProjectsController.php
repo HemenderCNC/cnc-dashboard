@@ -105,6 +105,30 @@ class ProjectsController extends Controller
                     'as' => 'created_bys'
                 ]],
 
+                [
+                    '$lookup' => [
+                        'from' => 'users',
+                        'let' => [
+                            'assigneeIds' => [
+                                '$map' => [
+                                    'input' => '$assignee',
+                                    'as' => 'id',
+                                    'in' => [ '$toObjectId' => '$$id' ]
+                                ]
+                            ]
+                        ],
+                        'pipeline' => [
+                            [
+                                '$match' => [
+                                    '$expr' => [
+                                        '$in' => ['$_id', '$$assigneeIds']
+                                    ]
+                                ]
+                            ]
+                        ],
+                        'as' => 'assignee_details'
+                    ]
+                ],
                 // Lookup timesheet for calculating spent hours
                 ['$lookup' => [
                     'from' => 'timesheets',
@@ -176,6 +200,7 @@ class ProjectsController extends Controller
                     'client_id' => 1,
                     'client' => 1,
                     'assignee' => 1,
+                    'assignee_details' => 1,
                     'estimated_hours' => 1,
                     'project_manager_id' => 1,
                     'project_status_id' => 1,

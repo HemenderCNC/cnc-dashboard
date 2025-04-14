@@ -521,19 +521,20 @@ Route::middleware('api')->group(function () {
         Route::prefix('projects')->group(function () {
             // View project routes
             Route::get('/', [ProjectsController::class, 'index']); // Get all projects
-            Route::middleware(['permission:view_project'])->group(function () {
-                Route::get('/summary', [ProjectsController::class, 'summary']); // Get summary
-                Route::get('/{id}', [ProjectsController::class, 'show']); // Get single project
-            });
+
 
             // Add project
             Route::post('/', [ProjectsController::class, 'store'])->middleware('permission:add_project'); // Add a project
 
             // Update project
-            Route::post('/', [ProjectsController::class, 'store'])->middleware('permission:edit_project'); // Update a project
+            Route::post('/{id}', [ProjectsController::class, 'update'])->middleware('permission:edit_project'); // Update a project
 
             // Delete project
             Route::delete('/{id}', [ProjectsController::class, 'destroy'])->middleware('permission:delete_project'); // Delete a project
+            Route::middleware(['permission:view_project'])->group(function () {
+                Route::get('/summary', [ProjectsController::class, 'summary']); // Get summary
+                Route::get('/{id}', [ProjectsController::class, 'show']); // Get single project
+            });
         });
 
 
