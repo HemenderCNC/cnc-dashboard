@@ -280,7 +280,7 @@ class UserController extends Controller
 
             // Delete old qualification document if exists
             if ($user->qualification_document) {
-                $service->delete($user->qualification_document['file_path'],$user->qualification_document['media_path']);
+                $service->delete($user->qualification_document['file_path'],$user->qualification_document['media_id']);
             }
 
             $qualificationDocument = $service->upload($request->file('qualification_document'), 'uploads', $request->user->id);
@@ -291,7 +291,7 @@ class UserController extends Controller
 
             // Delete old qualification document if exists
             if ($user->document) {
-                $service->delete($user->document['file_path']);
+                $service->delete($user->document['file_path'],$user->document['media_id']);
             }
 
             $document = $service->upload($request->file('document'), 'uploads', $request->user->id);
@@ -407,7 +407,7 @@ class UserController extends Controller
     $filters = [];
 
     // Check if the current user's role is "Employee"
-    if ($request->user->role->name === 'Employee') {
+    if ($request->user->role->name === 'employee') {
         $filters['_id'] = new ObjectId($request->user->id);
     }
         // 🔍 Search Filter (by name or employee_id)
@@ -453,13 +453,53 @@ class UserController extends Controller
             ['$match' => count($filters) > 0 ? $filters : (object)[]], // Ensure valid match object
 
             // Lookup Department
-            ['$lookup' => [
-                'from' => 'departments',
-                'localField' => 'department_id',
-                'foreignField' => '_id',
-                'as' => 'department'
-            ]],
+            [
+                '$lookup' => [
+                    'from' => 'departments',
+                    'let' => ['deptId' => ['$toObjectId' => '$department_id']],
+                    'pipeline' => [
+                        ['$match' => [
+                            '$expr' => [
+                                '$eq' => ['$_id', '$$deptId']
+                            ]
+                        ]]
+                    ],
+                    'as' => 'department'
+                ]
+            ],
             ['$unwind' => ['path' => '$department', 'preserveNullAndEmptyArrays' => true]],
+
+            [
+                '$lookup' => [
+                    'from' => 'employee_types',
+                    'let' => ['deptId' => ['$toObjectId' => '$employment_type_id']],
+                    'pipeline' => [
+                        ['$match' => [
+                            '$expr' => [
+                                '$eq' => ['$_id', '$$deptId']
+                            ]
+                        ]]
+                    ],
+                    'as' => 'employee_type'
+                ]
+            ],
+            ['$unwind' => ['path' => '$employee_type', 'preserveNullAndEmptyArrays' => true]],
+
+            [
+                '$lookup' => [
+                    'from' => 'designations',
+                    'let' => ['deptId' => ['$toObjectId' => '$designation_id']],
+                    'pipeline' => [
+                        ['$match' => [
+                            '$expr' => [
+                                '$eq' => ['$_id', '$$deptId']
+                            ]
+                        ]]
+                    ],
+                    'as' => 'designation'
+                ]
+            ],
+            ['$unwind' => ['path' => '$designation', 'preserveNullAndEmptyArrays' => true]],
 
             // Lookup Role
             ['$lookup' => [
@@ -508,6 +548,8 @@ class UserController extends Controller
                 'username' => 1,
                 'nationality' => 1,
                 'employee_status_id' => 1,
+                'employee_type' => 1,
+                'designation' => 1,
                 'profile_photo' => 1,
                 'employee_id' => 1,
                 'skills' => 1,

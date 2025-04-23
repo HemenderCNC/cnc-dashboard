@@ -19,7 +19,7 @@ class DashboardController extends Controller
         $totalUsers = User::count();
         $totalClients = Clients::count();
         $totalProjects = Project::count();
-        $notices = Notice::where('status','visible')->where('start_date', '>=', $today)->orderBy('created_at', 'desc')->get();
+        $notices = Notice::where('status','visible')->where('start_date', '<=', $today)->where('end_date', '>=', $today)->orderBy('created_at', 'desc')->get();
         $upcomingHolidays = Holiday::where('festival_date', '>=', $today)
             ->orderBy('festival_date', 'asc')
             ->get();
@@ -53,10 +53,10 @@ class DashboardController extends Controller
                 if (!$user->birthdate) {
                     return false; // Skip users without a birthdate
                 }
-                
+
                 $birthdate = Carbon::parse($user->birthdate);
                 $thisYearBirthday = Carbon::create($today->year, $birthdate->month, $birthdate->day);
-        
+
                 return $thisYearBirthday->gte($today); // ✅ Only upcoming birthdays
             })
             ->sortBy(function ($user) use ($today) {
@@ -75,8 +75,8 @@ class DashboardController extends Controller
             })
             ->values() // Reset array indexes
             ->toArray();
-        
-        
+
+
 
         return response()->json([
             'total_users' => $totalUsers,

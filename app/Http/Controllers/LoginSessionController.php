@@ -170,7 +170,7 @@ class LoginSessionController extends Controller
         $adjustedWorkingDays = $workingDays - $holidays;
         $query = LoginSession::query()
             ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()]);
-        if ($request->user->role->name === 'Employee') {
+        if ($request->user->role->name === 'employee') {
             $query->where('employee_id', $request->user->id);
         }
         else if ($request->has('employee_id')) {
@@ -181,7 +181,7 @@ class LoginSessionController extends Controller
 
         $query = Leave::query();
         // If user is an Employee, restrict to their own records
-        if ($request->user->role->name === 'Employee') {
+        if ($request->user->role->name === 'employee') {
             $query->where('employee_id', $request->user->id);
         }
         else if ($request->has('employee_id')) {

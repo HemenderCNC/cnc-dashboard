@@ -6,16 +6,20 @@ use App\Models\GeneralSettings;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Carbon\Carbon;
+use App\Models\Holiday;
+use MongoDB\BSON\UTCDateTime;
 
 class LeaveController extends Controller
 {
     // Employee can view only their own leave requests
     public function index(Request $request)
     {
-        $query = Leave::query();
+        // $query = Leave::query();
+        $query = Leave::with(['employee:id,name,last_name']);
 
         // If user is an Employee, restrict to their own records
-        if ($request->user->role->name === 'Employee') {
+        if ($request->user->role->name === 'employee') {
             $query->where('employee_id', $request->user->id);
         }
         else if ($request->has('employee_id')) {
@@ -40,43 +44,87 @@ class LeaveController extends Controller
 
     // Employee submits a leave request
     public function store(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'start_date' => [
-                'required',
-                'date',
-                Rule::when($request->half_day, ['same:end_date']), // Ensures same start and end date if half-day is true
-            ],
-            'end_date' => 'required|date|after_or_equal:start_date',
-            'half_day' => 'boolean',
-            'half_day_type' => 'nullable|in:first_half,second_half',
-            'reason' => 'required|string',
-        ]);
+{
+    $validator = Validator::make($request->all(), [
+        'start_date' => [
+            'required',
+            'date',
+            Rule::when($request->half_day, ['same:end_date']),
+        ],
+        'end_date' => 'required|date|after_or_equal:start_date',
+        'half_day' => 'boolean',
+        'half_day_type' => 'nullable|in:first_half,second_half',
+        'reason' => 'required|string',
+    ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        $leave_duration = (new \DateTime($request->start_date))->diff(new \DateTime($request->end_date))->days + 1;
-        if($request->half_day){
-            $leave_duration = 0.5;
-        }
-        $leave = Leave::create([
-            'employee_id' => $request->user->id,
-            'start_date' => $request->start_date,
-            'end_date' => $request->end_date,
-            'leave_duration' => $leave_duration,
-            'half_day' => $request->half_day ?? false,
-            'half_day_type' => $request->half_day ? $request->half_day_type : null,
-            'reason' => $request->reason,
-            'status' => 'pending',
-        ]);
-
-        return response()->json($leave, 201);
+    if ($validator->fails()) {
+        return response()->json([
+            'message' => 'Validation failed',
+            'errors' => $validator->errors()
+        ], 422);
     }
+
+    $employeeId = $request->user->id;
+    $startDate = Carbon::parse($request->start_date);
+    $endDate = Carbon::parse($request->end_date);
+
+    // 1. Check overlapping leave dates
+    $overlap = Leave::where('employee_id', $employeeId)
+        ->where(function ($query) use ($startDate, $endDate) {
+            $query->whereBetween('start_date', [$startDate->toDateString(), $endDate->toDateString()])
+              ->orWhereBetween('end_date', [$startDate->toDateString(), $endDate->toDateString()])
+              ->orWhere(function ($q) use ($startDate, $endDate) {
+                  $q->where('start_date', '<=', $startDate->toDateString())
+                    ->where('end_date', '>=', $endDate->toDateString());
+              });
+        })
+        ->exists();
+    if ($overlap) {
+        return response()->json([
+            'message' => 'You have already applied for leave during these dates.'
+        ], 422);
+    }
+
+    // 2. Calculate leave duration excluding weekends & holidays
+    $leaveDuration = 0;
+    if ($request->half_day) {
+        $leaveDuration = 0.5;
+    } else {
+        $holidayDates = Holiday::pluck('festival_date')->map(fn($d) => Carbon::parse($d)->toDateString())->toArray();
+
+        $period = new \DatePeriod($startDate, new \DateInterval('P1D'), $endDate->copy()->addDay());
+
+        foreach ($period as $date) {
+            $carbonDate = Carbon::instance($date);
+            $day = $carbonDate->toDateString();
+            $isWeekend = in_array($carbonDate->dayOfWeek, [Carbon::SATURDAY, Carbon::SUNDAY]);
+            $isHoliday = in_array($day, $holidayDates);
+        
+            if (!$isWeekend && !$isHoliday) {
+                $leaveDuration++;
+            }
+        }
+    }
+
+    if ($leaveDuration == 0) {
+        return response()->json([
+            'message' => 'This day is already holiday.'
+        ], 422);
+    }
+
+    $leave = Leave::create([
+        'employee_id' => $employeeId,
+        'start_date' => $startDate->toDateString(),
+        'end_date' => $endDate->toDateString(),
+        'leave_duration' => $leaveDuration,
+        'half_day' => $request->half_day ?? false,
+        'half_day_type' => $request->half_day ? $request->half_day_type : null,
+        'reason' => $request->reason,
+        'status' => 'pending',
+    ]);
+
+    return response()->json($leave, 201);
+}
 
     // Employee views a specific leave request
     public function show($id, Request $request)
@@ -168,7 +216,7 @@ class LeaveController extends Controller
         $query = Leave::query();
 
         // If user is an Employee, restrict to their own records
-        if ($request->user->role->name === 'Employee') {
+        if ($request->user->role->name === 'employee') {
             $query->where('employee_id', $request->user->id);
         }
         else if ($request->has('employee_id')) {
@@ -255,5 +303,22 @@ class LeaveController extends Controller
         ]);
 
         return response()->json(['message' => 'Leave rejected', 'leave' => $leave], 200);
+    }
+
+    public function allUsersPendingLeaves(Request $request)
+    {
+        if ($request->user->role->name !== 'employee') {
+            $leaves = Leave::with(['employee:id,name,last_name'])
+            ->where('status', 'pending')
+            ->get();
+        }else{
+            return response()->json(['message' => 'You don\'t have permission to view these records.'], 422);
+        }
+        
+        if (!$leaves) {
+            return response()->json(['message' => 'No leaves found'], 404);
+        }
+
+        return response()->json(['message' => 'Leave rejected', 'leave' => $leaves], 200);
     }
 }

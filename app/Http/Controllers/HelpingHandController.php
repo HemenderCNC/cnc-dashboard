@@ -15,7 +15,7 @@ class HelpingHandController extends Controller
     public function index(Request $request){
         $matchStage = (object)[]; // Ensure it's an object, not an empty array
         $userId = $request->user->id;
-        if ($request->user->role->name === 'Employee') {
+        if ($request->user->role->name === 'employee') {
             $matchStage->{'$or'} = [
                 (object) ['from_id' => $userId],
                 (object) ['to_id' => $userId]

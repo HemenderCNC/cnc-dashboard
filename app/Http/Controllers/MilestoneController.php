@@ -10,32 +10,120 @@ class MilestoneController extends Controller
 {
     // Get all Milestones
     public function index(Request $request)
-    {
-        $query = Milestones::query();
+{
+    $matchStage = (object)[];
 
-        // If user is an Employee, restrict to their own records
-        if ($request->has('project_id')) {
-            $query->where('project_id', $request->project_id);
-        }
-
-        // Filter by date range (start_date, end_date)
-        if ($request->has('start_date') && $request->has('end_date')) {
-            $query->whereBetween('start_date', [$request->start_date, $request->end_date]);
-        }
-
-        // Filter by status
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
-        }
-
-        // Order and fetch results
-        // $milestones = $query->orderBy('created_at', 'desc')->get();
-
-        // Order by "order" field in ascending order
-        $milestones = $query->orderBy('order', 'asc')->get();
-
-        return response()->json($milestones, 200);
+    if ($request->has('project_id')) {
+        $matchStage->project_id = $request->project_id;
     }
+
+    if ($request->has('status')) {
+        $matchStage->status = $request->status;
+    }
+
+    if ($request->has('start_date')) {
+        $startDate = new UTCDateTime(Carbon::parse($request->start_date)->getTimestampMs());
+        if (!isset($matchStage->start_date)) {
+            $matchStage->start_date = (object)[];
+        }
+        $matchStage->start_date->{'$gte'} = $startDate;
+    }
+
+    if ($request->has('end_date')) {
+        $endDate = new UTCDateTime(Carbon::parse($request->end_date)->getTimestampMs());
+        if (!isset($matchStage->end_date)) {
+            $matchStage->end_date = (object)[];
+        }
+        $matchStage->end_date->{'$lte'} = $endDate;
+    }
+
+    $milestonesPipeline = [
+        ['$match' => $matchStage],
+
+        // ✅ Corrected $lookup
+        [
+            '$lookup' => [
+                'from' => 'tasks',
+                'let' => ['milestoneId' => '$_id'],
+                'pipeline' => [
+                    [
+                        '$match' => [
+                            '$expr' => [
+                                '$eq' => [
+                                    ['$toObjectId' => '$milestone_id'],
+                                    '$$milestoneId'
+                                ]
+                            ]
+                        ]
+                    ],
+                    // Join task_statuses
+                    [
+                        '$lookup' => [
+                            'from' => 'task_statuses',
+                            'let' => ['statusId' => '$status_id'],
+                            'pipeline' => [
+                                [
+                                    '$match' => [
+                                        '$expr' => [
+                                            '$eq' => [
+                                                '$_id',
+                                                ['$toObjectId' => '$$statusId']
+                                            ]
+                                        ]
+                                    ]
+                                ]
+                            ],
+                            'as' => 'status_data'
+                        ]
+                    ],
+                    // Flatten the status_data array
+                    [
+                        '$unwind' => [
+                            'path' => '$status_data',
+                            'preserveNullAndEmptyArrays' => true
+                        ]
+                    ]
+                ],
+                'as' => 'tasks'
+            ]
+        ],
+
+        [
+            '$project' => [
+                'name' => 1,
+                'start_date' => 1,
+                'end_date' => 1,
+                'color' => 1,
+                'project_id' => 1,
+                'status' => 1,
+                'created_by' => 1,
+                'order' => 1,
+                'tasks' => 1,
+                'total_tasks' => ['$size' => '$tasks'],
+                'pending_tasks' => [
+                    '$size' => [
+                        '$filter' => [
+                            'input' => '$tasks',
+                            'as' => 'task',
+                            'cond' => [
+                                '$eq' => ['$$task.status_data.name', 'pending']
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ],
+
+        ['$sort' => ['order' => 1]]
+    ];
+
+    $milestones = Milestones::raw(function ($collection) use ($milestonesPipeline) {
+        return $collection->aggregate($milestonesPipeline);
+    });
+
+    return response()->json($milestones, 200);
+}
+
 
     // Store a new Milestones
     public function store(Request $request)
