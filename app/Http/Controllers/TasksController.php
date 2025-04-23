@@ -16,7 +16,7 @@ class TasksController extends Controller
     {
         $matchStage = (object)[]; // Ensure it's an object, not an empty array
 
-        if ($request->user->role->name === 'Employee') {
+        if ($request->user->role->name === 'employee') {
             $matchStage->assignee_id = $request->user->id;
         }
         else if ($request->has('employee_id')) {
@@ -40,6 +40,15 @@ class TasksController extends Controller
         // Filter by project status
         if ($request->has('status_id')) {
             $matchStage->status_id = $request->status_id;
+        } else {
+            // Exclude "Complete" tasks (case-insensitive check)
+            $completedStatus = TaskStatus::whereRaw([
+                'name' => ['$regex' => '^complete$', '$options' => 'i']
+            ])->first();
+
+            if ($completedStatus) {
+                $matchStage->status_id = ['$ne' => (string) $completedStatus->_id];
+            }
         }
         if ($request->has('task_type_id')) {
             $matchStage->task_type_id = $request->task_type_id;
@@ -65,13 +74,13 @@ class TasksController extends Controller
         }
 
         // Exclude "Complete" tasks (case-insensitive check)
-        $completedStatus = TaskStatus::whereRaw([
-            'name' => ['$regex' => '^complete$', '$options' => 'i']
-        ])->first();
+        // $completedStatus = TaskStatus::whereRaw([
+        //     'name' => ['$regex' => '^complete$', '$options' => 'i']
+        // ])->first();
 
-        if ($completedStatus) {
-            $matchStage->status_id = ['$ne' => (string) $completedStatus->_id];
-        }
+        // if ($completedStatus) {
+        //     $matchStage->status_id = ['$ne' => (string) $completedStatus->_id];
+        // }
         // Exclude "Complete" tasks END
 
         // Ensure matchStage is not empty
@@ -375,22 +384,22 @@ class TasksController extends Controller
     }
 
     /**
-     * For each milestone get the tasks that has task status as 
+     * For each milestone get the tasks that has task status as
      * complete and send response accordingly
      */
     public function getProjectMilestonesSummary(Request $request)
     {
         $projectId = $request->project_id;
-    
+
         if (!$projectId) {
             return response()->json(['error' => 'Project ID is required'], 400);
         }
-    
+
         $milestoneSummary = Milestones::raw(function ($collection) use ($projectId) {
             return $collection->aggregate([
                 // Match milestones for the given project
                 ['$match' => ['project_id' => (string) $projectId]],
-    
+
                 // Lookup tasks associated with this milestone
                 ['$lookup' => [
                     'from' => 'tasks',
@@ -398,14 +407,14 @@ class TasksController extends Controller
                     'foreignField' => 'milestone_id',
                     'as' => 'tasks'
                 ]],
-    
+
                 // Convert _id to Object format for consistency
                 ['$addFields' => [
                     'milestone_id' => [
                         ['$toString' => '$_id']
                     ]
                 ]],
-    
+
                 // Calculate total tasks and completed tasks
                 ['$addFields' => [
                     'total_tasks' => ['$size' => '$tasks'],
@@ -416,7 +425,7 @@ class TasksController extends Controller
                                 'as' => 'task',
                                 'cond' => [
                                     '$eq' => [
-                                        ['$toLower' => ['$ifNull' => ['$$task.status', '']]], 
+                                        ['$toLower' => ['$ifNull' => ['$$task.status', '']]],
                                         'complete'
                                     ]
                                 ]
@@ -424,7 +433,7 @@ class TasksController extends Controller
                         ]
                     ]
                 ]],
-    
+
                 // Calculate completion percentage
                 ['$addFields' => [
                     'completion_percentage' => [
@@ -434,10 +443,10 @@ class TasksController extends Controller
                         ]
                     ]
                 ]],
-    
+
                 // Sort milestones by 'order' field (ascending)
                 ['$sort' => ['order' => 1]],
-    
+
                 // Project the final output fields
                 ['$project' => [
                     '_id' => 0,
@@ -453,22 +462,22 @@ class TasksController extends Controller
                 ]]
             ]);
         });
-    
+
         return response()->json(['milestone_summary' => $milestoneSummary]);
     }
-    
-    
+
+
 
     public function getTasksByProject(Request $request)
     {
         $userId = $request->user->id; // Get logged-in user's ID
         $projectId = $request->project_id; // Get project ID from request
-    
+
         // Validate input
         if (!$projectId) {
             return response()->json(['error' => 'Project ID is required'], 400);
         }
-    
+
         // Tasks grouped by status
         $tasksByStatus = Tasks::raw(function ($collection) use ($projectId) {
             return $collection->aggregate([
@@ -489,7 +498,7 @@ class TasksController extends Controller
                 ['$sort' => ['status_name' => 1]]
             ]);
         });
-    
+
         // Tasks grouped by assignee
         $tasksByAssignee = Tasks::raw(function ($collection) use ($projectId) {
             return $collection->aggregate([
@@ -510,7 +519,7 @@ class TasksController extends Controller
                 ['$sort' => ['assignee_name' => 1]]
             ]);
         });
-    
+
         // Tasks grouped by assignee where status is "To Do" OR Open tasks
         $tasksByAssigneeTodo = Tasks::raw(function ($collection) use ($projectId) {
             return $collection->aggregate([
@@ -548,7 +557,7 @@ class TasksController extends Controller
                 ['$sort' => ['assignee_name' => 1]]
             ]);
         });
-    
+
         // Project milestones summary OR Project Progress
         /**
          * Calculates all milestones that are in pending status and return result accordingly
@@ -586,13 +595,13 @@ class TasksController extends Controller
                 ]]
             ]);
         });
-    
+
         // Convert results to arrays
         $tasksByStatusArray = iterator_to_array($tasksByStatus);
         $tasksByAssigneeArray = iterator_to_array($tasksByAssignee);
         $tasksByAssigneeTodoArray = iterator_to_array($tasksByAssigneeTodo);
         $projectMilestonesArray = iterator_to_array($projectMilestones);
-    
+
         // Prepare response
         $response = [
             'tasks_by_status' => $tasksByStatusArray,
@@ -600,9 +609,9 @@ class TasksController extends Controller
             'tasks_by_assignee_todo_open' => $tasksByAssigneeTodoArray,
             'project_milestones_summary' => $projectMilestonesArray
         ];
-    
+
         return response()->json($response);
     }
-    
+
 
 }

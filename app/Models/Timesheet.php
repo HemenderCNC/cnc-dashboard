@@ -112,4 +112,8 @@ class Timesheet extends Eloquent
         }
         return $query;
     }
+    public function scopeLatestForEmployee($query)
+    {
+        return $query->orderBy('created_at', 'desc')->limit(1);
+    }
 }
