@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use App\Services\FileUploadService;
 use MongoDB\BSON\ObjectId;
+use Illuminate\Support\Facades\DB;
 
 class UserController extends Controller
 {
@@ -30,8 +31,9 @@ class UserController extends Controller
             // Address Information
             'residential_address' => 'nullable|string',
             'permanent_address' => 'nullable|string',
-            'country' => 'nullable|string',
-            'city' => 'nullable|string',
+            'country' => 'nullable',
+            'state' => 'nullable',
+            'city' => 'nullable',
             'postal_code' => 'nullable|string',
             'emergency_contact_number' => 'nullable|string',
 
@@ -78,10 +80,52 @@ class UserController extends Controller
         ]);
         if ($validator->fails()) {
 
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422); // 422 Unprocessable Entity status code
+        }
+
+        // Validate country
+        if ($request->has('country') && !empty($request->country)) {
+            $countryExists = DB::getMongoDB()->selectCollection('countries')->findOne([
+                'id' => (int) $request->country
+            ]);
+
+            if (!$countryExists) {
                 return response()->json([
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422); // 422 Unprocessable Entity status code
+                    'message' => 'The specified country does not exist.'
+                ], 422);
+            }
+        }
+
+        if ($request->has('country') && !empty($request->country) && $request->has('state')  && !empty($request->state)) {
+            // Validate state
+            $stateExists = DB::getMongoDB()->selectCollection('states')->findOne([
+                'id' => (int) $request->state,
+                'country_id' => (int) $request->country
+            ]);
+
+            if (!$stateExists) {
+                return response()->json([
+                    'message' => 'The specified state does not exist in the given country.'
+                ], 422);
+            }
+        }
+
+        if ($request->has('country') && !empty($request->country) && $request->has('state') && !empty($request->state) && $request->has('city') && !empty($request->city)) {
+            // Validate city
+            $cityExists = DB::getMongoDB()->selectCollection('cities')->findOne([
+                'id' => (int) $request->city,
+                'state_id' => (int) $request->state,
+                'country_id' => (int) $request->country
+            ]);
+
+            if (!$cityExists) {
+                return response()->json([
+                    'message' => 'The specified city does not exist in the given country and state.'
+                ], 422);
+            }
         }
 
         // Auto-generate User ID
@@ -118,6 +162,7 @@ class UserController extends Controller
             'residential_address' => $request->residential_address,
             'permanent_address' => $request->permanent_address,
             'country' => $request->country,
+            'state' => $request->state,
             'city' => $request->city,
             'postal_code' => $request->postal_code,
             'emergency_contact_number' => $request->emergency_contact_number,
@@ -173,7 +218,6 @@ class UserController extends Controller
     //Edit user
     public function editUser(Request $request, $id)
     {
-        // Find user by ID
         $user = User::find($id);
 
         if (!$user) {
@@ -182,7 +226,6 @@ class UserController extends Controller
             ], 404);
         }
 
-        // Validate the incoming data
         $validator = Validator::make($request->all(), [
             // Basic Information
             'first_name' => 'required|string',
@@ -199,52 +242,13 @@ class UserController extends Controller
             // Address Information
             'residential_address' => 'nullable|string',
             'permanent_address' => 'nullable|string',
-            'country' => 'nullable|string',
-            'city' => 'nullable|string',
+            'country' => 'nullable',
+            'state' => 'nullable',
+            'city' => 'nullable',
             'postal_code' => 'nullable|string',
             'emergency_contact_number' => 'nullable|string',
 
-            // Qualification
-            'qualification_level_id' => 'nullable|exists:qualifications,_id',
-            'certification_name' => 'nullable|string',
-            'year_of_completion' => 'nullable|date',
-            'qualification_document' => 'nullable|file|mimes:pdf,jpeg,png|max:2048',
-
-            // Work Information
-            'company_email' => 'nullable|email|unique:users,email,'. $id,
-            'username' => 'required|string|unique:users,username,'. $id,
-            // 'password' => 'required|string|min:6',
-            'role_id' => 'required|exists:roles,_id',
-            'department_id' => 'nullable|exists:departments,_id',
-            'designation_id' => 'nullable|exists:designations,_id',
-            'joining_date' => 'nullable|date',
-            'in_time' => 'nullable|string',
-            'out_time' => 'nullable|string',
-            'adharcard_number' => 'nullable|string|size:12',
-            'pancard_number' => 'nullable|string',
-            'employment_type_id' => 'nullable|exists:employee_types,_id',
-            'employee_status_id' => 'nullable|exists:employee_statuses,_id',
-            'work_location_id' => 'nullable|exists:work_locations,_id',
-            // 'created_by' => 'required|exists:users,_id',
-
-
-            //Skills
-            'skills' => 'nullable|array',
-            'skills.*' => 'exists:skills,_id',
-
-            //Bank details
-            'account_holde_name' => 'nullable|string',
-            'bank_name' => 'nullable|string',
-            'account_number' => 'nullable|string',
-            'account_type' => 'nullable|string',
-            'bank_ifsc_code' => 'nullable|string',
-            'bank_branch_location' => 'nullable|string',
-
-            //document details
-            'document_type_id' => 'nullable|exists:document_types,_id',
-            'document' => 'nullable|file|mimes:pdf,jpeg,png|max:2048',
-
-            'reporting_manager_id' => 'nullable|exists:users,_id',
+            // Other fields...
         ]);
 
         if ($validator->fails()) {
@@ -254,13 +258,49 @@ class UserController extends Controller
             ], 422);
         }
 
+        // Validate country
+        if ($request->has('country') && !empty($request->country)) {
+            $countryExists = DB::getMongoDB()->selectCollection('countries')->findOne([
+                'id' => (int) $request->country
+            ]);
 
-        //Handel Upload
-        //CREATED seperate API to edit docs
-        // $service = app(FileUploadService::class);
-        // $profilePhoto = $service->upload($request->file('profile_photo'), 'uploads', $request->user->id);
-        // $qualificationDocument = $service->upload($request->file('qualification_document'), 'uploads', $request->user->id);
+            if (!$countryExists) {
+                return response()->json([
+                    'message' => 'The specified country does not exist.'
+                ], 422);
+            }
+        }
 
+        // Validate state
+        if ($request->has('country') && !empty($request->country) && $request->has('state') && !empty($request->state)) {
+            $stateExists = DB::getMongoDB()->selectCollection('states')->findOne([
+                'id' => (int) $request->state,
+                'country_id' => (int) $request->country
+            ]);
+
+            if (!$stateExists) {
+                return response()->json([
+                    'message' => 'The specified state does not exist in the given country.'
+                ], 422);
+            }
+        }
+
+        // Validate city
+        if ($request->has('country') && !empty($request->country) && $request->has('state') && !empty($request->state) && $request->has('city') && !empty($request->city)) {
+            $cityExists = DB::getMongoDB()->selectCollection('cities')->findOne([
+                'id' => (int) $request->city,
+                'state_id' => (int) $request->state,
+                'country_id' => (int) $request->country
+            ]);
+
+            if (!$cityExists) {
+                return response()->json([
+                    'message' => 'The specified city does not exist in the given country and state.'
+                ], 422);
+            }
+        }
+
+        // Proceed with user update...
 
         // Handle File Uploads Only If Present in Request
         $service = app(FileUploadService::class);
@@ -269,7 +309,7 @@ class UserController extends Controller
 
             // Delete old profile photo if exists
             if ($user->profile_photo) {
-                $service->delete($user->profile_photo['file_path'],$user->profile_photo['media_id']);
+                $service->delete($user->profile_photo['file_path'], $user->profile_photo['media_id']);
             }
 
             $profilePhoto = $service->upload($request->file('profile_photo'), 'uploads', $request->user->id);
@@ -280,7 +320,7 @@ class UserController extends Controller
 
             // Delete old qualification document if exists
             if ($user->qualification_document) {
-                $service->delete($user->qualification_document['file_path'],$user->qualification_document['media_id']);
+                $service->delete($user->qualification_document['file_path'], $user->qualification_document['media_id']);
             }
 
             $qualificationDocument = $service->upload($request->file('qualification_document'), 'uploads', $request->user->id);
@@ -291,14 +331,12 @@ class UserController extends Controller
 
             // Delete old qualification document if exists
             if ($user->document) {
-                $service->delete($user->document['file_path'],$user->document['media_id']);
+                $service->delete($user->document['file_path'], $user->document['media_id']);
             }
 
             $document = $service->upload($request->file('document'), 'uploads', $request->user->id);
             $user->document = $document;
         }
-
-
 
         // Update user data
         $user->update([
@@ -319,6 +357,7 @@ class UserController extends Controller
             'permanent_address' => $request->permanent_address,
             'country' => $request->country,
             'city' => $request->city,
+            'state' => $request->state,
             'postal_code' => $request->postal_code,
             'emergency_contact_number' => $request->emergency_contact_number,
 
@@ -380,20 +419,42 @@ class UserController extends Controller
      */
     public function getUserById($id)
     {
-        // Find the user by ID
         $user = User::with(['employeeType','department','employeeStatus','designation','workLocation','documentType','qualification','reportingManager'])->find($id);
 
-        // Check if the user exists
         if (!$user) {
             return response()->json([
                 'message' => 'User not found',
             ], 404);
         }
 
-        // Return the user data
+        // Fetch the country name
+        $country = DB::getMongoDB()->selectCollection('countries')->findOne(['id' => (int) $user->country]);
+        $countryName = $country ? $country['name'] : null;
+
+        // Fetch the state name
+        $state = DB::getMongoDB()->selectCollection('states')->findOne([
+            'id' => (int) $user->state,
+            'country_id' => (int) $user->country
+        ]);
+        $stateName = $state ? $state['name'] : null;
+
+        // Fetch the city name
+        $city = DB::getMongoDB()->selectCollection('cities')->findOne([
+            'id' => (int) $user->city,
+            'state_id' => (int) $user->state,
+            'country_id' => (int) $user->country
+        ]);
+        $cityName = $city ? $city['name'] : null;
+
+        // Add the names to the user data
+        $userData = $user->toArray();
+        $userData['country_name'] = $countryName;
+        $userData['state_name'] = $stateName;
+        $userData['city_name'] = $cityName;
+
         return response()->json([
             'message' => 'User retrieved successfully',
-            'data' => $user,
+            'data' => $userData,
         ], 200);
     }
 
@@ -403,13 +464,13 @@ class UserController extends Controller
      * @return \Illuminate\Http\JsonResponse
      */
     public function getAllUsers(Request $request)
-{
-    $filters = [];
+    {
+        $filters = [];
 
-    // Check if the current user's role is "Employee"
-    if ($request->user->role->name === 'Employee') {
-        $filters['_id'] = new ObjectId($request->user->id);
-    }
+        // Check if the current user's role is "Employee"
+        if ($request->user->role->name === 'employee') {
+            $filters['_id'] = new ObjectId($request->user->id);
+        }
         // 🔍 Search Filter (by name or employee_id)
         if ($request->has('search') && !empty($request->search)) {
             $search = trim($request->search);
@@ -447,135 +508,135 @@ class UserController extends Controller
             ];
         }
 
-    // 🔄 Fetch users with filters applied
-    $users = User::raw(function ($collection) use ($filters) {
-        return $collection->aggregate([
-            ['$match' => count($filters) > 0 ? $filters : (object)[]], // Ensure valid match object
+        // 🔄 Fetch users with filters applied
+        $users = User::raw(function ($collection) use ($filters) {
+            return $collection->aggregate([
+                ['$match' => count($filters) > 0 ? $filters : (object)[]], // Ensure valid match object
 
-            // Lookup Department
-            [
-                '$lookup' => [
-                    'from' => 'departments',
-                    'let' => ['deptId' => ['$toObjectId' => '$department_id']],
-                    'pipeline' => [
-                        ['$match' => [
-                            '$expr' => [
-                                '$eq' => ['$_id', '$$deptId']
-                            ]
-                        ]]
-                    ],
-                    'as' => 'department'
-                ]
-            ],
-            ['$unwind' => ['path' => '$department', 'preserveNullAndEmptyArrays' => true]],
-
-            [
-                '$lookup' => [
-                    'from' => 'employee_types',
-                    'let' => ['deptId' => ['$toObjectId' => '$employment_type_id']],
-                    'pipeline' => [
-                        ['$match' => [
-                            '$expr' => [
-                                '$eq' => ['$_id', '$$deptId']
-                            ]
-                        ]]
-                    ],
-                    'as' => 'employee_type'
-                ]
-            ],
-            ['$unwind' => ['path' => '$employee_type', 'preserveNullAndEmptyArrays' => true]],
-
-            [
-                '$lookup' => [
-                    'from' => 'designations',
-                    'let' => ['deptId' => ['$toObjectId' => '$designation_id']],
-                    'pipeline' => [
-                        ['$match' => [
-                            '$expr' => [
-                                '$eq' => ['$_id', '$$deptId']
-                            ]
-                        ]]
-                    ],
-                    'as' => 'designation'
-                ]
-            ],
-            ['$unwind' => ['path' => '$designation', 'preserveNullAndEmptyArrays' => true]],
-
-            // Lookup Role
-            ['$lookup' => [
-                'from' => 'roles',
-                'localField' => 'role_id',
-                'foreignField' => '_id',
-                'as' => 'role'
-            ]],
-            ['$unwind' => ['path' => '$role', 'preserveNullAndEmptyArrays' => true]],
-
-            // Lookup Office
-            ['$lookup' => [
-                'from' => 'work_locations',
-                'localField' => 'work_location_id',
-                'foreignField' => '_id',
-                'as' => 'work_location'
-            ]],
-            ['$unwind' => ['path' => '$work_location', 'preserveNullAndEmptyArrays' => true]],
-
-            // Lookup Employee Status (Fix ObjectId issue)
-            ['$lookup' => [
-                'from' => 'employee_statuses',
-                'let' => ['statusId' => ['$toObjectId' => '$employee_status_id']],
-                'pipeline' => [
-                    ['$match' => ['$expr' => ['$eq' => ['$_id', '$$statusId']]]]
+                // Lookup Department
+                [
+                    '$lookup' => [
+                        'from' => 'departments',
+                        'let' => ['deptId' => ['$toObjectId' => '$department_id']],
+                        'pipeline' => [
+                            ['$match' => [
+                                '$expr' => [
+                                    '$eq' => ['$_id', '$$deptId']
+                                ]
+                            ]]
+                        ],
+                        'as' => 'department'
+                    ]
                 ],
-                'as' => 'employee_status'
-            ]],
-            ['$unwind' => ['path' => '$employee_status', 'preserveNullAndEmptyArrays' => true]],
-            ['$sort' => ['created_at' => -1]],
+                ['$unwind' => ['path' => '$department', 'preserveNullAndEmptyArrays' => true]],
 
-            // Project Only Required Fields
-            ['$project' => [
-                'name' => 1,
-                '_id' => 1,
-                'last_name' => 1,
-                'gender' => 1,
-                'contact_number' => 1,
-                'birthdate' => 1,
-                'personal_email' => 1,
-                'blood_group' => 1,
-                'marital_status' => 1,
-                'office_location' => 1,
-                'residential_address' => 1,
-                'role_id' => 1,
-                'username' => 1,
-                'nationality' => 1,
-                'employee_status_id' => 1,
-                'employee_type' => 1,
-                'designation' => 1,
-                'profile_photo' => 1,
-                'employee_id' => 1,
-                'skills' => 1,
-                'email' => 1,
-                'reporting_manager_id' => 1,
-                'joining_date' => 1,
-                'department' => 1,
-                'role' => 1,
-                'work_location' => 1,
-                'employee_status' => 1,
-            ]]
-        ]);
-    });
+                [
+                    '$lookup' => [
+                        'from' => 'employee_types',
+                        'let' => ['deptId' => ['$toObjectId' => '$employment_type_id']],
+                        'pipeline' => [
+                            ['$match' => [
+                                '$expr' => [
+                                    '$eq' => ['$_id', '$$deptId']
+                                ]
+                            ]]
+                        ],
+                        'as' => 'employee_type'
+                    ]
+                ],
+                ['$unwind' => ['path' => '$employee_type', 'preserveNullAndEmptyArrays' => true]],
 
-    // Check if users exist
-    if ($users->isEmpty()) {
+                [
+                    '$lookup' => [
+                        'from' => 'designations',
+                        'let' => ['deptId' => ['$toObjectId' => '$designation_id']],
+                        'pipeline' => [
+                            ['$match' => [
+                                '$expr' => [
+                                    '$eq' => ['$_id', '$$deptId']
+                                ]
+                            ]]
+                        ],
+                        'as' => 'designation'
+                    ]
+                ],
+                ['$unwind' => ['path' => '$designation', 'preserveNullAndEmptyArrays' => true]],
+
+                // Lookup Role
+                ['$lookup' => [
+                    'from' => 'roles',
+                    'localField' => 'role_id',
+                    'foreignField' => '_id',
+                    'as' => 'role'
+                ]],
+                ['$unwind' => ['path' => '$role', 'preserveNullAndEmptyArrays' => true]],
+
+                // Lookup Office
+                ['$lookup' => [
+                    'from' => 'work_locations',
+                    'localField' => 'work_location_id',
+                    'foreignField' => '_id',
+                    'as' => 'work_location'
+                ]],
+                ['$unwind' => ['path' => '$work_location', 'preserveNullAndEmptyArrays' => true]],
+
+                // Lookup Employee Status (Fix ObjectId issue)
+                ['$lookup' => [
+                    'from' => 'employee_statuses',
+                    'let' => ['statusId' => ['$toObjectId' => '$employee_status_id']],
+                    'pipeline' => [
+                        ['$match' => ['$expr' => ['$eq' => ['$_id', '$$statusId']]]]
+                    ],
+                    'as' => 'employee_status'
+                ]],
+                ['$unwind' => ['path' => '$employee_status', 'preserveNullAndEmptyArrays' => true]],
+                ['$sort' => ['created_at' => -1]],
+
+                // Project Only Required Fields
+                ['$project' => [
+                    'name' => 1,
+                    '_id' => 1,
+                    'last_name' => 1,
+                    'gender' => 1,
+                    'contact_number' => 1,
+                    'birthdate' => 1,
+                    'personal_email' => 1,
+                    'blood_group' => 1,
+                    'marital_status' => 1,
+                    'office_location' => 1,
+                    'residential_address' => 1,
+                    'role_id' => 1,
+                    'username' => 1,
+                    'nationality' => 1,
+                    'employee_status_id' => 1,
+                    'employee_type' => 1,
+                    'designation' => 1,
+                    'profile_photo' => 1,
+                    'employee_id' => 1,
+                    'skills' => 1,
+                    'email' => 1,
+                    'reporting_manager_id' => 1,
+                    'joining_date' => 1,
+                    'department' => 1,
+                    'role' => 1,
+                    'work_location' => 1,
+                    'employee_status' => 1,
+                ]]
+            ]);
+        });
+
+        // Check if users exist
+        if ($users->isEmpty()) {
+            return response()->json([
+                'message' => 'No users found',
+            ], 404);
+        }
+
         return response()->json([
-            'message' => 'No users found',
-        ], 404);
+            'message' => 'Users retrieved successfully',
+            'data' => $users,
+        ], 200);
     }
-
-    return response()->json([
-        'message' => 'Users retrieved successfully',
-        'data' => $users,
-    ], 200);
-}
 
 
 
@@ -745,7 +806,73 @@ class UserController extends Controller
     //     return response()->json(['message' => 'No profile photo to delete'], 404);
     // }
 
+    /**
+     * Get all other employees excluding the current user.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getAllOtherEmployees(Request $request)
+    {
+        $currentUserId = $request->user->id; // Get the current user's ID
 
+        // Fetch all users with the role "employee" and exclude the current user
+        $users = User::raw(function ($collection) use ($currentUserId) {
+            return $collection->aggregate([
+                // Convert role_id (string) to ObjectId for the lookup
+                [
+                    '$addFields' => [
+                        'role_id_object' => ['$toObjectId' => '$role_id']
+                    ]
+                ],
+
+                // Lookup Role
+                [
+                    '$lookup' => [
+                        'from' => 'roles',
+                        'localField' => 'role_id_object', // Use the converted ObjectId field
+                        'foreignField' => '_id',
+                        'as' => 'role'
+                    ]
+                ],
+                ['$unwind' => ['path' => '$role', 'preserveNullAndEmptyArrays' => true]],
+
+                // Match users with the role "employee" and exclude the current user
+                [
+                    '$match' => [
+                        'role.name' => 'employee', // Filter by role name
+                        '_id' => ['$ne' => new ObjectId($currentUserId)] // Exclude the current user
+                    ]
+                ],
+
+                // Project Only Required Fields
+                [
+                    '$project' => [
+                        'name' => 1,
+                        '_id' => 1,
+                        'last_name' => 1,
+                        'email' => 1,
+                        'contact_number' => 1,
+                        'role' => 1,
+                        'profile_photo' => 1,
+                        'employee_id' => 1,
+                    ]
+                ]
+            ]);
+        });
+
+        // Check if users exist
+        if ($users->isEmpty()) {
+            return response()->json([
+                'message' => 'No employees found',
+            ], 404);
+        }
+
+        return response()->json([
+            'message' => 'Employees retrieved successfully',
+            'data' => $users,
+        ], 200);
+    }
     /**
      * Delete a user by ID.
      *
@@ -769,12 +896,12 @@ class UserController extends Controller
 
         // Delete profile photo if exists
         if (!empty($user->profile_photo['file_path'])) {
-            $service->delete($user->profile_photo['file_path'],$user->profile_photo['media_id']);
+            $service->delete($user->profile_photo['file_path'], $user->profile_photo['media_id']);
         }
 
         // Delete qualification document if exists
         if (!empty($user->qualification_document['file_path'])) {
-            $service->delete($user->qualification_document['file_path'],$user->qualification_document['media_id']);
+            $service->delete($user->qualification_document['file_path'], $user->qualification_document['media_id']);
         }
 
         // Delete the user
@@ -786,7 +913,53 @@ class UserController extends Controller
     }
 
 
+        /**
+     * Get all employees regardless of their role.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getAllEmployees()
+    {
+        // Fetch all users
+        $users = User::raw(function ($collection) {
+            return $collection->aggregate([
+                // Lookup Role
+                [
+                    '$lookup' => [
+                        'from' => 'roles',
+                        'localField' => 'role_id',
+                        'foreignField' => '_id',
+                        'as' => 'role'
+                    ]
+                ],
+                ['$unwind' => ['path' => '$role', 'preserveNullAndEmptyArrays' => true]],
 
+                // Project Only Required Fields
+                [
+                    '$project' => [
+                        'name' => 1,
+                        '_id' => 1,
+                        'last_name' => 1,
+                        'email' => 1,
+                        'contact_number' => 1,
+                        'role' => 1,
+                        'profile_photo' => 1,
+                        'employee_id' => 1,
+                    ]
+                ]
+            ]);
+        });
 
+        // Check if users exist
+        if ($users->isEmpty()) {
+            return response()->json([
+                'message' => 'No users found',
+            ], 404);
+        }
 
+        return response()->json([
+            'message' => 'Users retrieved successfully',
+            'data' => $users,
+        ], 200);
+    }
 }

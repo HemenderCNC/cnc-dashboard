@@ -15,7 +15,7 @@ class HelpingHandController extends Controller
     public function index(Request $request){
         $matchStage = (object)[]; // Ensure it's an object, not an empty array
         $userId = $request->user->id;
-        if ($request->user->role->name === 'Employee') {
+        if ($request->user->role->name === 'employee') {
             $matchStage->{'$or'} = [
                 (object) ['from_id' => $userId],
                 (object) ['to_id' => $userId]
@@ -163,6 +163,12 @@ class HelpingHandController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
+
+
+        if($HelpingHand->status == 'canceled'){
+            return response()->json(['message' => 'The Requester has canceled the request.'], 409);
+        }
+
         $status = $request->status;
         if($status == 'accepted'){
             $user_id = $request->user->id;

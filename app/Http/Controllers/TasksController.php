@@ -16,10 +16,9 @@ class TasksController extends Controller
     {
         $matchStage = (object)[]; // Ensure it's an object, not an empty array
 
-        if ($request->user->role->name === 'Employee') {
+        if ($request->user->role->name === 'employee') {
             $matchStage->assignee_id = $request->user->id;
-        }
-        else if ($request->has('employee_id')) {
+        } else if ($request->has('employee_id')) {
             $matchStage->assignee_id = $request->employee_id;
         }
         // Filter by project name (partial match)
@@ -88,7 +87,7 @@ class TasksController extends Controller
             $matchStage = (object)[]; // Empty object for MongoDB
         }
         $sortStage = ['$sort' => ['created_at' => -1]]; // Default sorting by created_at (Descending)
-        $matchDueDate=null;
+        $matchDueDate = null;
         if ($request->has('sort') && $request->sort === 'due_date') {
             $todayTimestamp = Carbon::today()->toIso8601String(); // Convert to milliseconds
             $matchDueDate = ['$match' => ['due_date' => ['$gte' => $todayTimestamp]]];
@@ -172,6 +171,99 @@ class TasksController extends Controller
                     ],
                     'as' => 'created_bys'
                 ]],
+                [
+                    '$lookup' => [
+                        'from' => 'timesheets',
+                        'let' => ['taskId' => '$_id'],
+                        'pipeline' => [
+                            [
+                                '$match' => [
+                                    '$expr' => [
+                                        '$eq' => [
+                                            ['$toObjectId' => '$task_id'],
+                                            '$$taskId'
+                                        ]
+                                    ]
+                                ]
+                            ],
+                            [
+                                '$unwind' => '$dates'
+                            ],
+                            [
+                                '$unwind' => '$dates.time_log'
+                            ],
+                            [
+                                '$addFields' => [
+                                    'start' => [
+                                        '$dateFromString' => [
+                                            'dateString' => [
+                                                '$concat' => [
+                                                    '$dates.date',
+                                                    'T',
+                                                    '$dates.time_log.start_time',
+                                                    ':00'
+                                                ]
+                                            ],
+                                            'format' => '%Y-%m-%dT%H:%M:%S'
+                                        ]
+                                    ],
+                                    'end' => [
+                                        '$dateFromString' => [
+                                            'dateString' => [
+                                                '$concat' => [
+                                                    '$dates.date',
+                                                    'T',
+                                                    '$dates.time_log.end_time',
+                                                    ':00'
+                                                ]
+                                            ],
+                                            'format' => '%Y-%m-%dT%H:%M:%S'
+                                        ]
+                                    ]
+                                ]
+                            ],
+                            [
+                                '$addFields' => [
+                                    'durationInMinutes' => [
+                                        '$divide' => [
+                                            ['$subtract' => ['$end', '$start']],
+                                            1000 * 60
+                                        ]
+                                    ]
+                                ]
+                            ],
+                            [
+                                '$group' => [
+                                    '_id' => null,
+                                    'total_minutes' => ['$sum' => '$durationInMinutes']
+                                ]
+                            ],
+                            [
+                                '$addFields' => [
+                                    'total_hours' => [
+                                        '$floor' => [
+                                            '$divide' => ['$total_minutes', 60]
+                                        ]
+                                    ],
+                                    'remaining_minutes' => [
+                                        '$mod' => ['$total_minutes', 60]
+                                    ]
+                                ]
+                            ]
+                        ],
+                        'as' => 'timesheet_data'
+                    ]
+                ],
+                [
+                    '$addFields' => [
+                        'total_hours' => [
+                            '$ifNull' => [['$arrayElemAt' => ['$timesheet_data.total_hours', 0]], 0]
+                        ],
+                        'total_minutes' => [
+                            '$ifNull' => [['$arrayElemAt' => ['$timesheet_data.remaining_minutes', 0]], 0]
+                        ]
+                    ]
+                ],
                 $sortStage,
                 ['$project' => [
                     'title' => 1,
@@ -194,14 +286,31 @@ class TasksController extends Controller
                     'attachment' => 1,
                     'created_by' => 1,
                     'created_bys' => 1,
+                    'total_hours' => 1,
+                    'total_minutes' => 1
                 ]]
             ]);
             return $collection->aggregate($pipeline);
         });
 
-        $projectsAssigned = Tasks::where('assignee_id', $request->user->id ?? $request->employee_id)
-        ->distinct('project_id')
-        ->count();
+        // $projectsAssigned = Tasks::where('assignee_id', $request->user->id ?? $request->employee_id)
+        //     ->distinct('project_id')
+        //     ->count();
+
+        $getDataFor =$request->user->id;
+
+        if($request->employee_id || $request->assignee_id){
+            if($request->employee_id){
+                $getDataFor = $request->employee_id;
+            }else if($request->assignee_id){
+                $getDataFor = $request->assignee_id;
+            }
+        }
+        $projectsAssigned = Tasks::where('assignee_id', $getDataFor)
+            ->distinct('project_id')
+            ->count();
+
+
 
         $taskStatuses = Tasks::raw(function ($collection) use ($matchStage) {
             return $collection->aggregate([
@@ -295,7 +404,7 @@ class TasksController extends Controller
      */
     public function show(string $id)
     {
-        $task = Tasks::with(['owner','assignee','project','milestone','status','taskType','createdBy'])->find($id);
+        $task = Tasks::with(['owner', 'assignee', 'project', 'milestone', 'status', 'taskType', 'createdBy'])->find($id);
         if (!$task) {
             return response()->json(['message' => 'Task not found'], 404);
         }
@@ -312,7 +421,7 @@ class TasksController extends Controller
             return response()->json(['message' => 'Task not found'], 404);
         }
         $validator = Validator::make($request->all(), [
-            'title' => 'required|string|unique:tasks,title,'.$id,
+            'title' => 'required|string|unique:tasks,title,' . $id,
             'project_id' => 'required|exists:projects,_id',
             'milestone_id' => 'nullable|exists:milestones,_id',
             'status_id' => 'required|exists:task_statuses,_id',
@@ -343,7 +452,7 @@ class TasksController extends Controller
         if ($request->hasFile('attachment')) {
             // Delete old profile photo if exists
             if ($task->attachment) {
-                $service->delete($task->attachment['file_path'],$task->attachment['media_id']);
+                $service->delete($task->attachment['file_path'], $task->attachment['media_id']);
             }
             $attachment = $service->upload($request->file('attachment'), 'uploads', $request->user->id);
             $task->attachment = $attachment;
@@ -438,7 +547,8 @@ class TasksController extends Controller
                 ['$addFields' => [
                     'completion_percentage' => [
                         '$cond' => [
-                            ['$eq' => ['$total_tasks', 0]], 0, // If no tasks, percentage = 0
+                            ['$eq' => ['$total_tasks', 0]],
+                            0, // If no tasks, percentage = 0
                             ['$multiply' => [['$divide' => ['$completed_tasks', '$total_tasks']], 100]]
                         ]
                     ]
@@ -612,6 +722,4 @@ class TasksController extends Controller
 
         return response()->json($response);
     }
-
-
 }

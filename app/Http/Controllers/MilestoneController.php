@@ -201,7 +201,7 @@ class MilestoneController extends Controller
         if (isset($data['name'])) {
             $data['name'] = strtolower(trim($data['name']));
         }
-
+    
         $milestone->update($data);
 
         return response()->json(['message' => 'Milestone updated successfully', 'data' => $milestone]);
@@ -232,11 +232,11 @@ class MilestoneController extends Controller
             'milestones.*.id' => 'required|exists:milestones,_id',
             'milestones.*.order' => 'required|integer|min:1'
         ]);
-
+    
         if ($validator->fails()) {
             return response()->json(['message' => 'Validation failed', 'errors' => $validator->errors()], 422);
         }
-
+    
         foreach ($request->milestones as $milestoneData) {
             Milestones::where('_id', $milestoneData['id'])
                 ->where('project_id', $request->project_id)
@@ -248,7 +248,7 @@ class MilestoneController extends Controller
                 'order' => $milestoneData['order']
             ];
         }
-
+    
         return response()->json([
             'success' => true,
             'message' => 'Milestone order updated successfully',
@@ -256,5 +256,5 @@ class MilestoneController extends Controller
             'updated_milestones' => $updatedMilestones
         ], 200);
     }
-
+    
 }

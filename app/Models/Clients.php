@@ -27,7 +27,19 @@ class Clients extends Eloquent
         'referral_source',
         'account_manager_id',
         'created_by',
+        'client_id', // Add client_id to the fillable array
     ];
+    public static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($client) {
+            // Generate the client ID
+            $lastClient = self::orderBy('_id', 'desc')->first();
+            $lastId = $lastClient ? intval(substr($lastClient->client_id, 4)) : 0;
+            $client->client_id = 'CLI-' . str_pad($lastId + 1, 3, '0', STR_PAD_LEFT);
+        });
+    }
     public function accountManager()
     {
         return $this->belongsTo(User::class, 'account_manager_id');

@@ -15,10 +15,11 @@ class LeaveController extends Controller
     // Employee can view only their own leave requests
     public function index(Request $request)
     {
-        $query = Leave::query();
+        // $query = Leave::query();
+        $query = Leave::with(['employee:id,name,last_name']);
 
         // If user is an Employee, restrict to their own records
-        if ($request->user->role->name === 'Employee') {
+        if ($request->user->role->name === 'employee') {
             $query->where('employee_id', $request->user->id);
         }
         else if ($request->has('employee_id')) {
@@ -98,7 +99,7 @@ class LeaveController extends Controller
             $day = $carbonDate->toDateString();
             $isWeekend = in_array($carbonDate->dayOfWeek, [Carbon::SATURDAY, Carbon::SUNDAY]);
             $isHoliday = in_array($day, $holidayDates);
-
+        
             if (!$isWeekend && !$isHoliday) {
                 $leaveDuration++;
             }
@@ -215,7 +216,7 @@ class LeaveController extends Controller
         $query = Leave::query();
 
         // If user is an Employee, restrict to their own records
-        if ($request->user->role->name === 'Employee') {
+        if ($request->user->role->name === 'employee') {
             $query->where('employee_id', $request->user->id);
         }
         else if ($request->has('employee_id')) {
@@ -302,5 +303,22 @@ class LeaveController extends Controller
         ]);
 
         return response()->json(['message' => 'Leave rejected', 'leave' => $leave], 200);
+    }
+
+    public function allUsersPendingLeaves(Request $request)
+    {
+        if ($request->user->role->name !== 'employee') {
+            $leaves = Leave::with(['employee:id,name,last_name'])
+            ->where('status', 'pending')
+            ->get();
+        }else{
+            return response()->json(['message' => 'You don\'t have permission to view these records.'], 422);
+        }
+        
+        if (!$leaves) {
+            return response()->json(['message' => 'No leaves found'], 404);
+        }
+
+        return response()->json(['message' => 'Leave rejected', 'leave' => $leaves], 200);
     }
 }

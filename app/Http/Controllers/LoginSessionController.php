@@ -11,13 +11,27 @@ use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 class LoginSessionController extends Controller
 {
+    // public function trackSession(Request $request)
+    // {
+    //     $userId = $request->user->id;
+    //     $this->trackLoginSessions($userId);
+    //     $this->trackTimesheetSession($userId);
+
+    //     return response()->json(['message' => 'Session tracked successfully'], 200);
+    // }
+
     public function trackSession(Request $request)
     {
         $userId = $request->user->id;
         $this->trackLoginSessions($userId);
         $this->trackTimesheetSession($userId);
+            // Call the index function of GeneralSettingsController
+        $generalSettings = app(GeneralSettingsController::class)->index($request);
 
-        return response()->json(['message' => 'Session tracked successfully'], 200);
+        return response()->json([
+            'message' => 'Session tracked successfully',
+            'general_settings' => $generalSettings
+        ], 200);
     }
     public function trackLoginSessions($userId){
         $currentDate = Carbon::now()->toDateString(); // Uses default timezone from config
@@ -36,13 +50,13 @@ class LoginSessionController extends Controller
             $timeLog = $session->time_log ?? [];
             if (!empty($timeLog) && ($now - $lastUpdatedTime) >= 300) {
                 $timeLog[] = [
-                    'start_time' => $currentTime,
-                    'end_time' => $currentTime,
+                    'start_time' => Carbon::now()->subMinute()->format('H:i'),
+                    'end_time' => Carbon::now()->format('H:i'),
                 ];
             }
             else{
                 $lastIndex = count($timeLog) - 1;
-                $timeLog[$lastIndex]['end_time'] = $currentTime;
+                $timeLog[$lastIndex]['end_time'] = Carbon::now()->format('H:i');
             }
             $session->time_log = $timeLog;
             $session->save();
@@ -51,49 +65,69 @@ class LoginSessionController extends Controller
                 $breakLog = $session->break_log;
                 $lastIndex = count($breakLog) - 1;
                 if ($lastIndex >= 0) {
-                    $breakLog[$lastIndex]['end_time'] = $currentTime;
+                    $breakLog[$lastIndex]['end_time'] = Carbon::now()->format('H:i');
                 }
                 $session->break_log = $breakLog;
             }
             $session->save();
         } else {
-            // Create new session entry
+            /**
+             * FIX
+             * Check if any tasks of this user are running
+             * then set break accordingly
+             * @var $timesheet Timesheet
+             */
+            // Retrieve the running timesheet for this user.
+            $breakStatus = true;
             $timesheet = Timesheet::where('employee_id', $userId)
-                            ->where('status', 'running')
-                            ->first();
-
-            if (!$timesheet) {
+                ->where('status', 'running')
+                ->first();
+            if($timesheet){
+                $breakStatus = false;
+            }
+            /**
+             * END FIX
+             */
+            // Create new session entry
+            if($breakStatus){
                 LoginSession::create([
                     'employee_id' => $userId,
                     'date' => $currentDate,
                     'time_log' => [
                         [
-                            'start_time' => $currentTime,
+                            'start_time' => Carbon::now()->subMinute()->format('H:i'),
                             'end_time' => $currentTime,
                         ]
                     ],
-                    'break' => true,
+                    'break' => $breakStatus,
                     'break_log' => [
                         [
-                            'start_time' => $currentTime,
-                            'end_time' => $endTime,
+                            'start_time' => Carbon::now()->subMinute()->format('H:i'),
+                            'end_time' => $currentTime,
                         ]
                     ],
                 ]);
-            }
-            else{
+            }else{
                 LoginSession::create([
                     'employee_id' => $userId,
                     'date' => $currentDate,
                     'time_log' => [
                         [
-                            'start_time' => $currentTime,
+                            'start_time' => Carbon::now()->subMinute()->format('H:i'),
                             'end_time' => $currentTime,
                         ]
                     ],
-                    'break' => false
+                    'break' => $breakStatus,
+                    'break_log' => [
+                        [
+                            'start_time' => Carbon::now()->subMinute()->format('H:i'),
+                            'end_time' => Carbon::now()->subMinute()->format('H:i'),
+                        ]
+                    ],
                 ]);
             }
+            
+
         }
     }
     public function trackTimesheetSession($userId)
@@ -189,7 +223,7 @@ class LoginSessionController extends Controller
         $adjustedWorkingDays = $workingDays - $holidays;
         $query = LoginSession::query()
             ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()]);
-        if ($request->user->role->name === 'Employee') {
+        if ($request->user->role->name === 'employee') {
             $query->where('employee_id', $request->user->id);
         }
         else if ($request->has('employee_id')) {
@@ -200,7 +234,7 @@ class LoginSessionController extends Controller
 
         $query = Leave::query();
         // If user is an Employee, restrict to their own records
-        if ($request->user->role->name === 'Employee') {
+        if ($request->user->role->name === 'employee') {
             $query->where('employee_id', $request->user->id);
         }
         else if ($request->has('employee_id')) {

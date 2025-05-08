@@ -16,7 +16,7 @@ class ProjectsController extends Controller
     public function index(Request $request)
     {
         $matchStage = (object)[]; // Ensure it's an object, not an empty array
-        if ($request->user->role->name === 'Employee') {
+        if ($request->user->role->name === 'employee') {
             $user_id = $request->user->id;
             $matchStage->assignee = ['$in' => array_map('strval', (array) $user_id)];
         }
@@ -68,7 +68,7 @@ class ProjectsController extends Controller
         $projects = Project::raw(function ($collection) use ($matchStage) {
             return $collection->aggregate([
                 ['$match' => $matchStage],  // Apply Filters
-
+        
                 // Lookup project_status
                 ['$lookup' => [
                     'from' => 'project_statuses',
@@ -78,7 +78,7 @@ class ProjectsController extends Controller
                     ],
                     'as' => 'project_status'
                 ]],
-
+        
                 // Lookup client
                 ['$lookup' => [
                     'from' => 'clients',
@@ -88,7 +88,7 @@ class ProjectsController extends Controller
                     ],
                     'as' => 'client'
                 ]],
-
+        
                 // Lookup project_manager
                 ['$lookup' => [
                     'from' => 'users',
@@ -96,7 +96,7 @@ class ProjectsController extends Controller
                     'foreignField' => '_id',
                     'as' => 'project_manager'
                 ]],
-
+        
                 // Lookup created_by
                 ['$lookup' => [
                     'from' => 'users',
@@ -172,7 +172,7 @@ class ProjectsController extends Controller
                     ],
                     'as' => 'spent_time'
                 ]],
-
+        
                 // Add spent_hours field to project
                 ['$addFields' => [
                     'spent_hours' => [
@@ -182,10 +182,10 @@ class ProjectsController extends Controller
                         ]
                     ]
                 ]],
-
+        
                 // Sort by creation date
                 ['$sort' => ['created_at' => -1]],
-
+        
                 // Project fields
                 ['$project' => [
                     'project_name' => 1,
@@ -206,7 +206,7 @@ class ProjectsController extends Controller
                     'project_status_id' => 1,
                     'project_status' => 1,
                     'created_by' => 1,
-                    'created_bys' => 1,
+                    'created_bys' => 1,                    
                     'platforms' => 1,
                     'languages' => 1,
                     'other_details' => 1,

@@ -26,6 +26,7 @@ class User extends Eloquent
         'permanent_address',
         'country',
         'city',
+        'state',
         'postal_code',
         'emergency_contact_number',
         // Qualification

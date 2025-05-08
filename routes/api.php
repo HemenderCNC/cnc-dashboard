@@ -1,4 +1,5 @@
 <?php
+
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
@@ -79,7 +80,7 @@ Route::middleware('api')->group(function () {
         // });
 
         // Route::middleware(['permission:678e3b79b9a4b5377a0d1793'])->group(function () {
-            Route::get('/permissionsmodule/grouped', [PermissionModulesController::class, 'getGroupedPermissions']);
+        Route::get('/permissionsmodule/grouped', [PermissionModulesController::class, 'getGroupedPermissions']);
         // });
 
 
@@ -114,6 +115,9 @@ Route::middleware('api')->group(function () {
         Route::post('users', [UserController::class, 'addUser'])->middleware('permission:add_user');
         Route::post('users/{id}', [UserController::class, 'editUser'])->middleware('permission:edit_user');  // Edit user
         Route::delete('users/{id}', [UserController::class, 'deleteUser'])->middleware('permission:delete_user');
+
+        Route::get('getallotheremployees', [UserController::class, 'getAllOtherEmployees']); //Get all users
+        Route::get('getallemployees', [UserController::class, 'getAllEmployees']); //Get all users
 
         // Route::middleware(['permission:678e3b79b9a4b5377a0d1793'])->group(function () {
         //     Route::get('getuserfieldoptions', [UserFieldOptionController::class, 'getOptions']);        // Get all options for User Employee field options
@@ -167,6 +171,21 @@ Route::middleware('api')->group(function () {
 
             // Delete an industry type
             Route::delete('/{id}', [CountriesController::class, 'destroy'])->middleware('permission:delete_country');
+        });
+
+        /**
+         * Get states of a country by ID
+         */
+        Route::prefix('states')->group(function () {
+            // Get states of a single country by country ID
+            Route::get('/{id}', [CountriesController::class, 'getStatesOf'])->middleware('permission:view_country');
+        });
+        /**
+         * Get cities of a state by ID
+         */
+        Route::prefix('cities')->group(function () {
+            // Get states of a single country by country ID
+            Route::get('/{country_id}/{state_id}', [CountriesController::class, 'getCitiesOf'])->middleware('permission:view_country');
         });
 
         // Route::apiResource('industry-types', IndustryTypesController::class);
@@ -582,6 +601,11 @@ Route::middleware('api')->group(function () {
             // Route::put('/{id}/reject', [LeaveController::class, 'reject']);
         });
 
+        Route::prefix('alloverleaves')->group(function () {
+            Route::middleware(['permission:view_leave'])->group(function () {
+                Route::get('/alluserspendingleaves', [LeaveController::class, 'allUsersPendingLeaves']);
+            });
+        });
 
         //Notice Module
         Route::prefix('notices')->group(function () {
@@ -662,6 +686,7 @@ Route::middleware('api')->group(function () {
 
             Route::middleware(['permission:view_timesheet'])->group(function () {
                 Route::get('/', [TimesheetController::class, 'index']); // Get all timesheets
+                Route::get('/mytimesheet', [TimesheetController::class, 'myTimesheet']); // Get a user's all timesheets
                 Route::get('/{id}', [TimesheetController::class, 'show']); // Get timesheet by ID
                 Route::get('/stop-task/{id}', [TimesheetController::class, 'stopTask']); // Get timesheet by ID
                 Route::get('/run-task/{id}', [TimesheetController::class, 'runTask']); // Get timesheet by ID
@@ -696,6 +721,11 @@ Route::middleware('api')->group(function () {
             Route::post('/', [GeneralSettingsController::class, 'update'])->middleware('permission:edit_general_settings'); // Update settings
         });
 
+        Route::prefix('timelineroutes')->group(function () {
+            Route::middleware(['permission:view_timesheet'])->group(function () {
+                Route::get('/employeetimeline/{id}', [TimesheetController::class, 'employeetimeline']);
+            });
+        });
 
         //Activity Logs listing
         Route::get('/activity-logs', [ActivityLogController::class, 'getActivityLogs']);
