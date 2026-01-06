@@ -20,6 +20,7 @@ class Timesheet extends Eloquent
     protected $fillable = [
         'project_id',
         'task_id',
+        'task_type',
         'employee_id',
         'dates',  // Array of dates with time logs
         'work_description',

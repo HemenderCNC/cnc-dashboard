@@ -23,7 +23,7 @@ class DashboardController extends Controller
         $upcomingHolidays = Holiday::where('festival_date', '>=', $today)
             ->orderBy('festival_date', 'asc')
             ->get();
-        $upcomingLeaves = Leave::where('start_date', '>=', $today)
+        $upcomingLeavesQuery = Leave::where('start_date', '>=', $today)
         ->where('status', 'approved')
         ->orderBy('start_date', 'asc')
         ->with([
@@ -40,8 +40,12 @@ class DashboardController extends Controller
                         }
                     ]);
             }
-        ])
-        ->get();
+        ]);
+        if ($request->user->role->slug === 'employee') {
+            $upcomingLeavesQuery->where('employee_id', $request->user->id);
+        }
+        
+        $upcomingLeaves = $upcomingLeavesQuery->get();
 
 
         // ✅ Upcoming Birthdays (Next 2 Months)

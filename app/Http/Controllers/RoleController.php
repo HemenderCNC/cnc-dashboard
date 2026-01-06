@@ -19,8 +19,9 @@ class RoleController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
         $role = Role::create([
-            'name' => strtolower(trim($request->name)),
+            'name' =>trim($request->name),
             'permissions' => $request->permissions,
+            'slug' => Str::slug(trim($request->name)),
         ]);
         return response()->json(['message' => 'Role created successfully', 'role' => $role], 201);
     }
@@ -48,14 +49,14 @@ class RoleController extends Controller
         }
 
         // Generate slug from name
-        $slug = Str::slug(trim($request->name), '_');
+        $slug =  Str::slug(trim($request->name));
         // Ensure slug is unique
         if (Role::where('slug', $slug)->where('_id', '!=', $id)->exists()) {
             return response()->json(['error' => 'Slug must be unique'], 400);
         }
 
         // Update the role
-        $role->name = strtolower(trim($request->name));
+        $role->name = trim($request->name);
         $role->slug = $slug;
         $role->permissions = $request->permissions;
         $role->save();

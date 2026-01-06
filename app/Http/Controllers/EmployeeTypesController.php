@@ -26,7 +26,7 @@ class EmployeeTypesController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-        $name = strtolower(trim($request->name)); // Trim spaces and convert to lowercase
+        $name = trim($request->name); // Trim spaces and convert to lowercase
         $employee_type = EmployeeType::create(['name' => $name]);
         // $employee_type = EmployeeType::create($request->only('name'));
         return response()->json($employee_type, 201);
@@ -59,7 +59,7 @@ class EmployeeTypesController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-        $name = strtolower(trim($request->name)); // Trim spaces and convert to lowercase
+        $name = trim($request->name); // Trim spaces and convert to lowercase
         $employee_type->update(['name' => $name]);
         // $employee_type->update($request->only('name'));
         return response()->json($employee_type, 200);

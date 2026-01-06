@@ -27,7 +27,7 @@ class SkillController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $name = strtolower(trim($request->name)); // Trim spaces and convert to lowercase
+        $name = trim($request->name); // Trim spaces and convert to lowercase
 
         $skill = Skill::create(['name' => $name]);
         // $skill = Skill::create($request->only('name'));
@@ -62,7 +62,7 @@ class SkillController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $name = strtolower(trim($request->name)); // Trim spaces and convert to lowercase
+        $name = trim($request->name); // Trim spaces and convert to lowercase
 
         $skill->update(['name' => $name]);
         // $skill->update($request->only('name'));

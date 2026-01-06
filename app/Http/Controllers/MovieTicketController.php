@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
@@ -46,14 +47,18 @@ class MovieTicketController extends Controller
     }
 
     // Get All Movie Tickets
-    public function index()
+    public function index(Request $request)
     {
-        $tickets = MovieTicket::with('creator:id,name,email') // Eager load creator details
-        ->orderBy('created_at', 'desc')
-        ->get();
-
-        return response()->json([
-            'tickets' => $tickets->map(function ($ticket) {
+        $page = (int) $request->input('page', 1);
+        $limit = (int) $request->input('limit', -1);
+        if ($limit == -1) {
+            if ($request->user->role->slug === 'administrator') {
+                $tickets = MovieTicket::with('creator:id,name,email')->orderBy('created_at', 'desc')->get();
+            }
+            else{
+                $tickets = MovieTicket::where('created_by', $request->user->id)->with('creator:id,name,email')->orderBy('created_at', 'desc')->get();
+            }
+            $tickets = $tickets->map(function ($ticket) {
                 return [
                     'id' => (string) $ticket->_id,
                     'image' => $ticket->image,
@@ -65,7 +70,44 @@ class MovieTicketController extends Controller
                         'email' => $ticket->creator ? $ticket->creator->email : null,
                     ],
                 ];
-            }),
+            });
+            return response()->json([
+                'data' => $tickets,
+                'meta' => [
+                    'page' => 1,
+                    'limit' => $limit,
+                    'total' => $tickets->count(),
+                    'total_pages' => 1,
+                ]
+            ], 200);
+        }
+        if ($request->user->role->slug === 'administrator') {
+                $tickets = MovieTicket::with('creator:id,name,email')->orderBy('created_at', 'desc')->paginate($limit, ['*'], 'page', $page);
+            }
+            else{
+                $tickets = MovieTicket::where('created_by', $request->user->id)->with('creator:id,name,email')->orderBy('created_at', 'desc')->paginate($limit, ['*'], 'page', $page);
+            }
+        $ticketsin = $tickets->map(function ($ticket) {
+            return [
+                'id' => (string) $ticket->_id,
+                'image' => $ticket->image,
+                'date' => $ticket->date,
+                'amount' => $ticket->amount,
+                'created_by' => [
+                    'id' => $ticket->creator ? (string) $ticket->creator->_id : null,
+                    'name' => $ticket->creator ? $ticket->creator->name : null,
+                    'email' => $ticket->creator ? $ticket->creator->email : null,
+                ],
+            ];
+        });
+        return response()->json([
+            'data' => $ticketsin,
+            'meta' => [
+                'page' => $tickets->currentPage(),
+                'limit' => $tickets->perPage(),
+                'total' => $tickets->total(),
+                'total_pages' => ceil($tickets->total() / $tickets->perPage()),
+            ]
         ], 200);
     }
 
@@ -77,7 +119,7 @@ class MovieTicketController extends Controller
         if (!$ticket) {
             return response()->json(['message' => 'Movie ticket not found'], 404);
         }
-    
+
         return response()->json([
             'ticket' => [
                 'id' => (string) $ticket->_id,
@@ -118,12 +160,12 @@ class MovieTicketController extends Controller
                 $media = Media::find($ticket->image['media_id']);
 
                 if ($media) {
-                    $this->fileUploadService->delete($media->file_path,$ticket->image['media_id']); // Delete file from storage
+                    $this->fileUploadService->delete($media->file_path, $ticket->image['media_id']); // Delete file from storage
                     $media->delete(); // Remove media record from database
                 }
             }
             if ($ticket->image) {
-                $this->fileUploadService->delete($ticket->image['file_path'],$ticket->image['media_id']);
+                $this->fileUploadService->delete($ticket->image['file_path'], $ticket->image['media_id']);
             }
             $imagePath = $this->fileUploadService->upload($request->file('image'), 'uploads', $request->user->id);
             $ticket->image = $imagePath;
@@ -150,7 +192,7 @@ class MovieTicketController extends Controller
             $media = Media::find($ticket->image['media_id']);
 
             if ($media) {
-                $this->fileUploadService->delete($media->file_path,$ticket->image['media_id']); // Delete file from storage and record from Media Table
+                $this->fileUploadService->delete($media->file_path, $ticket->image['media_id']); // Delete file from storage and record from Media Table
             }
         }
         $ticket->delete();

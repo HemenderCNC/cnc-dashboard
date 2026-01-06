@@ -9,17 +9,33 @@ use App\Models\Holiday;
 use App\Models\Leave;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
+
 class LoginSessionController extends Controller
 {
+    // public function trackSession(Request $request)
+    // {
+    //     $userId = $request->user->id;
+    //     $this->trackLoginSessions($userId);
+    //     $this->trackTimesheetSession($userId);
+
+    //     return response()->json(['message' => 'Session tracked successfully'], 200);
+    // }
+
     public function trackSession(Request $request)
     {
         $userId = $request->user->id;
-        $this->trackLoginSessions($userId);
         $this->trackTimesheetSession($userId);
+        $this->trackLoginSessions($userId);
+        // Call the index function of GeneralSettingsController
+        $generalSettings = app(GeneralSettingsController::class)->index($request);
 
-        return response()->json(['message' => 'Session tracked successfully'], 200);
+        return response()->json([
+            'message' => 'Session tracked successfully',
+            'general_settings' => $generalSettings
+        ], 200);
     }
-    public function trackLoginSessions($userId){
+    public function trackLoginSessions($userId)
+    {
         $currentDate = Carbon::now()->toDateString(); // Uses default timezone from config
         $currentTime = Carbon::now()->format('H:i');
         $endTime = Carbon::now()->addMinute()->format('H:i');
@@ -29,34 +45,61 @@ class LoginSessionController extends Controller
         if ($session) {
             $lastUpdatedTime = Carbon::parse($session->updated_at)->timestamp;
             $now = Carbon::now()->timestamp;
-            if (($now - $lastUpdatedTime) < 60) {
-                return response()->json(['message' => 'Already updated recently'], 200);
-            }
+            // if (($now - $lastUpdatedTime) < 60) {
+            //     return response()->json(['message' => 'Already updated recently'], 200);
+            // }
 
             $timeLog = $session->time_log ?? [];
             if (!empty($timeLog) && ($now - $lastUpdatedTime) >= 300) {
                 $timeLog[] = [
-                    'start_time' => $currentTime,
-                    'end_time' => $currentTime,
+                    'start_time' => Carbon::now()->format('H:i'),
+                    'end_time' => Carbon::now()->format('H:i'),
                 ];
-            }
-            else{
+            } else if (!empty($timeLog)) {
                 $lastIndex = count($timeLog) - 1;
-                $timeLog[$lastIndex]['end_time'] = $currentTime;
+                $timeLog[$lastIndex]['end_time'] = Carbon::now()->format('H:i');
+            } else {
+                $timeLog[] = [
+                    'start_time' => Carbon::now()->format('H:i'),
+                    'end_time' => Carbon::now()->format('H:i'),
+                ];
             }
             $session->time_log = $timeLog;
             $session->save();
 
-            if ($session->break === true && !empty($session->break_log)) {
-                $breakLog = $session->break_log;
-                $lastIndex = count($breakLog) - 1;
-                if ($lastIndex >= 0) {
-                    $breakLog[$lastIndex]['end_time'] = $currentTime;
+            if ($session->break === true) {
+                $breakLog = $session->break_log ?? [];
+                if (!empty($breakLog) && ($now - $lastUpdatedTime) >= 300) {
+                    $breakLog[] = [
+                        'start_time' => Carbon::now()->format('H:i'),
+                        'end_time' => Carbon::now()->format('H:i'),
+                    ];
+                } else if (!empty($breakLog)) {
+                    // Update the end_time of the last break log entry
+                    $lastIndex = count($breakLog) - 1;
+                    $breakLog[$lastIndex]['end_time'] = Carbon::now()->format('H:i');
+                } else {
+                    // First break log entry
+                    $breakLog[] = [
+                        'start_time' => Carbon::now()->format('H:i'),
+                        'end_time' => Carbon::now()->format('H:i'),
+                    ];
                 }
+
                 $session->break_log = $breakLog;
+                $session->save();
             }
-            $session->save();
         } else {
+            $breakStatus = true;
+            $timesheet = Timesheet::where('employee_id', $userId)
+                ->where('status', 'running')
+                ->first();
+            if ($timesheet) {
+                $breakStatus = false;
+            }
+            /**
+             * END FIX
+             */
             // Create new session entry
             LoginSession::create([
                 'employee_id' => $userId,
@@ -67,11 +110,11 @@ class LoginSessionController extends Controller
                         'end_time' => $currentTime,
                     ]
                 ],
-                'break' => true,
+                'break' => $breakStatus,
                 'break_log' => [
                     [
                         'start_time' => $currentTime,
-                        'end_time' => $endTime,
+                        'end_time' => $currentTime,
                     ]
                 ],
             ]);
@@ -83,12 +126,18 @@ class LoginSessionController extends Controller
 
         // Retrieve the running timesheet for this user.
         $timesheet = Timesheet::where('employee_id', $userId)
-                            ->where('status', 'running')
-                            ->first();
+            ->where('status', 'running')
+            ->first();
 
         if (!$timesheet) {
-            // Optionally, you may want to create a new timesheet or simply return.
             return;
+        }
+        $session = LoginSession::where('employee_id', $userId)
+            ->where('date', $currentDate)
+            ->first();
+        if ($session && $session->break === true) {
+            $session->break = false;
+            $session->save();
         }
         $lastUpdatedTime = Carbon::parse($timesheet->updated_at)->timestamp;
         $now = Carbon::now()->timestamp;
@@ -108,7 +157,7 @@ class LoginSessionController extends Controller
 
         // Format the current time values.
         $formattedStart = $now->format('H:i');
-        $formattedEnd = $now->copy()->addMinute()->format('H:i');
+        $formattedEnd = $now->copy()->format('H:i');
 
         if ($existingDateKey !== false) {
             // Today's date entry exists.
@@ -151,12 +200,13 @@ class LoginSessionController extends Controller
         $timesheet->save();
     }
 
-    public function attendance(Request $request){
+    public function attendance(Request $request)
+    {
         $now = Carbon::now(); // Get current date
         // Get working days (Monday-Friday) excluding Saturday & Sunday
         $startDate = $now->startOfMonth();
         $endDate = $now->copy()->endOfMonth();
-        if ($request->has('start_date') && $request->has('end_date')){
+        if ($request->has('start_date') && $request->has('end_date')) {
             $startDate = Carbon::parse($request->start_date);
             $endDate = Carbon::parse($request->end_date);
         }
@@ -164,16 +214,15 @@ class LoginSessionController extends Controller
             ->filter(fn($date) => !in_array($date->dayOfWeek, [Carbon::SATURDAY, Carbon::SUNDAY]))
             ->count();
         $holidays = Holiday::whereBetween('festival_date', [$startDate->toDateString(), $endDate->toDateString()])
-        ->get()
-        ->filter(fn($holiday) => !in_array(Carbon::parse($holiday->festival_date)->dayOfWeek, [Carbon::SATURDAY, Carbon::SUNDAY])) // Exclude Sat-Sun holidays
-        ->count();
+            ->get()
+            ->filter(fn($holiday) => !in_array(Carbon::parse($holiday->festival_date)->dayOfWeek, [Carbon::SATURDAY, Carbon::SUNDAY])) // Exclude Sat-Sun holidays
+            ->count();
         $adjustedWorkingDays = $workingDays - $holidays;
         $query = LoginSession::query()
             ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()]);
-        if ($request->user->role->name === 'employee') {
+        if ($request->user->role->slug === 'employee') {
             $query->where('employee_id', $request->user->id);
-        }
-        else if ($request->has('employee_id')) {
+        } else if ($request->has('employee_id')) {
             $query->where('employee_id', $request->employee_id);
         }
         $session_logs = $query->get();
@@ -181,10 +230,9 @@ class LoginSessionController extends Controller
 
         $query = Leave::query();
         // If user is an Employee, restrict to their own records
-        if ($request->user->role->name === 'employee') {
+        if ($request->user->role->slug === 'employee') {
             $query->where('employee_id', $request->user->id);
-        }
-        else if ($request->has('employee_id')) {
+        } else if ($request->has('employee_id')) {
             $query->where('employee_id', $request->employee_id);
         }
         $stdate = $startDate->toDateString();
@@ -198,7 +246,7 @@ class LoginSessionController extends Controller
             'total_holidays_excluding_weekends' => $holidays,
             'days_present' => $days_present,
             'total_leaves' => $total_leaves,
-            'session_logs'=>$session_logs
+            'session_logs' => $session_logs
         ];
     }
 }

@@ -37,7 +37,7 @@ class DesignationController extends Controller
 
 
         $designation = Designation::create([
-            'name' => strtolower(trim($request->name)),
+            'name' => trim($request->name),
             'department_id' => $request->department_id
         ]);
         return response()->json($designation, 201);
@@ -75,7 +75,7 @@ class DesignationController extends Controller
         }
 
         $designation->update([
-            'name' => strtolower(trim($request->name)),
+            'name' => trim($request->name),
             'department_id' => $request->department_id
         ]);
 

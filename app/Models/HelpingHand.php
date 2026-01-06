@@ -14,6 +14,7 @@ class HelpingHand extends Eloquent
         'from_id',
         'to_id',
         'project_id',
+        'task_id',
         'issue',
         'status',
         'schedule_time',

@@ -4,18 +4,21 @@ namespace App\Http\Controllers;
 
 use Illuminate\Support\Facades\Validator;
 use App\Models\HelpingHand;
+use App\Models\Timesheet;
+use App\Models\LoginSession;
 use Illuminate\Http\Request;
 use App\Notifications\PushNotification;
 use App\Models\User;
 use App\Models\Project;
-use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class HelpingHandController extends Controller
 {
-    public function index(Request $request){
+    public function index(Request $request)
+    {
         $matchStage = (object)[]; // Ensure it's an object, not an empty array
         $userId = $request->user->id;
-        if ($request->user->role->name === 'employee') {
+        if ($request->user->role->slug === 'employee') {
             $matchStage->{'$or'} = [
                 (object) ['from_id' => $userId],
                 (object) ['to_id' => $userId]
@@ -45,6 +48,7 @@ class HelpingHandController extends Controller
                 // Convert IDs to ObjectId
                 ['$addFields' => [
                     'project_id' => ['$toObjectId' => '$project_id'],
+                    'task_id' => ['$toObjectId' => '$task_id'],
                     'from_id' => ['$toObjectId' => '$from_id'],
                     'to_id' => ['$toObjectId' => '$to_id']
                 ]],
@@ -56,7 +60,13 @@ class HelpingHandController extends Controller
                     'foreignField' => '_id',
                     'as' => 'project'
                 ]],
-
+                // Lookup for Task
+                ['$lookup' => [
+                    'from' => 'tasks',
+                    'localField' => 'task_id',
+                    'foreignField' => '_id',
+                    'as' => 'task'
+                ]],
                 // Lookup for 'from' user
                 ['$lookup' => [
                     'from' => 'users',
@@ -114,6 +124,8 @@ class HelpingHandController extends Controller
                 ['$project' => [
                     'project_id' => 1,
                     'project' => 1,
+                    'task_id' => 1,
+                    'task' => 1,
                     'from_id' => 1,
                     'from' => 1,
                     'to_id' => 1,
@@ -131,7 +143,8 @@ class HelpingHandController extends Controller
         return response()->json($HelpingHand, 200);
     }
 
-    public function create(Request $request){
+    public function create(Request $request)
+    {
         $validator = Validator::make($request->all(), [
             'project_id' => 'required|exists:projects,_id',
             'from_id' => 'required|exists:users,_id',
@@ -143,6 +156,7 @@ class HelpingHandController extends Controller
         }
         $HelpingHand = HelpingHand::create([
             'project_id' => $request->project_id,
+            'task_id' => $request->task_id,
             'from_id' => $request->from_id,
             'to_id' => $request->to_id,
             'issue' => $request->issue,
@@ -152,7 +166,8 @@ class HelpingHandController extends Controller
         return response()->json($HelpingHand, 201);
     }
 
-    public function updateStatus(Request $request,$id){
+    public function updateStatus(Request $request, $id)
+    {
         $HelpingHand = HelpingHand::find($id);
         if (!$HelpingHand) {
             return response()->json(['message' => 'Helping Hand not found'], 404);
@@ -163,55 +178,109 @@ class HelpingHandController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
+
+
+        if ($HelpingHand->status == 'canceled') {
+            return response()->json(['message' => 'The Requester has canceled the request.'], 409);
+        }
+        $currentDate = Carbon::now()->toDateString();
         $status = $request->status;
-        if($status == 'accepted'){
+        if ($status == 'accepted') {
             $user_id = $request->user->id;
-            $HelpingHandCount = HelpingHand::where('status','accepted')->where('to_id',$user_id)->count();
-            if($HelpingHandCount > 0){
+            $HelpingHandCount = HelpingHand::where('status', 'accepted')->where('to_id', $user_id)->count();
+            if ($HelpingHandCount > 0) {
                 return response()->json(['message' => 'You are already working on a task. Please complete or cancel it before starting another.'], 409);
             }
             $timelog = array(
                 'start_time' => now()->format('H:i'),
-                'end_time' => now()->addMinute()->format('H:i'),
+                'end_time' => now()->format('H:i'),
             );
             $HelpingHand->time_log = $timelog;
+
+            Timesheet::where('employee_id', $user_id)->update(['status' => 'paused']);
+            $currentDate = Carbon::now()->toDateString();
+            $timesheet = Timesheet::create([
+                'project_id' => $HelpingHand->project_id,
+                'task_id' => $HelpingHand->task_id,
+                'task_type' => 'Helping Hand',
+                'employee_id' => $user_id,
+                'dates' => [
+                    [
+                        'date' => $currentDate,
+                        'time_log' => [
+                            [
+                                'start_time' => now()->format('H:i'),
+                                'end_time' => now()->format('H:i'),
+                            ]
+                        ],
+                    ]
+                ], // Store as a plain PHP array
+                'work_description' => 'Helping Hand',
+                'status' => 'running',
+            ]);
+            // Handle break session in LoginSession
+            $session = LoginSession::where('employee_id', $user_id)
+                ->where('date', $currentDate)
+                ->first();
+
+            if ($session && $session->break === true) {
+                $session->break = false;
+                $session->save();
+            }
         }
-        if($status == 'completed'){
+        if ($status == 'completed') {
+            $user_id = $request->user->id;
             $timelog = $HelpingHand->time_log;
+            $task_id = $HelpingHand->task_id;
             $timelog['end_time'] = now()->format('H:i');
             $HelpingHand->time_log = $timelog;
+            $timesheet = Timesheet::where('status', 'running')->where('employee_id', $user_id)->where('task_id', $task_id)->first();
+            if($timesheet) {
+                $timesheet->status = 'paused';
+                $timesheet->save();
+                $session = LoginSession::where('employee_id', $user_id)
+                ->where('date', $currentDate)
+                ->first();
+
+                if ($session && $session->break === false) {
+                    $session->break = true;
+                    $session->save();
+                }
+            }
         }
-        if($status == 'rescheduled'){
+        if ($status == 'rescheduled') {
             $reschedule_time = $request->reschedule_time;
             $HelpingHand->schedule_time = $reschedule_time;
         }
         $HelpingHand->update([
-                'status'=>$request->status
-            ]);
+            'status' => $request->status
+        ]);
+        $this->sendPushNotification($HelpingHand);
         return response()->json($HelpingHand, 200);
     }
 
-    public function sendPushNotification($HelpingHand){
-        if(empty($HelpingHand)){
+    public static function sendPushNotification($HelpingHand)
+    {
+        if (empty($HelpingHand)) {
             return;
         }
         $status = $HelpingHand->status;
         $from_id = $HelpingHand->from_id;
         $to_id = $HelpingHand->to_id;
 
-        if($status == 'pending'){
+        if ($status == 'pending') {
             $from = User::find($from_id);
-            $from_name = $from->name.' '.$from->last_name;
+            $from_name = $from->name . ' ' . $from->last_name;
             $project = Project::find($HelpingHand->project_id);
             $project_name = $project->project_name;
             $title = '🤝 New Help Request!';
-            $body = '✋ Employee '.$from_name.' has requested your help on 📌'.$project_name.'.               🚀Tap to respond!';
+            $body = '✋ Employee ' . $from_name . ' has requested your help on 📌' . $project_name . '.               🚀Tap to respond!';
             $user = User::find($to_id);
             $user->notify(new PushNotification($title, $body));
         }
-        if($status == 'accepted'){
+        if ($status == 'accepted') {
             $to = User::find($to_id);
-            $to_name = $to->name.' '.$to->last_name;
+            $to_name = $to->name . ' ' . $to->last_name;
             $project = Project::find($HelpingHand->project_id);
             $project_name = $project->project_name;
             $title = '✅ Help Request Accepted!';
@@ -219,9 +288,9 @@ class HelpingHandController extends Controller
             $user = User::find($from_id);
             $user->notify(new PushNotification($title, $body));
         }
-        if($status == 'declined'){
+        if ($status == 'declined') {
             $to = User::find($to_id);
-            $to_name = $to->name.' '.$to->last_name;
+            $to_name = $to->name . ' ' . $to->last_name;
             $project = Project::find($HelpingHand->project_id);
             $project_name = $project->project_name;
             $title = '❌ Help Request Declined';
@@ -229,7 +298,7 @@ class HelpingHandController extends Controller
             $user = User::find($from_id);
             $user->notify(new PushNotification($title, $body));
         }
-        if($status == 'canceled') {
+        if ($status == 'canceled') {
             $from = User::find($from_id);
             $from_name = $from->name . ' ' . $from->last_name;
             $project = Project::find($HelpingHand->project_id);
@@ -275,7 +344,8 @@ class HelpingHandController extends Controller
 
         return response()->json(['message' => 'Notification sent successfully']);
     }
-    public function setToken(Request $request){
+    public function setToken(Request $request)
+    {
         $fcm_token = $request->fcm_token;
         $userId = $request->user->id;
         $user = User::find($userId);

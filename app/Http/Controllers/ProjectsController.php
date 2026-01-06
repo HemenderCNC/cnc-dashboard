@@ -8,6 +8,10 @@ use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
 use MongoDB\BSON\UTCDateTime;
 use MongoDB\BSON\ObjectId;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\ProjectAssignedMail;
+use App\Models\User;
+
 class ProjectsController extends Controller
 {
     /**
@@ -16,9 +20,16 @@ class ProjectsController extends Controller
     public function index(Request $request)
     {
         $matchStage = (object)[]; // Ensure it's an object, not an empty array
-        if ($request->user->role->name === 'employee') {
+        // Pagination setup
+        $page = (int) $request->input('page', 1);
+        $limit = (int) $request->input('limit', -1);
+        $skip = ($page - 1) * $limit;
+        if ($request->user->role->slug === 'employee' || $request->user->role->slug === 'team-leader') {
             $user_id = $request->user->id;
             $matchStage->assignee = ['$in' => array_map('strval', (array) $user_id)];
+        } else if ($request->user->role->slug === 'project-manager') {
+            $user_id = $request->user->id;
+            $matchStage->project_manager_id = ['$in' => array_map('strval', (array) $user_id)];
         }
         // Filter by project name (partial match)
         if ($request->has('project_name')) {
@@ -65,10 +76,10 @@ class ProjectsController extends Controller
         }
 
         // MongoDB Aggregation Pipeline
-        $projects = Project::raw(function ($collection) use ($matchStage) {
-            return $collection->aggregate([
+        $projects = Project::raw(function ($collection) use ($matchStage, $limit, $skip) {
+            $pipeline = [
                 ['$match' => $matchStage],  // Apply Filters
-        
+
                 // Lookup project_status
                 ['$lookup' => [
                     'from' => 'project_statuses',
@@ -78,7 +89,7 @@ class ProjectsController extends Controller
                     ],
                     'as' => 'project_status'
                 ]],
-        
+
                 // Lookup client
                 ['$lookup' => [
                     'from' => 'clients',
@@ -88,7 +99,7 @@ class ProjectsController extends Controller
                     ],
                     'as' => 'client'
                 ]],
-        
+
                 // Lookup project_manager
                 ['$lookup' => [
                     'from' => 'users',
@@ -96,12 +107,14 @@ class ProjectsController extends Controller
                     'foreignField' => '_id',
                     'as' => 'project_manager'
                 ]],
-        
+
                 // Lookup created_by
                 ['$lookup' => [
                     'from' => 'users',
-                    'localField' => 'created_by',
-                    'foreignField' => '_id',
+                    'let' => ['createdBy' => ['$toObjectId' => '$created_by']],
+                    'pipeline' => [
+                        ['$match' => ['$expr' => ['$eq' => ['$_id', '$$createdBy']]]]
+                    ],
                     'as' => 'created_bys'
                 ]],
 
@@ -113,7 +126,7 @@ class ProjectsController extends Controller
                                 '$map' => [
                                     'input' => '$assignee',
                                     'as' => 'id',
-                                    'in' => [ '$toObjectId' => '$$id' ]
+                                    'in' => ['$toObjectId' => '$$id']
                                 ]
                             ]
                         ],
@@ -172,7 +185,73 @@ class ProjectsController extends Controller
                     ],
                     'as' => 'spent_time'
                 ]],
-        
+
+                [
+                    '$lookup' => [
+                        'from' => 'milestones',
+                        'localField' => '_id', // project _id
+                        'foreignField' => 'project_id', // milestone.project_id should match project _id
+                        'as' => 'milestone_stats_source'
+                    ]
+                ],
+                [
+                    '$addFields' => [
+                        'milestone_stats' => [
+                            // Condensed statistics calculation using $reduce and $sum
+                            'total_milestones'   => ['$size' => '$milestone_stats_source'],
+                            'pending_milestones' => [
+                                '$size' => [
+                                    '$filter' => [
+                                        'input' => '$milestone_stats_source',
+                                        'as'    => 'm',
+                                        'cond'  => [
+                                            '$ne' => [
+                                                ['$toLower' => '$$m.status'],
+                                                'completed'
+                                            ]
+                                        ],
+                                    ],
+                                ],
+                            ],
+                            'completion_percentage' => [
+                                '$cond' => [
+                                    ['$gt' => [['$size' => '$milestone_stats_source'], 0]],
+                                    [
+                                        '$multiply' => [
+                                            [
+                                                '$divide' => [
+                                                    [
+                                                        '$subtract' => [
+                                                            ['$size' => '$milestone_stats_source'],
+                                                            [
+                                                                '$size' => [
+                                                                    '$filter' => [
+                                                                        'input' => '$milestone_stats_source',
+                                                                        'as'    => 'm',
+                                                                        'cond'  => [
+                                                                            '$ne' => [
+                                                                                ['$toLower' => '$$m.status'],
+                                                                                'completed'
+                                                                            ]
+                                                                        ],
+                                                                    ],
+                                                                ]
+                                                            ]
+                                                        ]
+                                                    ],
+                                                    ['$size' => '$milestone_stats_source'],
+                                                ],
+                                            ],
+                                            100
+                                        ]
+                                    ],
+                                    0
+                                ]
+                            ],
+                        ]
+                    ]
+                ],
+
                 // Add spent_hours field to project
                 ['$addFields' => [
                     'spent_hours' => [
@@ -182,10 +261,10 @@ class ProjectsController extends Controller
                         ]
                     ]
                 ]],
-        
+
                 // Sort by creation date
                 ['$sort' => ['created_at' => -1]],
-        
+
                 // Project fields
                 ['$project' => [
                     'project_name' => 1,
@@ -206,16 +285,37 @@ class ProjectsController extends Controller
                     'project_status_id' => 1,
                     'project_status' => 1,
                     'created_by' => 1,
-                    'created_bys' => 1,                    
+                    'created_bys' => 1,
                     'platforms' => 1,
                     'languages' => 1,
                     'other_details' => 1,
-                    'spent_hours' => 1
+                    'spent_hours' => 1,
+                    'milestone_stats' => 1
                 ]]
-            ]);
-        });
+            ];
+            if ($limit !== -1) {
+                $pipeline[] = ['$skip' => $skip];
+                $pipeline[] = ['$limit' => $limit];
+            }
 
-        return response()->json($projects, 200);
+            return $collection->aggregate($pipeline);
+        });
+        $totalCount = Project::raw(function ($collection) use ($matchStage) {
+            return $collection->aggregate([
+                ['$match' => $matchStage],
+                ['$count' => 'total']
+            ]);
+        })->first()['total'] ?? 0;
+
+        return response()->json([
+            'data' => $projects,
+            'meta' => [
+                'page' => $page,
+                'limit' => $limit,
+                'total' => $totalCount,
+                'total_pages' => $limit === -1 ? 1 : ceil($totalCount / $limit),
+            ]
+        ]);
     }
 
     public function summary(Request $request)
@@ -316,7 +416,7 @@ class ProjectsController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'project_name' => 'required|string|unique:projects,name',
+            'project_name' => 'required|string|unique:projects,project_name',
             'project_industry' => 'required|string',
             'project_type' => 'required|string',
             'estimated_hours' => 'nullable|string',
@@ -328,14 +428,11 @@ class ProjectsController extends Controller
             'platforms.*' => 'exists:platforms,_id',
             'languages' => 'required|array',
             'languages.*' => 'exists:languages,_id',
-            'estimated_start_date' => 'required|date',
-            'estimated_end_date' => 'required|date',
-            'actual_start_date' => 'required|date',
-            'actual_end_date' => 'required|date',
             'client_id' => 'required|exists:clients,_id',
             'assignee' => 'nullable|array',
             'assignee.*' => 'exists:users,_id',
-            'project_manager_id' => 'nullable|exists:users,_id',
+            'project_manager_id' => 'nullable|array',
+            'project_manager_id.*' => 'exists:users,_id',
         ]);
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
@@ -361,6 +458,21 @@ class ProjectsController extends Controller
             'project_manager_id' => $request->project_manager_id,
             'created_by' => $request->user->id,
         ]);
+
+        // Send email to all assignees
+        if (!empty($request->assignee)) {
+            $assignees = User::whereIn('_id', $request->assignee)->get();
+            $projectManagers = User::whereIn('_id', (array) $request->project_manager_id)->get();
+            $managerNames = $projectManagers->pluck('name')->implode(', ');
+
+            foreach ($assignees as $assignee) {
+                Mail::to($assignee->email)->send(new ProjectAssignedMail(
+                    $platform,
+                    $managerNames ?: 'N/A'
+                ));
+            }
+        }
+
         return response()->json($platform, 201);
     }
 
@@ -369,13 +481,14 @@ class ProjectsController extends Controller
      */
     public function show(string $id)
     {
-        $project = project::with(['projectStatus','client','projectManager','createdBy'])->find($id);
+        $project = project::with(['projectStatus', 'client', 'createdBy'])->find($id);
         if (!$project) {
             return response()->json(['message' => 'Project not found'], 404);
         }
         $project->assignees_data = $project->assignees_data;
         $project->languages_data = $project->languages_data;
         $project->platforms_data = $project->platforms_data;
+        $project->project_managers = $project->project_managers;
 
         return response()->json($project, 200);
     }
@@ -390,7 +503,7 @@ class ProjectsController extends Controller
             return response()->json(['message' => 'Project not found'], 404);
         }
         $validator = Validator::make($request->all(), [
-            'project_name' => 'required|string|unique:projects,name,'. $id,
+            'project_name' => 'required|string|unique:projects,project_name,' . $id,
             'project_industry' => 'required|string',
             'project_type' => 'required|string',
             'estimated_hours' => 'nullable|string',
@@ -402,14 +515,11 @@ class ProjectsController extends Controller
             'platforms.*' => 'exists:platforms,_id',
             'languages' => 'required|array',
             'languages.*' => 'exists:languages,_id',
-            'estimated_start_date' => 'required|date',
-            'estimated_end_date' => 'required|date',
-            'actual_start_date' => 'required|date',
-            'actual_end_date' => 'required|date',
             'client_id' => 'required|exists:clients,_id',
             'assignee' => 'nullable|array',
             'assignee.*' => 'exists:users,_id',
-            'project_manager_id' => 'nullable|exists:users,_id',
+            'project_manager_id' => 'nullable|array',
+            'project_manager_id.*' => 'exists:users,_id',
         ]);
 
         if ($validator->fails()) {

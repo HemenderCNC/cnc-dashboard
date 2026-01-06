@@ -28,7 +28,7 @@ class WorkLocationController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $name = strtolower(trim($request->name)); // Trim spaces and convert to lowercase
+        $name = trim($request->name); // Trim spaces and convert to lowercase
         $worklocation = WorkLocation::create(['name' => $name]);
         // $worklocation = WorkLocation::create($request->only('name'));
         return response()->json($worklocation, 201);
@@ -62,7 +62,7 @@ class WorkLocationController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $name = strtolower(trim($request->name)); // Trim spaces and convert to lowercase
+        $name = trim($request->name); // Trim spaces and convert to lowercase
 
         $worklocation->update(['name' => $name]);
         // $worklocation->update($request->only('name'));

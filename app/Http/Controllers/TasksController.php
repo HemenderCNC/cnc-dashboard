@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Tasks;
 use App\Models\TaskStatus;
 use App\Models\Milestones;
+use App\Models\Project;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use App\Services\FileUploadService;
@@ -15,12 +17,14 @@ class TasksController extends Controller
     public function index(Request $request)
     {
         $matchStage = (object)[]; // Ensure it's an object, not an empty array
-
-        if ($request->user->role->name === 'employee') {
-            $matchStage->assignee_id = $request->user->id;
-        }
-        else if ($request->has('employee_id')) {
-            $matchStage->assignee_id = $request->employee_id;
+        // Pagination setup
+        $page = (int) $request->input('page', 1);
+        $limit = (int) $request->input('limit', -1);
+        $skip = ($page - 1) * $limit;
+        if ($request->user->role->slug === 'employee') {
+            $matchStage->assignees = $request->user->id;
+        } else if ($request->has('employee_id')) {
+            $matchStage->assignees = $request->employee_id;
         }
         // Filter by project name (partial match)
         if ($request->has('title')) {
@@ -33,6 +37,19 @@ class TasksController extends Controller
         }
 
         // Filter by project industry
+        if ($request->has('milestone_name')) {
+            // Get all matching milestones first
+            $milestoneIds = Milestones::whereRaw([
+                'name' => ['$regex' => $request->milestone_name, '$options' => 'i']
+            ])->pluck('id')->map(function ($id) {
+                return (string) $id;
+            })->toArray();
+
+            // If we found any milestones, match their IDs
+            if (count($milestoneIds) > 0) {
+                $matchStage->milestone_id = ['$in' => $milestoneIds];
+            }
+        }
         if ($request->has('milestone_id')) {
             $matchStage->milestone_id = $request->milestone_id;
         }
@@ -56,18 +73,24 @@ class TasksController extends Controller
         if ($request->has('priority')) {
             $matchStage->priority = $request->priority;
         }
+        if ($request->has('task_id')) {
+            $matchStage->task_id = $request->task_id;
+        }
         if ($request->has('owner_id')) {
             $matchStage->owner_id = $request->owner_id;
         }
 
         // Filter by platforms (array match)
         if ($request->has('assignee_id')) {
-            $matchStage->assignee_id = ['$in' => array_map('strval', (array) $request->assignee_id)];
+            $matchStage->assignees = ['$in' => array_map('strval', (array) $request->assignee_id)];
         }
         if ($request->has('start_date') && $request->has('end_date')) {
             $startDate = $request->start_date;
             $endDate = $request->end_date;
-            $matchStage->due_date  = [
+            $startDate = Carbon::parse($request->start_date)->startOfDay()->toIso8601String();
+            $endDate = Carbon::parse($request->end_date)->endOfDay()->toIso8601String();
+
+            $matchStage->start_date  = [
                 '$gte' => $startDate,
                 '$lte' => $endDate
             ];
@@ -88,7 +111,7 @@ class TasksController extends Controller
             $matchStage = (object)[]; // Empty object for MongoDB
         }
         $sortStage = ['$sort' => ['created_at' => -1]]; // Default sorting by created_at (Descending)
-        $matchDueDate=null;
+        $matchDueDate = null;
         if ($request->has('sort') && $request->sort === 'due_date') {
             $todayTimestamp = Carbon::today()->toIso8601String(); // Convert to milliseconds
             $matchDueDate = ['$match' => ['due_date' => ['$gte' => $todayTimestamp]]];
@@ -97,7 +120,7 @@ class TasksController extends Controller
 
 
         // MongoDB Aggregation Pipeline
-        $tasks = Tasks::raw(function ($collection) use ($matchStage, $sortStage, $matchDueDate) {
+        $tasks = Tasks::raw(function ($collection) use ($matchStage, $sortStage, $matchDueDate, $skip, $limit) {
             $pipeline = [
                 ['$match' => $matchStage],  // Apply Filters
             ];
@@ -124,6 +147,39 @@ class TasksController extends Controller
                     ],
                     'as' => 'milestone'
                 ]],
+                [
+                    '$lookup' => [
+                        'from' => 'users',
+                        'let' => [
+                            'assigneeIds' => [
+                                '$map' => [
+                                    'input' => ['$ifNull' => ['$assignees', []]],
+                                    'as' => 'id',
+                                    'in' => ['$toObjectId' => '$$id'] // <--- THIS IS REQUIRED!
+                                ]
+                            ]
+                        ],
+                        'pipeline' => [
+                            [
+                                '$match' => [
+                                    '$expr' => [
+                                        '$in' => ['$_id', '$$assigneeIds']
+                                    ]
+                                ]
+                            ],
+                            [
+                                '$project' => [
+                                    '_id' => 1,
+                                    'name' => 1,
+                                    'personal_email' => 1,
+                                    'contact_number' => 1
+                                ]
+                            ]
+                        ],
+                        'as' => 'assignees_data'
+                    ]
+                ],
+
                 ['$lookup' => [
                     'from' => 'task_statuses',
                     'let' => ['taskStatusId' => ['$toObjectId' => '$status_id']],
@@ -150,30 +206,108 @@ class TasksController extends Controller
                 ]],
                 ['$lookup' => [
                     'from' => 'users',
-                    'let' => ['assigneeId' => ['$toObjectId' => '$assignee_id']],
-                    'pipeline' => [
-                        ['$match' => ['$expr' => ['$eq' => ['$_id', '$$assigneeId']]]],
-                        ['$lookup' => [
-                            'from' => 'designations', // Replace with the actual name of the designation collection
-                            'let' => ['designationId' => ['$toObjectId' => '$designation_id']],
-                            'pipeline' => [
-                                ['$match' => ['$expr' => ['$eq' => ['$_id', '$$designationId']]]]
-                            ],
-                            'as' => 'designation'
-                        ]]
-                    ],
-                    'as' => 'assignees'
-                ]],
-                ['$lookup' => [
-                    'from' => 'users',
                     'let' => ['createdBy' => ['$toObjectId' => '$created_by']],
                     'pipeline' => [
                         ['$match' => ['$expr' => ['$eq' => ['$_id', '$$createdBy']]]]
                     ],
                     'as' => 'created_bys'
                 ]],
+                [
+                    '$lookup' => [
+                        'from' => 'timesheets',
+                        'let' => ['taskId' => '$_id'],
+                        'pipeline' => [
+                            [
+                                '$match' => [
+                                    '$expr' => [
+                                        '$eq' => [
+                                            ['$toObjectId' => '$task_id'],
+                                            '$$taskId'
+                                        ]
+                                    ]
+                                ]
+                            ],
+                            [
+                                '$unwind' => '$dates'
+                            ],
+                            [
+                                '$unwind' => '$dates.time_log'
+                            ],
+                            [
+                                '$addFields' => [
+                                    'start' => [
+                                        '$dateFromString' => [
+                                            'dateString' => [
+                                                '$concat' => [
+                                                    '$dates.date',
+                                                    'T',
+                                                    '$dates.time_log.start_time',
+                                                    ':00'
+                                                ]
+                                            ],
+                                            'format' => '%Y-%m-%dT%H:%M:%S'
+                                        ]
+                                    ],
+                                    'end' => [
+                                        '$dateFromString' => [
+                                            'dateString' => [
+                                                '$concat' => [
+                                                    '$dates.date',
+                                                    'T',
+                                                    '$dates.time_log.end_time',
+                                                    ':00'
+                                                ]
+                                            ],
+                                            'format' => '%Y-%m-%dT%H:%M:%S'
+                                        ]
+                                    ]
+                                ]
+                            ],
+                            [
+                                '$addFields' => [
+                                    'durationInMinutes' => [
+                                        '$divide' => [
+                                            ['$subtract' => ['$end', '$start']],
+                                            1000 * 60
+                                        ]
+                                    ]
+                                ]
+                            ],
+                            [
+                                '$group' => [
+                                    '_id' => null,
+                                    'total_minutes' => ['$sum' => '$durationInMinutes']
+                                ]
+                            ],
+                            [
+                                '$addFields' => [
+                                    'total_hours' => [
+                                        '$floor' => [
+                                            '$divide' => ['$total_minutes', 60]
+                                        ]
+                                    ],
+                                    'remaining_minutes' => [
+                                        '$mod' => ['$total_minutes', 60]
+                                    ]
+                                ]
+                            ]
+                        ],
+                        'as' => 'timesheet_data'
+                    ]
+                ],
+                [
+                    '$addFields' => [
+                        'total_hours' => [
+                            '$ifNull' => [['$arrayElemAt' => ['$timesheet_data.total_hours', 0]], 0]
+                        ],
+                        'total_minutes' => [
+                            '$ifNull' => [['$arrayElemAt' => ['$timesheet_data.remaining_minutes', 0]], 0]
+                        ]
+                    ]
+                ],
                 $sortStage,
                 ['$project' => [
+                    'task_id' => 1,
                     'title' => 1,
                     'project_id' => 1,
                     'project' => 1,
@@ -188,20 +322,72 @@ class TasksController extends Controller
                     'owner' => 1,
                     'assignee_id' => 1,
                     'assignees' => 1,
+                    'assignees_data' => 1,
                     'description' => 1,
                     'due_date' => 1,
                     'estimated_hours' => 1,
                     'attachment' => 1,
                     'created_by' => 1,
                     'created_bys' => 1,
+                    'total_hours' => 1,
+                    'total_minutes' => 1
                 ]]
             ]);
+            if ($limit !== -1) {
+                $pipeline[] = ['$skip' => $skip];
+                $pipeline[] = ['$limit' => $limit];
+            }
             return $collection->aggregate($pipeline);
         });
+        $totalCount = Tasks::raw(function ($collection) use ($matchStage) {
+            $matchFilter = [];
+            if (!empty($matchStage)) {
+                $matchFilter = $matchStage;
+            }
+            return $collection->aggregate([
+                ['$match' => (object)$matchFilter],
+                ['$count' => 'total']
+            ]);
+        })->first()['total'] ?? 0;
+        $tasks_data = [
+            'data' => $tasks,
+            'meta' => [
+                'page' => $page,
+                'limit' => $limit,
+                'total' => $totalCount,
+                'total_pages' => $limit === -1 ? 1 : ceil($totalCount / $limit),
+            ]
+        ];
 
-        $projectsAssigned = Tasks::where('assignee_id', $request->user->id ?? $request->employee_id)
-        ->distinct('project_id')
-        ->count();
+
+        // $projectsAssigned = Tasks::where('assignee_id', $request->user->id ?? $request->employee_id)
+        //     ->distinct('project_id')
+        //     ->count();
+
+        $getDataFor = $request->user->id;
+
+        if ($request->has('employee_id') || $request->has('assignees')) {
+            if ($request->has('employee_id')) {
+                $getDataFor = $request->employee_id;
+            } elseif ($request->has('assignees')) {
+                $getDataFor = $request->assignees;
+            }
+        }
+        $project_id = $request->has('project_id');
+        if ($project_id) {
+            if ($request->user->role->slug === 'employee') {
+                $projectsAssigned = Tasks::where('assignees', (string) $getDataFor)
+                    ->where('project_id', $request->project_id)
+                    ->count();
+            } else {
+                $projectsAssigned = Tasks::where('project_id', $request->project_id)
+                    ->count();
+            }
+        } else {
+            $projectsAssigned = Tasks::where('assignees', (string) $getDataFor)
+                ->distinct('project_id')
+                ->count();
+        }
 
         $taskStatuses = Tasks::raw(function ($collection) use ($matchStage) {
             return $collection->aggregate([
@@ -227,7 +413,7 @@ class TasksController extends Controller
         return response()->json([
             'projects_assigned' => $projectsAssigned,
             'task_statuses' => $taskStatuses,
-            'tasks_list' => $tasks,
+            'tasks_list' => $tasks_data,
         ], 200);
     }
 
@@ -246,7 +432,8 @@ class TasksController extends Controller
             'task_type_id' => 'required|exists:task_types,_id',
             'priority' => 'required|string',
             'owner_id' => 'required|exists:users,_id',
-            'assignee_id' => 'required|exists:users,_id',
+            'assignees' => 'required|array|min:1', // <-- updated for array
+            'assignees.*' => 'exists:users,_id',
             'description' => 'nullable|string',
             'start_date' => 'required|date',
             'due_date' => [
@@ -269,6 +456,20 @@ class TasksController extends Controller
         if ($request->hasFile('attachment')) {
             $attachment = $service->upload($request->file('attachment'), 'uploads', $request->user->id);
         }
+
+        // Check and update project assignee list
+        $project = Project::find($request->project_id);
+        if ($project) {
+            $currentAssignees = $project->assignee ?? [];
+            foreach ($request->assignees as $assigneeId) {
+                if (!in_array($assigneeId, $currentAssignees)) {
+                    $currentAssignees[] = $assigneeId;
+                }
+            }
+            $project->assignee = $currentAssignees;
+            $project->save();
+        }
+
         $dueDate = Carbon::parse($request->due_date)->toIso8601String();
         $startDate = Carbon::parse($request->start_date)->toIso8601String();
         $platform = Tasks::create([
@@ -279,7 +480,7 @@ class TasksController extends Controller
             'task_type_id' => $request->task_type_id,
             'priority' => $request->priority,
             'owner_id' => $request->owner_id,
-            'assignee_id' => $request->assignee_id,
+            'assignees' => array_map('strval', $request->assignees),
             'description' => $request->description,
             'start_date' => $startDate,
             'due_date' => $dueDate,
@@ -295,11 +496,30 @@ class TasksController extends Controller
      */
     public function show(string $id)
     {
-        $task = Tasks::with(['owner','assignee','project','milestone','status','taskType','createdBy'])->find($id);
+        $task = Tasks::with(['owner', 'project', 'milestone', 'status', 'taskType', 'createdBy'])->find($id);
         if (!$task) {
             return response()->json(['message' => 'Task not found'], 404);
         }
-        return response()->json($task, 200);
+        $assignees_data = [];
+        if (is_array($task->assignees) && count($task->assignees)) {
+            $assignees_data = User::whereIn('_id', $task->assignees)
+            ->get(['id', 'name', 'last_name','personal_email', 'contact_number']) // add/remove fields as needed
+            ->map(function ($user) {
+                return [
+                    'id'    => (string) $user->id,
+                    'name'  => $user->name,
+                    'last_name'  => $user->last_name,
+                    'email' => $user->personal_email,
+                    'number'=> $user->contact_number
+                ];
+            })
+            ->toArray();
+        }
+
+        // Convert the model to array and add assignees_data field
+        $task_array = $task->toArray();
+        $task_array['assignees_data'] = $assignees_data;
+        return response()->json($task_array, 200);
     }
 
     /**
@@ -312,14 +532,15 @@ class TasksController extends Controller
             return response()->json(['message' => 'Task not found'], 404);
         }
         $validator = Validator::make($request->all(), [
-            'title' => 'required|string|unique:tasks,title,'.$id,
+            'title' => 'required|string|unique:tasks,title,' . $id,
             'project_id' => 'required|exists:projects,_id',
             'milestone_id' => 'nullable|exists:milestones,_id',
             'status_id' => 'required|exists:task_statuses,_id',
             'task_type_id' => 'required|exists:task_types,_id',
             'priority' => 'required|string',
             'owner_id' => 'required|exists:users,_id',
-            'assignee_id' => 'required|exists:users,_id',
+            'assignees' => 'required|array|min:1', // <-- updated for array
+            'assignees.*' => 'exists:users,_id',
             'description' => 'nullable|string',
             'start_date' => 'required|date',
             'due_date' => [
@@ -343,11 +564,25 @@ class TasksController extends Controller
         if ($request->hasFile('attachment')) {
             // Delete old profile photo if exists
             if ($task->attachment) {
-                $service->delete($task->attachment['file_path'],$task->attachment['media_id']);
+                $service->delete($task->attachment['file_path'], $task->attachment['media_id']);
             }
             $attachment = $service->upload($request->file('attachment'), 'uploads', $request->user->id);
             $task->attachment = $attachment;
         }
+
+        // Check and update project assignee list
+        $project = Project::find($request->project_id);
+        if ($project) {
+            $currentAssignees = $project->assignee ?? [];
+            foreach ($request->assignees as $assigneeId) {
+                if (!in_array($assigneeId, $currentAssignees)) {
+                    $currentAssignees[] = $assigneeId;
+                }
+            }
+            $project->assignee = $currentAssignees;
+            $project->save();
+        }
+
         $dueDate = Carbon::parse($request->due_date)->toIso8601String();
         $startDate = Carbon::parse($request->start_date)->toIso8601String();
         $task->update(
@@ -359,7 +594,7 @@ class TasksController extends Controller
                 'task_type_id' => $request->task_type_id,
                 'priority' => $request->priority,
                 'owner_id' => $request->owner_id,
-                'assignee_id' => $request->assignee_id,
+                'assignees' => array_map('strval', $request->assignees),
                 'description' => $request->description,
                 'start_date' => $startDate,
                 'due_date' => $dueDate,
@@ -438,7 +673,8 @@ class TasksController extends Controller
                 ['$addFields' => [
                     'completion_percentage' => [
                         '$cond' => [
-                            ['$eq' => ['$total_tasks', 0]], 0, // If no tasks, percentage = 0
+                            ['$eq' => ['$total_tasks', 0]],
+                            0, // If no tasks, percentage = 0
                             ['$multiply' => [['$divide' => ['$completed_tasks', '$total_tasks']], 100]]
                         ]
                     ]
@@ -470,15 +706,14 @@ class TasksController extends Controller
 
     public function getTasksByProject(Request $request)
     {
-        $userId = $request->user->id; // Get logged-in user's ID
-        $projectId = $request->project_id; // Get project ID from request
+        $userId = $request->user->id;
+        $projectId = $request->project_id;
 
-        // Validate input
         if (!$projectId) {
             return response()->json(['error' => 'Project ID is required'], 400);
         }
 
-        // Tasks grouped by status
+        // Tasks grouped by status - UNCHANGED
         $tasksByStatus = Tasks::raw(function ($collection) use ($projectId) {
             return $collection->aggregate([
                 ['$match' => ['project_id' => (string) $projectId]],
@@ -499,20 +734,31 @@ class TasksController extends Controller
             ]);
         });
 
-        // Tasks grouped by assignee
+        // Tasks grouped by assignee (UNWIND ASSIGNEES ARRAY)
         $tasksByAssignee = Tasks::raw(function ($collection) use ($projectId) {
             return $collection->aggregate([
                 ['$match' => ['project_id' => (string) $projectId]],
-                ['$addFields' => ['assignee_id' => ['$toObjectId' => '$assignee_id']]],
+                ['$unwind' => '$assignees'],
+                [
+                    '$addFields' => [
+                        'assignee_oid' => [
+                            '$cond' => [
+                                ['$eq' => ['$assignees', null]], // skip nulls
+                                null,
+                                ['$toObjectId' => '$assignees']
+                            ]
+                        ]
+                    ]
+                ],
                 ['$lookup' => [
                     'from' => 'users',
-                    'localField' => 'assignee_id',
+                    'localField' => 'assignee_oid',
                     'foreignField' => '_id',
                     'as' => 'assignee_info'
                 ]],
                 ['$unwind' => ['path' => '$assignee_info', 'preserveNullAndEmptyArrays' => true]],
                 ['$group' => [
-                    '_id' => '$assignee_id',
+                    '_id' => '$assignee_oid',
                     'assignee_name' => ['$first' => '$assignee_info.name'],
                     'task_count' => ['$sum' => 1]
                 ]],
@@ -520,26 +766,40 @@ class TasksController extends Controller
             ]);
         });
 
-        // Tasks grouped by assignee where status is "To Do" OR Open tasks
+        // Tasks grouped by assignee with status "to do" (UNWIND ASSIGNEES ARRAY)
         $tasksByAssigneeTodo = Tasks::raw(function ($collection) use ($projectId) {
             return $collection->aggregate([
                 ['$match' => ['project_id' => (string) $projectId]],
-                ['$addFields' => [
-                    'status_id' => ['$toObjectId' => '$status_id'],
-                    'assignee_id' => ['$toObjectId' => '$assignee_id']
-                ]],
+                ['$unwind' => '$assignees'],
+                [
+                    '$addFields' => [
+                        'assignee_oid' => [
+                            '$cond' => [
+                                ['$eq' => ['$assignees', null]], // skip nulls
+                                null,
+                                ['$toObjectId' => '$assignees']
+                            ]
+                        ],
+                        'status_oid' => ['$toObjectId' => '$status_id'],
+                    ]
+                ],
                 ['$lookup' => [
                     'from' => 'task_statuses',
-                    'localField' => 'status_id',
+                    'localField' => 'status_oid',
                     'foreignField' => '_id',
                     'as' => 'status_info'
                 ]],
                 ['$unwind' => ['path' => '$status_info', 'preserveNullAndEmptyArrays' => true]],
                 ['$match' => [
-                    '$expr' => ['$eq' => [['$toLower' => '$status_info.name'], 'to do']]
+                    '$expr' => [
+                        '$eq' => [
+                            ['$toLower' => '$status_info.name'],
+                            'to do'
+                        ]
+                    ]
                 ]],
                 ['$group' => [
-                    '_id' => '$assignee_id',
+                    '_id' => '$assignee_oid',
                     'task_count' => ['$sum' => 1]
                 ]],
                 ['$lookup' => [
@@ -558,10 +818,7 @@ class TasksController extends Controller
             ]);
         });
 
-        // Project milestones summary OR Project Progress
-        /**
-         * Calculates all milestones that are in pending status and return result accordingly
-         */
+        // Project milestones summary (unchanged)
         $projectMilestones = Milestones::raw(function ($collection) use ($projectId) {
             return $collection->aggregate([
                 ['$match' => ['project_id' => (string) $projectId]],
@@ -570,7 +827,11 @@ class TasksController extends Controller
                     'total_milestones' => ['$sum' => 1],
                     'pending_milestones' => [
                         '$sum' => [
-                            '$cond' => [['$eq' => [['$toLower' => '$status'], 'pending']], 1, 0]
+                            '$cond' => [
+                                ['$ne' => [['$toLower' => '$status'], 'completed']],
+                                1,
+                                0
+                            ]
                         ]
                     ],
                     'milestones' => ['$push' => [
@@ -596,13 +857,11 @@ class TasksController extends Controller
             ]);
         });
 
-        // Convert results to arrays
         $tasksByStatusArray = iterator_to_array($tasksByStatus);
         $tasksByAssigneeArray = iterator_to_array($tasksByAssignee);
         $tasksByAssigneeTodoArray = iterator_to_array($tasksByAssigneeTodo);
         $projectMilestonesArray = iterator_to_array($projectMilestones);
 
-        // Prepare response
         $response = [
             'tasks_by_status' => $tasksByStatusArray,
             'tasks_by_assignee' => $tasksByAssigneeArray,
@@ -612,6 +871,4 @@ class TasksController extends Controller
 
         return response()->json($response);
     }
-
-
 }

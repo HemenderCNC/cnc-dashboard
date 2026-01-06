@@ -69,6 +69,7 @@ return [
             'options' => [
                 'authSource' => env('DB_AUTH_SOURCE', 'admin'),
                 'ssl' => filter_var(env('DB_SSL', true), FILTER_VALIDATE_BOOLEAN),
+                'tls' => true,
             ],
         ],
 

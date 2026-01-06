@@ -57,7 +57,11 @@ class Project extends Eloquent
     }
     public function projectManager()
     {
-        return $this->belongsTo(User::class, 'project_manager_id');
+        return User::whereIn('_id', $this->project_manager_id ?? [])->get();
+    }
+    public function getProjectManagersAttribute()
+    {
+        return User::whereIn('_id', $this->project_manager_id ?? [])->get();
     }
     public function client()
     {

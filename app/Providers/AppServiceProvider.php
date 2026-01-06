@@ -37,15 +37,36 @@ class AppServiceProvider extends ServiceProvider
         $modelPath = app_path('Models');
 
         if (File::isDirectory($modelPath)) {
+            // $modelFiles = File::files($modelPath);
+            
+            // foreach ($modelFiles as $file) {
+            //     $modelClass = 'App\\Models\\' . pathinfo($file->getFilename(), PATHINFO_FILENAME);
+                
+            //     if (class_exists($modelClass) && is_subclass_of($modelClass, Model::class)) {
+            //         $modelClass::observe(ActivityLogObserver::class);
+            //     }
+            // }
+
             $modelFiles = File::files($modelPath);
             
+            $excludedModels = [
+                ActivityLog::class,
+                \App\Models\LoginSession::class,
+                // Add any other models you want to exclude from activity logging here
+            ];
+
             foreach ($modelFiles as $file) {
                 $modelClass = 'App\\Models\\' . pathinfo($file->getFilename(), PATHINFO_FILENAME);
                 
+                if (in_array($modelClass, $excludedModels)) {
+                    continue;
+                }
+
                 if (class_exists($modelClass) && is_subclass_of($modelClass, Model::class)) {
                     $modelClass::observe(ActivityLogObserver::class);
                 }
             }
+
         }
     }
 }

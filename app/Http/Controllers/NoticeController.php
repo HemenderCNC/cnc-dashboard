@@ -4,25 +4,40 @@ namespace App\Http\Controllers;
 use App\Models\Notice;
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
-
 use Illuminate\Http\Request;
 
 class NoticeController extends Controller
 {
     // Get all notices
-    public function index()
+    public function index(Request $request)
     {
-        $notices = Notice::orderBy('created_at', 'desc')->get();
-        if ($notices->isEmpty()) {
+        $page = (int) $request->input('page', 1);
+        $limit = (int) $request->input('limit', -1);
+        if ($limit == -1) {
+            $leaves = Notice::orderBy('created_at', 'desc')->get();
+
             return response()->json([
-                'message' => 'No notices found',
-                'notices' => []
+                'data' => $leaves,
+                'meta' => [
+                    'page' => 1,
+                    'limit' => $limit,
+                    'total' => $leaves->count(),
+                    'total_pages' => 1,
+                ]
             ], 200);
         }
 
+        // Else use pagination
+        $leaves = Notice::orderBy('created_at', 'desc')->paginate($limit, ['*'], 'page', $page);
+
         return response()->json([
-            'message' => 'Notices fetched successfully',
-            'notices' => $notices
+            'data' => $leaves->items(),
+            'meta' => [
+                'page' => $leaves->currentPage(),
+                'limit' => $leaves->perPage(),
+                'total' => $leaves->total(),
+                'total_pages' => ceil($leaves->total() / $leaves->perPage()),
+            ]
         ], 200);
     }
 

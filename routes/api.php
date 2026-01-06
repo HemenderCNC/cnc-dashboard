@@ -1,4 +1,5 @@
 <?php
+
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
@@ -36,6 +37,8 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HelpingHandController;
 use App\Http\Controllers\PermissionModulesController;
 use App\Http\Controllers\MovieTicketController;
+use App\Http\Controllers\ChartController;
+use App\Http\Controllers\BugsController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -57,10 +60,10 @@ Route::middleware('api')->group(function () {
 
         Route::prefix('task-types')->group(function () {
             Route::get('/', [TaskTypeController::class, 'index']);
-            Route::post('/', [TaskTypeController::class, 'store'])->middleware('permission:add_task_type');
-            Route::get('/{id}', [TaskTypeController::class, 'show'])->middleware('permission:view_task_type');
-            Route::put('/{id}', [TaskTypeController::class, 'update'])->middleware('permission:edit_task_type');
-            Route::delete('/{id}', [TaskTypeController::class, 'destroy'])->middleware('permission:delete_task_type');
+            Route::post('/', [TaskTypeController::class, 'store']);
+            Route::get('/{id}', [TaskTypeController::class, 'show']);
+            Route::put('/{id}', [TaskTypeController::class, 'update']);
+            Route::delete('/{id}', [TaskTypeController::class, 'destroy']);
         });
 
         //Role group
@@ -69,6 +72,10 @@ Route::middleware('api')->group(function () {
         Route::delete('roles/{id}', [RoleController::class, 'deleteRole'])->middleware('permission:delete_role'); // Delete Role
         Route::get('roles', [RoleController::class, 'getAllRoles'])->middleware('permission:view_role'); // Get all roles
         Route::get('role/{id}', [RoleController::class, 'getRoleById'])->middleware('permission:view_role'); // Get all roles
+
+                // Example route for administrator and manager roles
+        Route::post('users/update-password', [UserController::class, 'updateUserPassword'])
+            ->middleware(['auth.token', 'role:Administrator,Team Leader,Project Manager']);
 
         // Route::middleware(['permission:678e3b79b9a4b5377a0d1793'])->group(function () {
         //     Route::post('roles', [RoleController::class, 'addRole']);        // Add Role
@@ -79,7 +86,7 @@ Route::middleware('api')->group(function () {
         // });
 
         // Route::middleware(['permission:678e3b79b9a4b5377a0d1793'])->group(function () {
-            Route::get('/permissionsmodule/grouped', [PermissionModulesController::class, 'getGroupedPermissions']);
+        Route::get('/permissionsmodule/grouped', [PermissionModulesController::class, 'getGroupedPermissions']);
         // });
 
 
@@ -115,6 +122,12 @@ Route::middleware('api')->group(function () {
         Route::post('users/{id}', [UserController::class, 'editUser'])->middleware('permission:edit_user');  // Edit user
         Route::delete('users/{id}', [UserController::class, 'deleteUser'])->middleware('permission:delete_user');
 
+        Route::get('getallotheremployees', [UserController::class, 'getAllOtherEmployees']); //Get all users
+        Route::get('getallemployees', [UserController::class, 'getAllEmployees']); //Get all users
+
+        Route::get('get-users-not-admins', [UserController::class, 'getAllUsersNotAdmins']); //Get all users
+        Route::get('get-project-managers', [UserController::class, 'getProjectManagers']); //Get all users
+
         // Route::middleware(['permission:678e3b79b9a4b5377a0d1793'])->group(function () {
         //     Route::get('getuserfieldoptions', [UserFieldOptionController::class, 'getOptions']);        // Get all options for User Employee field options
         //     Route::get('user/{id}', [UserController::class, 'getUserById']); // Get a user details by user ID
@@ -136,55 +149,92 @@ Route::middleware('api')->group(function () {
         // Route::apiResource('departments', DepartmentController::class);
         Route::prefix('departments')->group(function () {
             // Get all industry types
-            Route::get('/', [DepartmentController::class, 'index'])->middleware('permission:view_department');
+            Route::get('/', [DepartmentController::class, 'index']);
 
             // Create a new industry type
-            Route::post('/', [DepartmentController::class, 'store'])->middleware('permission:add_department');
+            Route::post('/', [DepartmentController::class, 'store']);
 
             // Get a single industry type by ID
-            Route::get('/{id}', [DepartmentController::class, 'show'])->middleware('permission:view_department');
+            Route::get('/{id}', [DepartmentController::class, 'show']);
 
             // Update an industry type
-            Route::put('/{id}', [DepartmentController::class, 'update'])->middleware('permission:edit_department');
+            Route::put('/{id}', [DepartmentController::class, 'update']);
 
             // Delete an industry type
-            Route::delete('/{id}', [DepartmentController::class, 'destroy'])->middleware('permission:delete_department');
+            Route::delete('/{id}', [DepartmentController::class, 'destroy']);
+        });
+
+        //Bugs API
+        Route::prefix('bugs')->group(function () {
+            // Get all Bugs types
+            Route::get('/', [BugsController::class, 'index']);
+
+            // Create a new Bugs type
+            Route::post('/', [BugsController::class, 'store']);
+
+            // Get a single Bugs type by ID
+            Route::get('/{id}', [BugsController::class, 'show']);
+
+            // Update an Bugs type
+            Route::post('/{id}', [BugsController::class, 'update']);
+
+            // Delete an Bugs type
+            Route::delete('/{id}', [BugsController::class, 'destroy']);
         });
 
         // Route::apiResource('countries', CountriesController::class);
         Route::prefix('countries')->group(function () {
             // Get all industry types
-            Route::get('/', [CountriesController::class, 'index'])->middleware('permission:view_country');
+            Route::get('/', [CountriesController::class, 'index']);
 
             // Create a new industry type
-            Route::post('/', [CountriesController::class, 'store'])->middleware('permission:add_country');
+            Route::post('/', [CountriesController::class, 'store']);
 
             // Get a single industry type by ID
-            Route::get('/{id}', [CountriesController::class, 'show'])->middleware('permission:view_country');
+            Route::get('/{id}', [CountriesController::class, 'show']);
 
             // Update an industry type
-            Route::put('/{id}', [CountriesController::class, 'update'])->middleware('permission:edit_country');
+            Route::put('/{id}', [CountriesController::class, 'update']);
 
             // Delete an industry type
-            Route::delete('/{id}', [CountriesController::class, 'destroy'])->middleware('permission:delete_country');
+            Route::delete('/{id}', [CountriesController::class, 'destroy']);
+        });
+
+        /**
+         * Get states of a country by ID
+         */
+        Route::prefix('states')->group(function () {
+            // Get states of a single country by country ID
+            Route::get('/{id}', [CountriesController::class, 'getStatesOf']);
+        });
+        Route::prefix('charts')->group(function () {
+            // Get employee performance chart data
+            Route::get('/employee-performance', [ChartController::class, 'getEmployeePerformance']);
+        });
+        /**
+         * Get cities of a state by ID
+         */
+        Route::prefix('cities')->group(function () {
+            // Get states of a single country by country ID
+            Route::get('/{country_id}/{state_id}', [CountriesController::class, 'getCitiesOf']);
         });
 
         // Route::apiResource('industry-types', IndustryTypesController::class);
         Route::prefix('industry-types')->group(function () {
             // Get all industry types
-            Route::get('/', [IndustryTypesController::class, 'index'])->middleware('permission:view_industry_type');
+            Route::get('/', [IndustryTypesController::class, 'index']);
 
             // Create a new industry type
-            Route::post('/', [IndustryTypesController::class, 'store'])->middleware('permission:add_industry_type');
+            Route::post('/', [IndustryTypesController::class, 'store']);
 
             // Get a single industry type by ID
-            Route::get('/{id}', [IndustryTypesController::class, 'show'])->middleware('permission:view_industry_type');
+            Route::get('/{id}', [IndustryTypesController::class, 'show']);
 
             // Update an industry type
-            Route::put('/{id}', [IndustryTypesController::class, 'update'])->middleware('permission:edit_industry_type');
+            Route::put('/{id}', [IndustryTypesController::class, 'update']);
 
             // Delete an industry type
-            Route::delete('/{id}', [IndustryTypesController::class, 'destroy'])->middleware('permission:delete_industry_type');
+            Route::delete('/{id}', [IndustryTypesController::class, 'destroy']);
         });
 
 
@@ -192,13 +242,13 @@ Route::middleware('api')->group(function () {
         // Route::apiResource('designations', DesignationController::class);
         Route::prefix('designations')->group(function () {
             // Get all designations
-            Route::get('/', [DesignationController::class, 'index'])->middleware('permission:view_designation');
+            Route::get('/', [DesignationController::class, 'index']);
 
             // Create a new designation
             Route::post('/', [DesignationController::class, 'store'])->middleware('permission:add_designation');
 
             // Get a single designation by ID
-            Route::get('/{id}', [DesignationController::class, 'show'])->middleware('permission:view_designation');
+            Route::get('/{id}', [DesignationController::class, 'show']);
 
             // Update a designation
             Route::put('/{id}', [DesignationController::class, 'update'])->middleware('permission:edit_designation');
@@ -212,13 +262,13 @@ Route::middleware('api')->group(function () {
         // Route::apiResource('qualifications', QualificationController::class);
         Route::prefix('qualifications')->group(function () {
             // Get all qualifications
-            Route::get('/', [QualificationController::class, 'index'])->middleware('permission:view_qualification');
+            Route::get('/', [QualificationController::class, 'index']);
 
             // Create a new qualification
             Route::post('/', [QualificationController::class, 'store'])->middleware('permission:add_qualification');
 
             // Get a single qualification by ID
-            Route::get('/{id}', [QualificationController::class, 'show'])->middleware('permission:view_qualification');
+            Route::get('/{id}', [QualificationController::class, 'show']);
 
             // Update a qualification
             Route::put('/{id}', [QualificationController::class, 'update'])->middleware('permission:edit_qualification');
@@ -232,13 +282,13 @@ Route::middleware('api')->group(function () {
         // Route::apiResource('skills', SkillController::class);
         Route::prefix('skills')->group(function () {
             // Get all skills
-            Route::get('/', [SkillController::class, 'index'])->middleware('permission:view_skill');
+            Route::get('/', [SkillController::class, 'index']);
 
             // Create a new skill
             Route::post('/', [SkillController::class, 'store'])->middleware('permission:add_skill');
 
             // Get a single skill by ID
-            Route::get('/{id}', [SkillController::class, 'show'])->middleware('permission:view_skill');
+            Route::get('/{id}', [SkillController::class, 'show']);
 
             // Update a skill
             Route::put('/{id}', [SkillController::class, 'update'])->middleware('permission:edit_skill');
@@ -252,13 +302,13 @@ Route::middleware('api')->group(function () {
         // Route::apiResource('employee-types', EmployeeTypesController::class);
         Route::prefix('employee-types')->group(function () {
             // Get all employee types
-            Route::get('/', [EmployeeTypesController::class, 'index'])->middleware('permission:view_employee_type');
+            Route::get('/', [EmployeeTypesController::class, 'index']);
 
             // Create a new employee type
             Route::post('/', [EmployeeTypesController::class, 'store'])->middleware('permission:add_employee_type');
 
             // Get a single employee type by ID
-            Route::get('/{id}', [EmployeeTypesController::class, 'show'])->middleware('permission:view_employee_type');
+            Route::get('/{id}', [EmployeeTypesController::class, 'show']);
 
             // Update an employee type
             Route::put('/{id}', [EmployeeTypesController::class, 'update'])->middleware('permission:edit_employee_type');
@@ -272,13 +322,13 @@ Route::middleware('api')->group(function () {
         // Route::apiResource('work-location', WorkLocationController::class);
         Route::prefix('work-location')->group(function () {
             // Get all work locations
-            Route::get('/', [WorkLocationController::class, 'index'])->middleware('permission:view_work_location');
+            Route::get('/', [WorkLocationController::class, 'index']);
 
             // Create a new work location
             Route::post('/', [WorkLocationController::class, 'store'])->middleware('permission:add_work_location');
 
             // Get a single work location by ID
-            Route::get('/{id}', [WorkLocationController::class, 'show'])->middleware('permission:view_work_location');
+            Route::get('/{id}', [WorkLocationController::class, 'show']);
 
             // Update a work location
             Route::put('/{id}', [WorkLocationController::class, 'update'])->middleware('permission:edit_work_location');
@@ -292,13 +342,13 @@ Route::middleware('api')->group(function () {
         // Route::apiResource('employee-status', EmployeeStatusController::class);
         Route::prefix('employee-status')->group(function () {
             // Get all employee statuses
-            Route::get('/', [EmployeeStatusController::class, 'index'])->middleware('permission:view_employee_status');
+            Route::get('/', [EmployeeStatusController::class, 'index']);
 
             // Create a new employee status
             Route::post('/', [EmployeeStatusController::class, 'store'])->middleware('permission:add_employee_status');
 
             // Get a single employee status by ID
-            Route::get('/{id}', [EmployeeStatusController::class, 'show'])->middleware('permission:view_employee_status');
+            Route::get('/{id}', [EmployeeStatusController::class, 'show']);
 
             // Update an employee status
             Route::put('/{id}', [EmployeeStatusController::class, 'update'])->middleware('permission:edit_employee_status');
@@ -312,13 +362,13 @@ Route::middleware('api')->group(function () {
         // Route::apiResource('project-status', ProjectStatusController::class);
         Route::prefix('project-status')->group(function () {
             // Get all project statuses
-            Route::get('/', [ProjectStatusController::class, 'index'])->middleware('permission:view_project_status');
+            Route::get('/', [ProjectStatusController::class, 'index']);
 
             // Create a new project status
             Route::post('/', [ProjectStatusController::class, 'store'])->middleware('permission:add_project_status');
 
             // Get a single project status by ID
-            Route::get('/{id}', [ProjectStatusController::class, 'show'])->middleware('permission:view_project_status');
+            Route::get('/{id}', [ProjectStatusController::class, 'show']);
 
             // Update a project status
             Route::put('/{id}', [ProjectStatusController::class, 'update'])->middleware('permission:edit_project_status');
@@ -332,13 +382,13 @@ Route::middleware('api')->group(function () {
         // Route::apiResource('document-types', DocumentTypeController::class);
         Route::prefix('document-types')->group(function () {
             // Get all document types
-            Route::get('/', [DocumentTypeController::class, 'index'])->middleware('permission:view_document_type');
+            Route::get('/', [DocumentTypeController::class, 'index']);
 
             // Create a new document type
             Route::post('/', [DocumentTypeController::class, 'store'])->middleware('permission:add_document_type');
 
             // Get a single document type by ID
-            Route::get('/{id}', [DocumentTypeController::class, 'show'])->middleware('permission:view_document_type');
+            Route::get('/{id}', [DocumentTypeController::class, 'show']);
 
             // Update a document type
             Route::put('/{id}', [DocumentTypeController::class, 'update'])->middleware('permission:edit_document_type');
@@ -352,13 +402,13 @@ Route::middleware('api')->group(function () {
         // Route::apiResource('platforms', PlatformController::class);
         Route::prefix('platforms')->group(function () {
             // Get all platforms
-            Route::get('/', [PlatformController::class, 'index'])->middleware('permission:view_platform');
+            Route::get('/', [PlatformController::class, 'index']);
 
             // Create a new platform
             Route::post('/', [PlatformController::class, 'store'])->middleware('permission:add_platform');
 
             // Get a single platform by ID
-            Route::get('/{id}', [PlatformController::class, 'show'])->middleware('permission:view_platform');
+            Route::get('/{id}', [PlatformController::class, 'show']);
 
             // Update a platform
             Route::put('/{id}', [PlatformController::class, 'update'])->middleware('permission:edit_platform');
@@ -372,13 +422,13 @@ Route::middleware('api')->group(function () {
         // Route::apiResource('languages', LanguagesController::class);
         Route::prefix('languages')->group(function () {
             // Get all languages
-            Route::get('/', [LanguagesController::class, 'index'])->middleware('permission:view_language');
+            Route::get('/', [LanguagesController::class, 'index']);
 
             // Create a new language
             Route::post('/', [LanguagesController::class, 'store'])->middleware('permission:add_language');
 
             // Get a single language by ID
-            Route::get('/{id}', [LanguagesController::class, 'show'])->middleware('permission:view_language');
+            Route::get('/{id}', [LanguagesController::class, 'show']);
 
             // Update a language
             Route::put('/{id}', [LanguagesController::class, 'update'])->middleware('permission:edit_language');
@@ -398,7 +448,7 @@ Route::middleware('api')->group(function () {
             Route::post('/', [MilestoneController::class, 'store'])->middleware('permission:add_milestone');
 
             // Get a single milestone by ID
-            Route::get('/{id}', [MilestoneController::class, 'show'])->middleware('permission:view_milestone');
+            Route::get('/{id}', [MilestoneController::class, 'show']);
 
             // Update a milestone
             Route::put('/{id}', [MilestoneController::class, 'update'])->middleware('permission:edit_milestone');
@@ -421,7 +471,7 @@ Route::middleware('api')->group(function () {
             Route::post('/', [TaskStatusController::class, 'store'])->middleware('permission:add_task_status');
 
             // Get a single task status
-            Route::get('/{id}', [TaskStatusController::class, 'show'])->middleware('permission:view_task_status');
+            Route::get('/{id}', [TaskStatusController::class, 'show']);
 
             // Update a task status
             Route::put('/{id}', [TaskStatusController::class, 'update'])->middleware('permission:edit_task_status');
@@ -434,9 +484,10 @@ Route::middleware('api')->group(function () {
 
         //Clients API
         Route::prefix('clients')->group(function () {
+            Route::get('/', [ClientsController::class, 'index']);
             Route::middleware(['permission:view_client'])->group(function () {
-                Route::get('/', [ClientsController::class, 'index']);
                 Route::get('/{id}', [ClientsController::class, 'show']);
+                Route::get('/project-summary/{id}', [ClientsController::class, 'project_summary']);
             });
             Route::post('/', [ClientsController::class, 'store'])->middleware('permission:add_client');
             Route::post('/{id}', [ClientsController::class, 'update'])->middleware('permission:edit_client');
@@ -521,7 +572,7 @@ Route::middleware('api')->group(function () {
         Route::prefix('projects')->group(function () {
             // View project routes
             Route::get('/', [ProjectsController::class, 'index']); // Get all projects
-            
+
 
             // Add project
             Route::post('/', [ProjectsController::class, 'store'])->middleware('permission:add_project'); // Add a project
@@ -570,6 +621,9 @@ Route::middleware('api')->group(function () {
             Route::middleware(['permission:reject_leave'])->group(function () {
                 Route::put('/{id}/reject', [LeaveController::class, 'reject']);
             });
+            Route::middleware(['permission:delete_leave'])->group(function () {
+                Route::delete('/{id}', [LeaveController::class, 'destroy']);
+            });
 
 
             // Route::get('/leaves-summary', [LeaveController::class, 'getLeaveSummary']);
@@ -581,6 +635,7 @@ Route::middleware('api')->group(function () {
             // Route::put('/{id}/approve', [LeaveController::class, 'approve']);
             // Route::put('/{id}/reject', [LeaveController::class, 'reject']);
         });
+
         Route::prefix('alloverleaves')->group(function () {
             Route::middleware(['permission:view_leave'])->group(function () {
                 Route::get('/alluserspendingleaves', [LeaveController::class, 'allUsersPendingLeaves']);
@@ -662,17 +717,21 @@ Route::middleware('api')->group(function () {
         });
 
         //Timesheet Module
+        Route::get('/resource-occupancy', [TimesheetController::class, 'resourceOccupancy'])->middleware('role:Administrator,Team Leader,Project Manager'); ; // Get timesheet by ID
         Route::prefix('timesheet')->group(function () {
 
             Route::middleware(['permission:view_timesheet'])->group(function () {
                 Route::get('/', [TimesheetController::class, 'index']); // Get all timesheets
+                Route::get('/mytimesheet', [TimesheetController::class, 'myTimesheet']); // Get a user's all timesheets
                 Route::get('/{id}', [TimesheetController::class, 'show']); // Get timesheet by ID
                 Route::get('/stop-task/{id}', [TimesheetController::class, 'stopTask']); // Get timesheet by ID
-                Route::get('/run-task/{id}', [TimesheetController::class, 'runTask']); // Get timesheet by ID
                 Route::get('/complete-task/{id}', [TimesheetController::class, 'completeTask']); // Get timesheet by ID
+                Route::get('/run-task/{id}', [TimesheetController::class, 'runTask']); // Get timesheet by ID
+                // Route::get('/complete-task/{id}', [TimesheetController::class, 'completeTask']); // Get timesheet by ID
             });
             Route::middleware(['permission:add_timesheet'])->group(function () {
                 Route::post('/', [TimesheetController::class, 'store']); // Create a timesheet
+                Route::post('/manual-entry', [TimesheetController::class, 'manualEntry']); // Create a timesheet
             });
             Route::middleware(['permission:edit_timesheet'])->group(function () {
                 Route::post('/{id}', [TimesheetController::class, 'update']); // Update a timesheet
@@ -700,6 +759,11 @@ Route::middleware('api')->group(function () {
             Route::post('/', [GeneralSettingsController::class, 'update'])->middleware('permission:edit_general_settings'); // Update settings
         });
 
+        Route::prefix('timelineroutes')->group(function () {
+            Route::middleware(['permission:view_timesheet'])->group(function () {
+                Route::get('/employeetimeline/{id}', [TimesheetController::class, 'employeetimeline']);
+            });
+        });
 
         //Activity Logs listing
         Route::get('/activity-logs', [ActivityLogController::class, 'getActivityLogs']);

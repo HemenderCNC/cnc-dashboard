@@ -27,7 +27,7 @@ class EmployeeStatusController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-        $name = strtolower(trim($request->name)); // Trim spaces and convert to lowercase
+        $name = trim($request->name); // Trim spaces and convert to lowercase
         $worklocation = EmployeeStatus::create(['name' => $name]);
         // $worklocation = EmployeeStatus::create($request->only('name'));
         return response()->json($worklocation, 201);
@@ -60,7 +60,7 @@ class EmployeeStatusController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-        $name = strtolower(trim($request->name)); // Trim spaces and convert to lowercase
+        $name = trim($request->name); // Trim spaces and convert to lowercase
         $worklocation->update(['name' => $name]);
         // $worklocation->update($request->only('name'));
         return response()->json($worklocation, 200);

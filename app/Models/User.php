@@ -26,6 +26,7 @@ class User extends Eloquent
         'permanent_address',
         'country',
         'city',
+        'state',
         'postal_code',
         'emergency_contact_number',
         // Qualification
@@ -72,6 +73,7 @@ class User extends Eloquent
 
     protected $hidden = ['password', 'remember_token'];
     protected $appends = ['role_with_permissions','skills_data', 'working', 'total_work_hours', 'total_projects', 'today_tasks'];
+    // protected $appends = ['role_with_permissions','skills_data'];
 
     protected static function boot()
     {

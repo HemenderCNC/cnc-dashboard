@@ -28,7 +28,7 @@ class TaskTypeController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
         $taskType = TaskType::create([
-            'name' => strtolower(trim($request->name)),
+            'name' => trim($request->name),
         ]);
 
         return response()->json($taskType, 201);
@@ -61,7 +61,7 @@ class TaskTypeController extends Controller
             'name' => 'required|unique:task_types,name,' . $id,
         ]);
 
-        $taskType->update(['name' => strtolower(trim($request->name))]);
+        $taskType->update(['name' => trim($request->name)]);
 
         return response()->json($taskType);
     }
