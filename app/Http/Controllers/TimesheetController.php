@@ -400,151 +400,151 @@ class TimesheetController extends Controller
     }
 
     //get resource occupancy for users that are working on tasks for today date
-  public function resourceOccupancy(Request $request)
-{
-    $todayDate = Carbon::now()->toDateString();
-    $match = [
-        'dates.date' => $todayDate,
-    ];
-
-    // Add employee filter if provided
-    if ($request->filled('employee_id')) {
-        $match['employee_id'] = $request->employee_id;
-    }
-
-    // Add project filter if provided
-    if ($request->filled('project_id')) {
-        $match['project_id'] = $request->project_id;
-    }
-
-    // Add task filter if provided
-    if ($request->filled('task_id')) {
-        $match['task_id'] = $request->task_id;
-    }
-    $pipeline = [
-        ['$match' => $match],
-        ['$unwind' => '$dates'],
-        ['$match' => [
+    public function resourceOccupancy(Request $request)
+    {
+        $todayDate = Carbon::now()->toDateString();
+        $match = [
             'dates.date' => $todayDate,
-        ]],
-        ['$unwind' => '$dates.time_log'],
+        ];
 
-        // Compute start/end timestamps
-        ['$addFields' => [
-            'start_time_full' => [
-                '$concat' => ['$dates.date', 'T', '$dates.time_log.start_time', ':00']
-            ],
-            'end_time_full' => [
-                '$concat' => ['$dates.date', 'T', '$dates.time_log.end_time', ':00']
-            ]
-        ]],
-        ['$addFields' => [
-            'start_time_date' => [
-                '$dateFromString' => [
-                    'dateString' => '$start_time_full',
+        // Add employee filter if provided
+        if ($request->filled('employee_id')) {
+            $match['employee_id'] = $request->employee_id;
+        }
+
+        // Add project filter if provided
+        if ($request->filled('project_id')) {
+            $match['project_id'] = $request->project_id;
+        }
+
+        // Add task filter if provided
+        if ($request->filled('task_id')) {
+            $match['task_id'] = $request->task_id;
+        }
+        $pipeline = [
+            ['$match' => $match],
+            ['$unwind' => '$dates'],
+            ['$match' => [
+                'dates.date' => $todayDate,
+            ]],
+            ['$unwind' => '$dates.time_log'],
+
+            // Compute start/end timestamps
+            ['$addFields' => [
+                'start_time_full' => [
+                    '$concat' => ['$dates.date', 'T', '$dates.time_log.start_time', ':00']
+                ],
+                'end_time_full' => [
+                    '$concat' => ['$dates.date', 'T', '$dates.time_log.end_time', ':00']
                 ]
-            ],
-            'end_time_date' => [
-                '$dateFromString' => [
-                    'dateString' => '$end_time_full',
-                ]
-            ]
-        ]],
-        ['$addFields' => [
-            'minutes' => [
-                '$divide' => [
-                    ['$subtract' => ['$end_time_date', '$start_time_date']],
-                    60000
-                ]
-            ]
-        ]],
-
-        // Type conversions for lookups
-        ['$addFields' => [
-            'task_oid' => ['$toObjectId' => '$task_id'],
-            'project_oid' => ['$toObjectId' => '$project_id'],
-            'employee_oid' => ['$toObjectId' => '$employee_id'],
-        ]],
-
-        // Project join
-        ['$lookup' => [
-            'from' => 'projects',
-            'localField' => 'project_oid',
-            'foreignField' => '_id',
-            'as' => 'project'
-        ]],
-        ['$addFields' => [
-            'project_name' => [
-                '$arrayElemAt' => ['$project.project_name', 0]
-            ]
-        ]],
-
-        // Task join
-        ['$lookup' => [
-            'from' => 'tasks',
-            'localField' => 'task_oid',
-            'foreignField' => '_id',
-            'as' => 'task'
-        ]],
-        ['$addFields' => [
-            'task_name' => [
-                '$arrayElemAt' => ['$task.title', 0]
-            ],
-            'task_type' => [
-                '$arrayElemAt' => ['$task.task_type', 0]
-            ]
-        ]],
-
-        // User join
-        ['$lookup' => [
-            'from' => 'users',
-            'localField' => 'employee_oid',
-            'foreignField' => '_id',
-            'as' => 'user'
-        ]],
-        ['$addFields' => [
-            'employee_name' => [
-                '$arrayElemAt' => ['$user.name', 0]
-            ]
-        ]],
-
-        // Final projection
-        ['$project' => [
-            '_id' => 1,
-            'project_id' => '$project_id',
-            'project_name' => 1,
-            'task_id' => '$task_id',
-            'task_name' => 1,
-            'task_type' => 1,
-            'employee_id' => '$employee_id',
-            'employee_name' => 1,
-            'dates' => [
-                'date' => '$dates.date',
-                'time_log' => [
-                    [
-                        'start_time' => '$dates.time_log.start_time',
-                        'end_time' => '$dates.time_log.end_time'
+            ]],
+            ['$addFields' => [
+                'start_time_date' => [
+                    '$dateFromString' => [
+                        'dateString' => '$start_time_full',
+                    ]
+                ],
+                'end_time_date' => [
+                    '$dateFromString' => [
+                        'dateString' => '$end_time_full',
                     ]
                 ]
-            ],
-            'minutes' => 1,
-            'work_description' => 1,
-            'status' => 1,
-            'updated_at' => 1,
-            'created_at' => 1
-        ]],
-        ['$sort' => ['updated_at' => -1]],
-    ];
+            ]],
+            ['$addFields' => [
+                'minutes' => [
+                    '$divide' => [
+                        ['$subtract' => ['$end_time_date', '$start_time_date']],
+                        60000
+                    ]
+                ]
+            ]],
 
-    $result = Timesheet::raw(function ($collection) use ($pipeline) {
-        return $collection->aggregate($pipeline);
-    });
+            // Type conversions for lookups
+            ['$addFields' => [
+                'task_oid' => ['$toObjectId' => '$task_id'],
+                'project_oid' => ['$toObjectId' => '$project_id'],
+                'employee_oid' => ['$toObjectId' => '$employee_id'],
+            ]],
 
-    return response()->json($result, 200);
-}
+            // Project join
+            ['$lookup' => [
+                'from' => 'projects',
+                'localField' => 'project_oid',
+                'foreignField' => '_id',
+                'as' => 'project'
+            ]],
+            ['$addFields' => [
+                'project_name' => [
+                    '$arrayElemAt' => ['$project.project_name', 0]
+                ]
+            ]],
+
+            // Task join
+            ['$lookup' => [
+                'from' => 'tasks',
+                'localField' => 'task_oid',
+                'foreignField' => '_id',
+                'as' => 'task'
+            ]],
+            ['$addFields' => [
+                'task_name' => [
+                    '$arrayElemAt' => ['$task.title', 0]
+                ],
+                'task_type' => [
+                    '$arrayElemAt' => ['$task.task_type', 0]
+                ]
+            ]],
+
+            // User join
+            ['$lookup' => [
+                'from' => 'users',
+                'localField' => 'employee_oid',
+                'foreignField' => '_id',
+                'as' => 'user'
+            ]],
+            ['$addFields' => [
+                'employee_name' => [
+                    '$arrayElemAt' => ['$user.name', 0]
+                ]
+            ]],
+
+            // Final projection
+            ['$project' => [
+                '_id' => 1,
+                'project_id' => '$project_id',
+                'project_name' => 1,
+                'task_id' => '$task_id',
+                'task_name' => 1,
+                'task_type' => 1,
+                'employee_id' => '$employee_id',
+                'employee_name' => 1,
+                'dates' => [
+                    'date' => '$dates.date',
+                    'time_log' => [
+                        [
+                            'start_time' => '$dates.time_log.start_time',
+                            'end_time' => '$dates.time_log.end_time'
+                        ]
+                    ]
+                ],
+                'minutes' => 1,
+                'work_description' => 1,
+                'status' => 1,
+                'updated_at' => 1,
+                'created_at' => 1
+            ]],
+            ['$sort' => ['updated_at' => -1]],
+        ];
+
+        $result = Timesheet::raw(function ($collection) use ($pipeline) {
+            return $collection->aggregate($pipeline);
+        });
+
+        return response()->json($result, 200);
+    }
 
 
-    
+
 
     public function employeetimeline($employeeId, Request $request)
     {
@@ -699,7 +699,7 @@ class TimesheetController extends Controller
                 return response()->json(['message' => 'Task already completed.'], 404);
             }
             else{
-                return response()->json(['message' => 'Task already created.'], 404);
+                return response()->json(['message' => 'Task is already added.'], 404);
             }
         } else {
             // Create a new timesheet entry
@@ -762,26 +762,26 @@ class TimesheetController extends Controller
             ], 422);
         }
 
-            // Create a new timesheet entry
-            $timesheet = Timesheet::create([
-                'project_id' => $request->project_id,
-                'task_id' => $request->task_id,
-                'task_type' => $request->task_type,
-                'employee_id' => $userId,
-                'dates' => [
-                    [
-                        'date' => $request->date,
-                        'time_log' => [
-                            [
-                                'start_time' => $request->start_time,
-                                'end_time' => $request->end_time,
-                            ]
-                        ],
-                    ]
-                ], // Store as a plain PHP array
-                'work_description' => $request->work_description,
-                'status' => 'completed',
-            ]);
+        // Create a new timesheet entry
+        $timesheet = Timesheet::create([
+            'project_id' => $request->project_id,
+            'task_id' => $request->task_id,
+            'task_type' => $request->task_type,
+            'employee_id' => $userId,
+            'dates' => [
+                [
+                    'date' => $request->date,
+                    'time_log' => [
+                        [
+                            'start_time' => $request->start_time,
+                            'end_time' => $request->end_time,
+                        ]
+                    ],
+                ]
+            ], // Store as a plain PHP array
+            'work_description' => $request->work_description,
+            'status' => 'completed',
+        ]);
 
         return response()->json($timesheet, 201);
     }
@@ -917,6 +917,7 @@ class TimesheetController extends Controller
         // Pause any other running tasks for the same employee.
         Timesheet::where('employee_id', $userId)
             ->where('_id', '!=', $timesheet->_id)
+            ->where('status', 'running')
             ->update(['status' => 'paused']);
 
         // Stop break log if active.

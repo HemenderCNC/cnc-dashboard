@@ -171,16 +171,16 @@ class ProjectsController extends Controller
                             ]
                         ]],
                         ['$addFields' => [
-                            'diff_hours' => [
+                            'diff_minutes' => [
                                 '$divide' => [
                                     ['$subtract' => ['$end', '$start']],
-                                    1000 * 60 * 60 // convert milliseconds to hours
+                                    1000 * 60
                                 ]
                             ]
                         ]],
                         ['$group' => [
                             '_id' => null,
-                            'total_hours' => ['$sum' => '$diff_hours']
+                            'total_minutes' => ['$sum' => '$diff_minutes']
                         ]]
                     ],
                     'as' => 'spent_time'
@@ -255,9 +255,9 @@ class ProjectsController extends Controller
                 // Add spent_hours field to project
                 ['$addFields' => [
                     'spent_hours' => [
-                        '$round' => [
-                            ['$ifNull' => [['$arrayElemAt' => ['$spent_time.total_hours', 0]], 0]],
-                            2
+                        '$ifNull' => [
+                            ['$arrayElemAt' => ['$spent_time.total_minutes', 0]],
+                            0
                         ]
                     ]
                 ]],
