@@ -942,37 +942,19 @@ class UserController extends Controller
      *
      * @return \Illuminate\Http\JsonResponse
      */
-    public function getAllEmployees()
+        public function getAllEmployees()
     {
-        // Fetch all users
-        $users = User::raw(function ($collection) {
-            return $collection->aggregate([
-                // Lookup Role
-                [
-                    '$lookup' => [
-                        'from' => 'roles',
-                        'localField' => 'role_id',
-                        'foreignField' => '_id',
-                        'as' => 'role'
-                    ]
-                ],
-                ['$unwind' => ['path' => '$role', 'preserveNullAndEmptyArrays' => true]],
-
-                // Project Only Required Fields
-                [
-                    '$project' => [
-                        'name' => 1,
-                        '_id' => 1,
-                        'last_name' => 1,
-                        'email' => 1,
-                        'contact_number' => 1,
-                        'role' => 1,
-                        'profile_photo' => 1,
-                        'employee_id' => 1,
-                    ]
-                ]
+        $users = User::with('role')
+            ->get([
+                'name',
+                '_id', 
+                'last_name', 
+                'email', 
+                'contact_number', 
+                'role_id',
+                'profile_photo', 
+                'employee_id'
             ]);
-        });
 
         // Check if users exist
         if ($users->isEmpty()) {

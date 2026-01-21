@@ -540,6 +540,7 @@ Route::middleware('api')->group(function () {
             // View tasks
             Route::get('/project-milstones-summary', [TasksController::class, 'getProjectMilestonesSummary']);
             Route::get('/project-tasks-summary', [TasksController::class, 'getTasksByProject']);
+            Route::get('/parent-tasks', [TasksController::class, 'getParentTasks']);
             Route::get('/', [TasksController::class, 'index']); // Get all tasks
             Route::middleware(['permission:view_task'])->group(function () {
                 Route::get('/{id}', [TasksController::class, 'show']); // Get task by ID
@@ -718,6 +719,7 @@ Route::middleware('api')->group(function () {
 
         //Timesheet Module
         Route::get('/resource-occupancy', [TimesheetController::class, 'resourceOccupancy'])->middleware('role:Administrator,Team Leader,Project Manager'); ; // Get timesheet by ID
+       Route::get('/resource-avilible', [TimesheetController::class, 'resourceAvilible']);
         Route::prefix('timesheet')->group(function () {
 
             Route::middleware(['permission:view_timesheet'])->group(function () {

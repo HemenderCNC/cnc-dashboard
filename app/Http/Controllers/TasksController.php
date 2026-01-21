@@ -7,6 +7,7 @@ use App\Models\TaskStatus;
 use App\Models\Milestones;
 use App\Models\Project;
 use App\Models\User;
+use App\Models\Timesheet;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use App\Services\FileUploadService;
@@ -21,11 +22,35 @@ class TasksController extends Controller
         $page = (int) $request->input('page', 1);
         $limit = (int) $request->input('limit', -1);
         $skip = ($page - 1) * $limit;
+
         if ($request->user->role->slug === 'employee') {
             $matchStage->assignees = $request->user->id;
         } else if ($request->has('employee_id')) {
             $matchStage->assignees = $request->employee_id;
         }
+
+        if ($request->user->role && $request->user->role->name === 'QA') {
+            $ReadyToQAStatus = TaskStatus::whereRaw([
+                'name' => ['$regex' => '^Ready To QA$', '$options' => 'i']
+            ])->first();
+
+            if ($ReadyToQAStatus) {
+                if (isset($matchStage->assignees)) {
+                    $matchStage->{'$or'} = [
+                        ['assignees' => $matchStage->assignees],
+                        [
+                            'qa_id' => $request->user->id,
+                            'status_id' => $ReadyToQAStatus->_id
+                        ]
+                    ];
+                    unset($matchStage->assignees);
+                } else {
+                    $matchStage->qa_id = $request->user->id;
+                    $matchStage->status_id = $ReadyToQAStatus->_id;
+                }
+            }
+        }
+
         // Filter by project name (partial match)
         if ($request->has('title')) {
             $matchStage->title = ['$regex' => $request->title, '$options' => 'i'];
@@ -117,7 +142,6 @@ class TasksController extends Controller
             $matchDueDate = ['$match' => ['due_date' => ['$gte' => $todayTimestamp]]];
             $sortStage = ['$sort' => ['due_date' => 1]];
         }
-
 
         // MongoDB Aggregation Pipeline
         $tasks = Tasks::raw(function ($collection) use ($matchStage, $sortStage, $matchDueDate, $skip, $limit) {
@@ -211,6 +235,22 @@ class TasksController extends Controller
                         ['$match' => ['$expr' => ['$eq' => ['$_id', '$$createdBy']]]]
                     ],
                     'as' => 'created_bys'
+                ]],
+                ['$lookup' => [
+                    'from' => 'users',
+                    'let' => ['qaId' => ['$toObjectId' => '$qa_id']],
+                    'pipeline' => [
+                        ['$match' => ['$expr' => ['$eq' => ['$_id', '$$qaId']]]]
+                    ],
+                    'as' => 'qa'
+                ]],
+                ['$lookup' => [
+                    'from' => 'tasks',
+                    'let' => ['taskId' => ['$toString' => '$_id']],
+                    'pipeline' => [
+                        ['$match' => ['$expr' => ['$eq' => ['$parent_task_id', '$$taskId']]]]
+                    ],
+                    'as' => 'child_tasks'
                 ]],
                 [
                     '$lookup' => [
@@ -329,6 +369,12 @@ class TasksController extends Controller
                     'attachment' => 1,
                     'created_by' => 1,
                     'created_bys' => 1,
+                    'qa_id' => 1,
+                    'qa' => 1,
+                    'parent_task_id' => 1,
+                    'parent_task' => 1,
+                    'is_child_task' => 1,
+                    'child_tasks' => 1,
                     'total_hours' => 1,
                     'total_minutes' => 1
                 ]]
@@ -339,6 +385,7 @@ class TasksController extends Controller
             }
             return $collection->aggregate($pipeline);
         });
+
         $totalCount = Tasks::raw(function ($collection) use ($matchStage) {
             $matchFilter = [];
             if (!empty($matchStage)) {
@@ -348,7 +395,8 @@ class TasksController extends Controller
                 ['$match' => (object)$matchFilter],
                 ['$count' => 'total']
             ]);
-        })->first()['total'] ?? 0;
+        })->first()['total'] ?? 0;  
+
         $tasks_data = [
             'data' => $tasks,
             'meta' => [
@@ -358,7 +406,6 @@ class TasksController extends Controller
                 'total_pages' => $limit === -1 ? 1 : ceil($totalCount / $limit),
             ]
         ];
-
 
         // $projectsAssigned = Tasks::where('assignee_id', $request->user->id ?? $request->employee_id)
         //     ->distinct('project_id')
@@ -374,6 +421,7 @@ class TasksController extends Controller
             }
         }
         $project_id = $request->has('project_id');
+
         if ($project_id) {
             if ($request->user->role->slug === 'employee') {
                 $projectsAssigned = Tasks::where('assignees', (string) $getDataFor)
@@ -410,14 +458,78 @@ class TasksController extends Controller
             ]);
         });
 
+        if ($request->has('project_id')) {
+            
+
+
+$estimated_project_hours = Tasks::raw(function ($collection) use ($request) {
+    return $collection->aggregate([
+        ['$match' => ['project_id' => $request->project_id]],
+        [
+            '$group' => [
+                '_id' => null,
+                'total' => [
+                    '$sum' => ['$toInt' => '$estimated_hours']
+                ]
+            ]
+        ]
+    ]);
+});
+
+$estimated_project_hours = $estimated_project_hours[0]['total'] ?? 0;
+
+
+           $totalMinutes = Timesheet::raw(function ($collection) use ($request) {
+    return $collection->aggregate([
+        ['$match' => ['project_id' => $request->project_id]],
+        ['$unwind' => '$dates'],
+        ['$unwind' => '$dates.time_log'],
+        [
+            '$project' => [
+                'minutes' => [
+                    '$subtract' => [
+                        [
+                            '$add' => [
+                                ['$multiply' => [['$toInt' => ['$substr' => ['$dates.time_log.end_time', 0, 2]]], 60]],
+                                ['$toInt' => ['$substr' => ['$dates.time_log.end_time', 3, 2]]]
+                            ]
+                        ],
+                        [
+                            '$add' => [
+                                ['$multiply' => [['$toInt' => ['$substr' => ['$dates.time_log.start_time', 0, 2]]], 60]],
+                                ['$toInt' => ['$substr' => ['$dates.time_log.start_time', 3, 2]]]
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ],
+        [
+            '$group' => [
+                '_id' => null,
+                'total' => ['$sum' => '$minutes']
+            ]
+        ]
+    ]);
+});
+
+$totalMinutes = $totalMinutes[0]['total'] ?? 0;
+
+$hours = intdiv($totalMinutes, 60);
+$minutes = $totalMinutes % 60;
+
+$total_spent_hours = sprintf('%02d:%02d', $hours, $minutes);
+
+        }
+
         return response()->json([
             'projects_assigned' => $projectsAssigned,
             'task_statuses' => $taskStatuses,
             'tasks_list' => $tasks_data,
+            'estimated_project_hours' => $estimated_project_hours ?? null,
+            'total_spent_hours' => $total_spent_hours ?? null,
         ], 200);
     }
-
-
 
     /**
      * Store a newly created resource in storage.
@@ -432,7 +544,10 @@ class TasksController extends Controller
             'task_type_id' => 'required|exists:task_types,_id',
             'priority' => 'required|string',
             'owner_id' => 'required|exists:users,_id',
+            'qa_id' => 'nullable|exists:users,_id',
             'assignees' => 'required|array|min:1', // <-- updated for array
+            'parent_task_id' => 'nullable|exists:tasks,_id',
+            'is_child_task' => 'nullable',
             'assignees.*' => 'exists:users,_id',
             'description' => 'nullable|string',
             'start_date' => 'required|date',
@@ -472,6 +587,13 @@ class TasksController extends Controller
 
         $dueDate = Carbon::parse($request->due_date)->toIso8601String();
         $startDate = Carbon::parse($request->start_date)->toIso8601String();
+
+        if($request->parent_task_id){
+            $is_child_task = true;  
+        }else{
+            $is_child_task = false;
+        }
+
         $platform = Tasks::create([
             'title' => $request->title,
             'project_id' => $request->project_id,
@@ -480,6 +602,9 @@ class TasksController extends Controller
             'task_type_id' => $request->task_type_id,
             'priority' => $request->priority,
             'owner_id' => $request->owner_id,
+            'qa_id' => $request->qa_id,
+            'parent_task_id' => $request->parent_task_id,
+            'is_child_task' => $is_child_task,
             'assignees' => array_map('strval', $request->assignees),
             'description' => $request->description,
             'start_date' => $startDate,
@@ -496,7 +621,7 @@ class TasksController extends Controller
      */
     public function show(string $id)
     {
-        $task = Tasks::with(['owner', 'project', 'milestone', 'status', 'taskType', 'createdBy'])->find($id);
+        $task = Tasks::with(['owner', 'project', 'milestone', 'status', 'taskType', 'createdBy', 'qa','parentTask'])->findOrFail($id);
         if (!$task) {
             return response()->json(['message' => 'Task not found'], 404);
         }
@@ -539,6 +664,9 @@ class TasksController extends Controller
             'task_type_id' => 'required|exists:task_types,_id',
             'priority' => 'required|string',
             'owner_id' => 'required|exists:users,_id',
+            'qa_id' => 'nullable|exists:users,_id',
+            'parent_task_id' => 'nullable|exists:tasks,_id',
+            'is_child_task' => 'nullable',
             'assignees' => 'required|array|min:1', // <-- updated for array
             'assignees.*' => 'exists:users,_id',
             'description' => 'nullable|string',
@@ -585,6 +713,13 @@ class TasksController extends Controller
 
         $dueDate = Carbon::parse($request->due_date)->toIso8601String();
         $startDate = Carbon::parse($request->start_date)->toIso8601String();
+
+          if($request->parent_task_id){
+            $is_child_task = true;  
+        }else{
+            $is_child_task = false;
+        }
+
         $task->update(
             [
                 'title' => $request->title,
@@ -594,6 +729,9 @@ class TasksController extends Controller
                 'task_type_id' => $request->task_type_id,
                 'priority' => $request->priority,
                 'owner_id' => $request->owner_id,
+                'qa_id' => $request->qa_id,
+                'parent_task_id' => $request->parent_task_id,
+                'is_child_task' => $is_child_task,
                 'assignees' => array_map('strval', $request->assignees),
                 'description' => $request->description,
                 'start_date' => $startDate,
@@ -701,8 +839,6 @@ class TasksController extends Controller
 
         return response()->json(['milestone_summary' => $milestoneSummary]);
     }
-
-
 
     public function getTasksByProject(Request $request)
     {
@@ -871,4 +1007,18 @@ class TasksController extends Controller
 
         return response()->json($response);
     }
+
+    public function getParentTasks(Request $request)
+    {
+        $tasks = Tasks::where('parent_task_id', null)
+            ->where('is_child_task', false) 
+            ->get();
+        $tasks = $tasks->map(function ($task) {
+            return [
+                'id' => $task->_id,
+                'title' => $task->title,
+            ];
+        });
+        return response()->json($tasks);
+    }       
 }

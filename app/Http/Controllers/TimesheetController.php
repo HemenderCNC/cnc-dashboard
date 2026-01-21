@@ -7,9 +7,13 @@ use Illuminate\Http\Request;
 use App\Models\Timesheet;
 use App\Models\Tasks;
 use App\Models\LoginSession;
+use App\Models\TaskStatus;
+use App\Models\User;
+use App\Models\Role;   
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
 use Carbon\CarbonInterval;
+use MongoDB\BSON\ObjectId;
 
 class TimesheetController extends Controller
 {
@@ -24,8 +28,12 @@ class TimesheetController extends Controller
         $skip = ($page - 1) * $limit;
 
         // Role check
-        if ($request->user->role->slug === 'employee') {
+        if ($request->user->role->slug === 'employee' || $request->user->role->slug === 'qa') {
             $matchStage['employee_id'] = $request->user->id;
+        }
+
+        if ($request->user->role && $request->user->role->name === 'Administrator') {
+            $matchStage['status'] = 'running';
         }
 
         // Basic filters
@@ -113,12 +121,14 @@ class TimesheetController extends Controller
                     'project_id' => ['$toObjectId' => '$project_id'],
                     'employee_id' => ['$toObjectId' => '$employee_id'],
                 ]],
+
                 ['$lookup' => [
                     'from' => 'tasks',
                     'localField' => 'task_id',
                     'foreignField' => '_id',
                     'as' => 'task'
                 ]],
+                
                 [
                     '$addFields' => [
                         'task.task_type' => '$task_type'
@@ -178,7 +188,7 @@ class TimesheetController extends Controller
 
             return $collection->aggregate($pipeline);
         });
-
+        
         // Total count without pagination
         $totalCount = Timesheet::raw(function ($collection) use ($matchStage) {
             return $collection->aggregate([
@@ -543,9 +553,40 @@ class TimesheetController extends Controller
         return response()->json($result, 200);
     }
 
+    public function resourceAvilible(Request $request){
+        
+        $today = Carbon::today()->format('Y-m-d');
 
+    //  Get Administrator role ID
+    $roleId = Role::where('name', 'Administrator')->value('id');
 
+    //  Employees who already have timesheet today (BUSY)
+    $busyEmployeeIds = Timesheet::where('dates.date', $today)
+        ->where('task_type', '!=', 'R&D')
+        ->where('status', '!=', 'paused')
+        ->where('status', '!=', 'completed')
+        ->groupBy('employee_id')
+        ->pluck('employee_id')
+        ->toArray();
 
+    //  Employees who logged in today
+    $loggedInEmployeeIds = LoginSession::whereDate('created_at', $today)
+        ->groupBy('employee_id')
+        ->pluck('employee_id')
+        ->toArray();
+
+    //  Final available users
+    $userlist = User::where('role_id', '!=', $roleId)
+        ->whereIn('_id', $loggedInEmployeeIds)      
+        ->whereNotIn('_id', $busyEmployeeIds)       
+        ->get();
+
+    return response()->json([
+        'data' => $userlist
+    ]);
+
+    }
+            
     public function employeetimeline($employeeId, Request $request)
     {
         // Retrieve start_date and end_date from the query parameters (if provided)
@@ -788,6 +829,7 @@ class TimesheetController extends Controller
     public function stopTask(Request $request, $id)
     {
         $timesheet = Timesheet::where('id', $id)->first();
+
         if (!$timesheet) {
             return response()->json(['message' => 'Timesheet not found'], 404);
         }
@@ -804,6 +846,12 @@ class TimesheetController extends Controller
             }
         }
         $this->userBreakLogStart($userId);
+
+        $statusId = TaskStatus::where('name', 'on hold')->value('_id');
+
+        Tasks::where('_id', $timesheet->task_id)->update([
+            'status_id' => $statusId
+        ]);
 
         $formattedTotal = $this->calculate_total_time_spent_by_task($timesheet);
         $timesheetArray = $timesheet->toArray();
@@ -920,6 +968,13 @@ class TimesheetController extends Controller
             ->where('status', 'running')
             ->update(['status' => 'paused']);
 
+
+$statusId = TaskStatus::where('name', 'in progress')->value('_id');
+
+ Tasks::where('_id', $timesheet->task_id)->update([
+            'status_id' => $statusId
+        ]);
+        
         // Stop break log if active.
         $this->userBreakLogStop($userId);
 

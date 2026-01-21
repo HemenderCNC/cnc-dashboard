@@ -8,7 +8,8 @@ class Tasks extends Eloquent
 {
     protected $connection = 'mongodb';
     protected $collection = 'tasks';
-    protected $fillable = ['task_id', 'title', 'project_id', 'milestone_id', 'status_id', 'task_type_id', 'priority', 'owner_id', 'assignee_id', 'assignees', 'description', 'due_date', 'estimated_hours', 'attachment', 'created_by', 'start_date'];
+    protected $fillable = ['task_id', 'title', 'project_id', 'milestone_id', 'status_id', 'task_type_id', 'priority', 'owner_id', 'assignee_id', 'assignees', 'description', 'due_date', 'estimated_hours', 'attachment', 'created_by', 'start_date', 
+    'qa_id','parent_task_id','is_child_task'];
     public static function boot()
     {
         parent::boot();
@@ -34,6 +35,11 @@ class Tasks extends Eloquent
     {
         return $this->belongsTo(User::class, 'owner_id');
     }
+
+    public function qa()
+    {
+        return $this->belongsTo(User::class, 'qa_id');
+    }
     public function assignee()
     {
         return $this->belongsTo(User::class, 'assignee_id');
@@ -54,4 +60,14 @@ class Tasks extends Eloquent
     {
         return $this->belongsTo(TaskType::class, 'task_type_id');
     }
+    public function parentTask()
+{
+    return $this->belongsTo(self::class, 'parent_task_id', '_id');
+}
+
+public function childTasks()
+{
+    return $this->hasMany(self::class, 'parent_task_id', '_id');
+}
+    
 }
