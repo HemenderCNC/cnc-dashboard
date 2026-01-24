@@ -9,6 +9,7 @@ use App\Models\Tasks;
 use App\Models\LoginSession;
 use App\Models\TaskStatus;
 use App\Models\User;
+use App\Models\Project;
 use App\Models\Role;   
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
@@ -557,33 +558,153 @@ class TimesheetController extends Controller
         
         $today = Carbon::today()->format('Y-m-d');
 
-    //  Get Administrator role ID
-    $roleId = Role::where('name', 'Administrator')->value('id');
+        //  Get Administrator role ID
+        $roleId = Role::where('name', 'Administrator')->value('id');
 
-    //  Employees who already have timesheet today (BUSY)
-    $busyEmployeeIds = Timesheet::where('dates.date', $today)
-        ->where('task_type', '!=', 'R&D')
-        ->where('status', '!=', 'paused')
-        ->where('status', '!=', 'completed')
-        ->groupBy('employee_id')
-        ->pluck('employee_id')
-        ->toArray();
+        //  Employees who logged in today
+        $loggedInEmployeeIds = LoginSession::where('created_at', '>=', Carbon::today())
+            ->where('created_at', '<', Carbon::tomorrow())
+            ->groupBy('employee_id')
+            ->pluck('employee_id')
+            ->toArray();
+        
+        //  Employees who already have timesheet today (BUSY)
+        $busyEmployeeIds = Timesheet::where('dates.date', $today)
+            ->where('task_type', '!=', 'R&D')
+            ->where('status', '!=', 'paused')
+            ->where('status', '!=', 'completed')
+            ->groupBy('employee_id')
+            ->pluck('employee_id')
+            ->toArray();
 
-    //  Employees who logged in today
-    $loggedInEmployeeIds = LoginSession::whereDate('created_at', $today)
-        ->groupBy('employee_id')
-        ->pluck('employee_id')
-        ->toArray();
+        $userlist = User::raw(function ($collection) use ($roleId, $loggedInEmployeeIds, $busyEmployeeIds, $today) {
+            $loggedInOids = array_map(fn($id) => new ObjectId($id), array_values($loggedInEmployeeIds));
+            $busyOids = array_map(fn($id) => new ObjectId($id), array_values($busyEmployeeIds));
 
-    //  Final available users
-    $userlist = User::where('role_id', '!=', $roleId)
-        ->whereIn('_id', $loggedInEmployeeIds)      
-        ->whereNotIn('_id', $busyEmployeeIds)       
-        ->get();
+            return $collection->aggregate([
+                ['$match' => [
+                    'role_id' => ['$ne' => $roleId],
+                    'is_logout' => ['$ne' => true],
+                    '_id' => [
+                        '$in' => $loggedInOids,
+                        '$nin' => $busyOids
+                    ]
+                ]],
 
-    return response()->json([
-        'data' => $userlist
-    ]);
+                ['$lookup' => [
+                    'from' => 'timesheets',
+                    'let' => ['userId' => ['$toString' => '$_id']],
+                    'pipeline' => [
+                        ['$match' => [
+                            '$expr' => ['$and' => [
+                                ['$eq' => ['$employee_id', '$$userId']],
+                                ['$eq' => ['$status', 'running']],
+                                ['$in' => [$today, '$dates.date']]
+                            ]]
+                        ]],
+                        ['$limit' => 1]
+                    ],
+                    'as' => 'timesheet_doc'
+                ]],
+                ['$unwind' => ['path' => '$timesheet_doc', 'preserveNullAndEmptyArrays' => true]],
+                ['$lookup' => [
+                    'from' => 'tasks',
+                    'let' => ['taskId' => ['$toObjectId' => '$timesheet_doc.task_id']],
+                    'pipeline' => [
+                        ['$match' => ['$expr' => ['$eq' => ['$_id', '$$taskId']]]]
+                    ],
+                    'as' => 'task_doc'
+                ]],
+                ['$unwind' => ['path' => '$task_doc', 'preserveNullAndEmptyArrays' => true]],
+
+                ['$lookup' => [
+                    'from' => 'projects',
+                    'let' => ['projectId' => ['$toObjectId' => '$task_doc.project_id']],
+                    'pipeline' => [
+                        ['$match' => ['$expr' => ['$eq' => ['$_id', '$$projectId']]]]
+                    ],
+                    'as' => 'project_doc'
+                ]],
+                ['$unwind' => ['path' => '$project_doc', 'preserveNullAndEmptyArrays' => true]],
+
+                ['$addFields' => [
+                    'total_minutes_calc' => [
+                        '$cond' => [
+                            'if' => ['$ifNull' => ['$timesheet_doc', false]],
+                            'then' => [
+                                '$reduce' => [
+                                    'input' => '$timesheet_doc.dates',
+                                    'initialValue' => 0,
+                                    'in' => [
+                                        '$add' => [
+                                            '$$value',
+                                            ['$reduce' => [
+                                                'input' => '$$this.time_log',
+                                                'initialValue' => 0,
+                                                'in' => [
+                                                    '$add' => [
+                                                        '$$value',
+                                                        ['$divide' => [
+                                                            ['$subtract' => [
+                                                                ['$dateFromString' => ['dateString' => ['$concat' => ['2024-01-01T', '$$this.end_time', ':00']]]],
+                                                                ['$dateFromString' => ['dateString' => ['$concat' => ['2024-01-01T', '$$this.start_time', ':00']]]]
+                                                            ]],
+                                                            60000
+                                                        ]]
+                                                    ]
+                                                ]
+                                            ]]
+                                        ]
+                                    ]
+                                ]
+                            ],
+                            'else' => 0
+                        ]
+                    ]
+                ]],
+                
+                 ['$addFields' => [
+                    'total_time_formatted' => [
+                        '$concat' => [
+                            ['$toString' => ['$floor' => ['$divide' => ['$total_minutes_calc', 60]]]],
+                            ':',
+                            ['$cond' => [
+                                'if' => ['$lt' => [['$mod' => ['$total_minutes_calc', 60]], 10]],
+                                'then' => ['$concat' => ['0', ['$toString' => ['$mod' => ['$total_minutes_calc', 60]]]]],
+                                'else' => ['$toString' => ['$mod' => ['$total_minutes_calc', 60]]]
+                            ]]
+                        ]
+                    ]
+                 ]],
+
+                 ['$project' => [
+                     '_id' => 1,
+                     'name' => 1,
+                     'last_name' => 1,
+                     'profile_photo' => 1,
+                     'current_task' => [
+                         '$cond' => [
+                             'if' => ['$ifNull' => ['$task_doc', false]],
+                             'then' => [
+                                 '$mergeObjects' => [
+                                     '$task_doc',
+                                     [
+                                         'project_name' => '$project_doc.project_name',
+                                         'total_time_spent' => '$total_time_formatted',
+                                         'working_description' => '$timesheet_doc.work_description'
+                                     ]
+                                 ]
+                             ],
+                             'else' => null
+                         ]
+                     ]
+                 ]]
+            ]);
+        });
+        
+        return response()->json([
+            'data' => $userlist
+        ]);
 
     }
             
@@ -883,6 +1004,7 @@ class TimesheetController extends Controller
         $timesheetArray['total_spent_time'] = $formattedTotal;
         return response()->json($timesheetArray);
     }
+    
     public function calculate_total_time_spent_by_task($timesheet){
         // ➕ Calculate total time spent
         $totalMinutes = 0;

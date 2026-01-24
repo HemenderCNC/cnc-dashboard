@@ -195,8 +195,10 @@ class TasksController extends Controller
                                 '$project' => [
                                     '_id' => 1,
                                     'name' => 1,
+                                    'last_name' => 1,
                                     'personal_email' => 1,
-                                    'contact_number' => 1
+                                    'contact_number' => 1,
+                                    'profile_photo' => 1
                                 ]
                             ]
                         ],
@@ -248,7 +250,174 @@ class TasksController extends Controller
                     'from' => 'tasks',
                     'let' => ['taskId' => ['$toString' => '$_id']],
                     'pipeline' => [
-                        ['$match' => ['$expr' => ['$eq' => ['$parent_task_id', '$$taskId']]]]
+                        ['$match' => ['$expr' => ['$eq' => ['$parent_task_id', '$$taskId']]]],
+                        ['$lookup' => [
+                            'from' => 'projects',
+                            'let' => ['statusId' => ['$toObjectId' => '$project_id']], // Convert to ObjectId
+                            'pipeline' => [
+                                ['$match' => ['$expr' => ['$eq' => ['$_id', '$$statusId']]]]
+                            ],
+                            'as' => 'project'
+                        ]],
+                        ['$lookup' => [
+                            'from' => 'users',
+                            'let' => ['ownerId' => ['$toObjectId' => '$owner_id']],
+                            'pipeline' => [
+                                ['$match' => ['$expr' => ['$eq' => ['$_id', '$$ownerId']]]]
+                            ],
+                            'as' => 'owner'
+                        ]],
+                        [
+                            '$lookup' => [
+                                'from' => 'users',
+                                'let' => [
+                                    'assigneeIds' => [
+                                        '$map' => [
+                                            'input' => ['$ifNull' => ['$assignees', []]],
+                                            'as' => 'id',
+                                            'in' => ['$toObjectId' => '$$id'] // <--- THIS IS REQUIRED!
+                                        ]
+                                    ]
+                                ],
+
+                                'pipeline' => [
+                                    [
+                                        '$match' => [
+                                            '$expr' => [
+                                                '$in' => ['$_id', '$$assigneeIds']
+                                            ]
+                                        ]
+                                    ],
+                                    [
+                                        '$project' => [
+                                            '_id' => 1,
+                                            'name' => 1,
+                                            'last_name' => 1,
+                                            'personal_email' => 1,
+                                            'contact_number' => 1,
+                                            'profile_photo' => 1
+                                        ]
+                                    ]
+                                ],
+                                'as' => 'assignees_data'
+                            ]
+                        ],
+                        ['$lookup' => [
+                            'from' => 'task_statuses',
+                            'let' => ['taskStatusId' => ['$toObjectId' => '$status_id']],
+                            'pipeline' => [
+                                ['$match' => ['$expr' => ['$eq' => ['$_id', '$$taskStatusId']]]]
+                            ],
+                            'as' => 'child_task_status'
+                        ]],
+                        ['$lookup' => [
+                            'from' => 'task_types',
+                            'let' => ['taskTypeId' => ['$toObjectId' => '$task_type_id']],
+                            'pipeline' => [
+                                ['$match' => ['$expr' => ['$eq' => ['$_id', '$$taskTypeId']]]]
+                            ],
+                            'as' => 'child_task_type'
+                        ]],
+                        ['$lookup' => [
+                            'from' => 'milestones',
+                            'let' => ['milestoneId' => ['$toObjectId' => '$milestone_id']],
+                            'pipeline' => [
+                                ['$match' => ['$expr' => ['$eq' => ['$_id', '$$milestoneId']]]]
+                            ],
+                            'as' => 'child_task_milestone'
+                        ]],
+                        ['$lookup' => [
+                            'from' => 'timesheets',
+                            'let' => ['childTaskId' => '$_id'],
+                            'pipeline' => [
+                                [
+                                    '$match' => [
+                                        '$expr' => [
+                                            '$eq' => [
+                                                ['$toObjectId' => '$task_id'],
+                                                '$$childTaskId'
+                                            ]
+                                        ]
+                                    ]
+                                ],
+                                [
+                                    '$unwind' => '$dates'
+                                ],
+                                [
+                                    '$unwind' => '$dates.time_log'
+                                ],
+                                [
+                                    '$addFields' => [
+                                        'start' => [
+                                            '$dateFromString' => [
+                                                'dateString' => [
+                                                    '$concat' => [
+                                                        '$dates.date',
+                                                        'T',
+                                                        '$dates.time_log.start_time',
+                                                        ':00'
+                                                    ]
+                                                ],
+                                                'format' => '%Y-%m-%dT%H:%M:%S'
+                                            ]
+                                        ],
+                                        'end' => [
+                                            '$dateFromString' => [
+                                                'dateString' => [
+                                                    '$concat' => [
+                                                        '$dates.date',
+                                                        'T',
+                                                        '$dates.time_log.end_time',
+                                                        ':00'
+                                                    ]
+                                                ],
+                                                'format' => '%Y-%m-%dT%H:%M:%S'
+                                            ]
+                                        ]
+                                    ]
+                                ],
+                                [
+                                    '$addFields' => [
+                                        'durationInMinutes' => [
+                                            '$divide' => [
+                                                ['$subtract' => ['$end', '$start']],
+                                                1000 * 60
+                                            ]
+                                        ]
+                                    ]
+                                ],
+                                [
+                                    '$group' => [
+                                        '_id' => null,
+                                        'total_minutes' => ['$sum' => '$durationInMinutes']
+                                    ]
+                                ],
+                                [
+                                    '$addFields' => [
+                                        'total_hours' => [
+                                            '$floor' => [
+                                                '$divide' => ['$total_minutes', 60]
+                                            ]
+                                        ],
+                                        'remaining_minutes' => [
+                                            '$mod' => ['$total_minutes', 60]
+                                        ]
+                                    ]
+                                ]
+                            ],
+                            'as' => 'child_timesheet_data'
+                        ]],
+                        [
+                            '$addFields' => [
+                                'total_hours' => [
+                                    '$ifNull' => [['$arrayElemAt' => ['$child_timesheet_data.total_hours', 0]], 0]
+                                ],
+                                'total_minutes' => [
+                                    '$ifNull' => [['$arrayElemAt' => ['$child_timesheet_data.remaining_minutes', 0]], 0]
+                                ]
+                            ]
+                        ],
+                        ['$project' => ['child_timesheet_data' => 0]]
                     ],
                     'as' => 'child_tasks'
                 ]],
@@ -395,7 +564,7 @@ class TasksController extends Controller
                 ['$match' => (object)$matchFilter],
                 ['$count' => 'total']
             ]);
-        })->first()['total'] ?? 0;  
+        })->first()['total'] ?? 0;
 
         $tasks_data = [
             'data' => $tasks,
@@ -459,67 +628,73 @@ class TasksController extends Controller
         });
 
         if ($request->has('project_id')) {
-            
 
 
-$estimated_project_hours = Tasks::raw(function ($collection) use ($request) {
-    return $collection->aggregate([
-        ['$match' => ['project_id' => $request->project_id]],
-        [
-            '$group' => [
-                '_id' => null,
-                'total' => [
-                    '$sum' => ['$toInt' => '$estimated_hours']
-                ]
-            ]
-        ]
-    ]);
-});
 
-$estimated_project_hours = $estimated_project_hours[0]['total'] ?? 0;
-
-
-           $totalMinutes = Timesheet::raw(function ($collection) use ($request) {
-    return $collection->aggregate([
-        ['$match' => ['project_id' => $request->project_id]],
-        ['$unwind' => '$dates'],
-        ['$unwind' => '$dates.time_log'],
-        [
-            '$project' => [
-                'minutes' => [
-                    '$subtract' => [
-                        [
-                            '$add' => [
-                                ['$multiply' => [['$toInt' => ['$substr' => ['$dates.time_log.end_time', 0, 2]]], 60]],
-                                ['$toInt' => ['$substr' => ['$dates.time_log.end_time', 3, 2]]]
-                            ]
-                        ],
-                        [
-                            '$add' => [
-                                ['$multiply' => [['$toInt' => ['$substr' => ['$dates.time_log.start_time', 0, 2]]], 60]],
-                                ['$toInt' => ['$substr' => ['$dates.time_log.start_time', 3, 2]]]
+            $estimated_project_hours = Tasks::raw(function ($collection) use ($request) {
+                return $collection->aggregate([
+                    ['$match' => ['project_id' => $request->project_id]],
+                    [
+                        '$group' => [
+                            '_id' => null,
+                            'total' => [
+                                '$sum' => [
+                                    '$convert' => [
+                                        'input' => '$estimated_hours',
+                                        'to' => 'int',
+                                        'onError' => 0,
+                                        'onNull' => 0
+                                    ]
+                                ]
                             ]
                         ]
                     ]
-                ]
-            ]
-        ],
-        [
-            '$group' => [
-                '_id' => null,
-                'total' => ['$sum' => '$minutes']
-            ]
-        ]
-    ]);
-});
+                ]);
+            });
 
-$totalMinutes = $totalMinutes[0]['total'] ?? 0;
+            $estimated_project_hours = $estimated_project_hours[0]['total'] ?? 0;
 
-$hours = intdiv($totalMinutes, 60);
-$minutes = $totalMinutes % 60;
 
-$total_spent_hours = sprintf('%02d:%02d', $hours, $minutes);
+            $totalMinutes = Timesheet::raw(function ($collection) use ($request) {
+                return $collection->aggregate([
+                    ['$match' => ['project_id' => $request->project_id]],
+                    ['$unwind' => '$dates'],
+                    ['$unwind' => '$dates.time_log'],
+                    [
+                        '$project' => [
+                            'minutes' => [
+                                '$subtract' => [
+                                    [
+                                        '$add' => [
+                                            ['$multiply' => [['$toInt' => ['$substr' => ['$dates.time_log.end_time', 0, 2]]], 60]],
+                                            ['$toInt' => ['$substr' => ['$dates.time_log.end_time', 3, 2]]]
+                                        ]
+                                    ],
+                                    [
+                                        '$add' => [
+                                            ['$multiply' => [['$toInt' => ['$substr' => ['$dates.time_log.start_time', 0, 2]]], 60]],
+                                            ['$toInt' => ['$substr' => ['$dates.time_log.start_time', 3, 2]]]
+                                        ]
+                                    ]
+                                ]
+                            ]
+                        ]
+                    ],
+                    [
+                        '$group' => [
+                            '_id' => null,
+                            'total' => ['$sum' => '$minutes']
+                        ]
+                    ]
+                ]);
+            });
 
+            $totalMinutes = $totalMinutes[0]['total'] ?? 0;
+
+            $hours = intdiv($totalMinutes, 60);
+            $minutes = $totalMinutes % 60;
+
+            $total_spent_hours = sprintf('%02d:%02d', $hours, $minutes);
         }
 
         return response()->json([
@@ -588,9 +763,9 @@ $total_spent_hours = sprintf('%02d:%02d', $hours, $minutes);
         $dueDate = Carbon::parse($request->due_date)->toIso8601String();
         $startDate = Carbon::parse($request->start_date)->toIso8601String();
 
-        if($request->parent_task_id){
-            $is_child_task = true;  
-        }else{
+        if ($request->parent_task_id) {
+            $is_child_task = true;
+        } else {
             $is_child_task = false;
         }
 
@@ -621,24 +796,24 @@ $total_spent_hours = sprintf('%02d:%02d', $hours, $minutes);
      */
     public function show(string $id)
     {
-        $task = Tasks::with(['owner', 'project', 'milestone', 'status', 'taskType', 'createdBy', 'qa','parentTask'])->findOrFail($id);
+        $task = Tasks::with(['owner', 'project', 'milestone', 'status', 'taskType', 'createdBy', 'qa', 'parentTask'])->findOrFail($id);
         if (!$task) {
             return response()->json(['message' => 'Task not found'], 404);
         }
         $assignees_data = [];
         if (is_array($task->assignees) && count($task->assignees)) {
             $assignees_data = User::whereIn('_id', $task->assignees)
-            ->get(['id', 'name', 'last_name','personal_email', 'contact_number']) // add/remove fields as needed
-            ->map(function ($user) {
-                return [
-                    'id'    => (string) $user->id,
-                    'name'  => $user->name,
-                    'last_name'  => $user->last_name,
-                    'email' => $user->personal_email,
-                    'number'=> $user->contact_number
-                ];
-            })
-            ->toArray();
+                ->get(['id', 'name', 'last_name', 'personal_email', 'contact_number']) // add/remove fields as needed
+                ->map(function ($user) {
+                    return [
+                        'id'    => (string) $user->id,
+                        'name'  => $user->name,
+                        'last_name'  => $user->last_name,
+                        'email' => $user->personal_email,
+                        'number' => $user->contact_number
+                    ];
+                })
+                ->toArray();
         }
 
         // Convert the model to array and add assignees_data field
@@ -714,9 +889,9 @@ $total_spent_hours = sprintf('%02d:%02d', $hours, $minutes);
         $dueDate = Carbon::parse($request->due_date)->toIso8601String();
         $startDate = Carbon::parse($request->start_date)->toIso8601String();
 
-          if($request->parent_task_id){
-            $is_child_task = true;  
-        }else{
+        if ($request->parent_task_id) {
+            $is_child_task = true;
+        } else {
             $is_child_task = false;
         }
 
@@ -1011,7 +1186,7 @@ $total_spent_hours = sprintf('%02d:%02d', $hours, $minutes);
     public function getParentTasks(Request $request)
     {
         $tasks = Tasks::where('parent_task_id', null)
-            ->where('is_child_task', false) 
+            ->where('is_child_task', false)
             ->get();
         $tasks = $tasks->map(function ($task) {
             return [
@@ -1020,5 +1195,5 @@ $total_spent_hours = sprintf('%02d:%02d', $hours, $minutes);
             ];
         });
         return response()->json($tasks);
-    }       
+    }
 }

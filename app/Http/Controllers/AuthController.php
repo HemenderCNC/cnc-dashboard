@@ -97,6 +97,7 @@ class AuthController extends Controller
 
         $role = Role::where('id', $user->role->id)->first();
         $user->role_id = $role->_id;  // Assuming role_id is used to reference the role
+        $user->is_logout = false;
         $user->save();
         // Check if the password is correct
         if (!$user || !Hash::check($request->password, $user->password)) {
@@ -219,6 +220,12 @@ class AuthController extends Controller
     {
         $userID = $request->user->id;
         if($userID){
+            $user = User::find($userID);
+            if($user){
+                $user->is_logout = true;
+                $user->save();
+            }
+            
             $timesheet = Timesheet::where('employee_id', $userID)
             ->where('status', 'running')
             ->first();

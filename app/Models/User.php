@@ -67,7 +67,8 @@ class User extends Eloquent
         'reporting_manager_id',
         'document_type_id',
         'document',
-        'fcm_token'
+        'fcm_token',
+        'is_logout'
     ];
 
 
