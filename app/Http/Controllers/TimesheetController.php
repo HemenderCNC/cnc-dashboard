@@ -985,14 +985,20 @@ class TimesheetController extends Controller
         if (!$timesheet) {
             return response()->json(['message' => 'Timesheet not found'], 404);
         }
-        $timesheet->status = 'completed';
+        $timesheet->status = 'Ready For QA';
         $timesheet->save();
         $userId = $request->user->id; // Get authenticated user ID
+
+        $statusId = TaskStatus::where('name', 'Ready For QA')->value('_id');
+        Tasks::where('_id', $timesheet->task_id)->update([
+            'status_id' => $statusId
+        ]); 
+
         if ($timesheet->task_type == 'Helping Hand') {
             $task_id = $timesheet->task_id;
             $HelpingHand = HelpingHand::where('task_id', $task_id)->where('to_id', $userId)->where('status', 'accepted')->first();
             if ($HelpingHand) {
-                $HelpingHand->status = 'completed';
+                $HelpingHand->status = 'Ready For QA';
                 $HelpingHand->save();
                 HelpingHandController::sendPushNotification($HelpingHand);
             }
