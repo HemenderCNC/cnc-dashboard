@@ -944,7 +944,10 @@ class UserController extends Controller
      */
         public function getAllEmployees()
     {
-        $users = User::with('role')
+        $users = User::whereHas('role', function ($query) {
+            $query->whereIn('name', ['Team Leader', 'Project Manager','QA']);
+        })
+            ->with('role')
             ->get([
                 'name',
                 '_id', 
