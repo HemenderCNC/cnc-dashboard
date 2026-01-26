@@ -217,6 +217,14 @@ class TimesheetController extends Controller
     {
         $matchStage = [];
 
+        if ($request->user->role->name == 'QA') {
+            $matchStage['status'] = ['$ne' => 'completed'];
+        }
+
+        if ($request->user->role->name == 'Employee') {
+            $matchStage['status'] = ['$nin' => ['completed', 'Ready For QA']];
+        }   
+
         // Filter by Employee Role
         // if ($request->user->role->slug === 'employee') {
         $matchStage['employee_id'] = $request->user->id;
@@ -572,7 +580,7 @@ class TimesheetController extends Controller
         $busyEmployeeIds = Timesheet::where('dates.date', $today)
             ->where('task_type', '!=', 'R&D')
             ->where('status', '!=', 'paused')
-            ->where('status', '!=', 'completed')
+            ->where('status', '!=', 'Ready For QA')
             ->groupBy('employee_id')
             ->pluck('employee_id')
             ->toArray();
@@ -607,6 +615,47 @@ class TimesheetController extends Controller
                     'as' => 'timesheet_doc'
                 ]],
                 ['$unwind' => ['path' => '$timesheet_doc', 'preserveNullAndEmptyArrays' => true]],
+                ['$addFields' => [
+                    'today_time_log' => [
+                        '$let' => [
+                            'vars' => [
+                                'matched_date' => [
+                                    '$arrayElemAt' => [
+                                        ['$filter' => [
+                                            'input' => ['$ifNull' => ['$timesheet_doc.dates', []]],
+                                            'as' => 'd',
+                                            'cond' => ['$eq' => ['$$d.date', $today]]
+                                        ]],
+                                        0
+                                    ]
+                                ]
+                            ],
+                            'in' => '$$matched_date.time_log'
+                        ]
+                    ]
+                ]],
+                ['$addFields' => [
+                    'today_total_minutes' => [
+                        '$reduce' => [
+                            'input' => ['$ifNull' => ['$today_time_log', []]],
+                            'initialValue' => 0,
+                            'in' => [
+                                '$add' => [
+                                    '$$value',
+                                    [
+                                        '$divide' => [
+                                            ['$subtract' => [
+                                                ['$dateFromString' => ['dateString' => ['$concat' => [$today, 'T', '$$this.end_time', ':00']]]],
+                                                ['$dateFromString' => ['dateString' => ['$concat' => [$today, 'T', '$$this.start_time', ':00']]]]
+                                            ]],
+                                            60000
+                                        ]
+                                    ]
+                                ]
+                            ]
+                        ]
+                    ]
+                ]],
                 ['$lookup' => [
                     'from' => 'tasks',
                     'let' => ['taskId' => ['$toObjectId' => '$timesheet_doc.task_id']],
@@ -617,66 +666,6 @@ class TimesheetController extends Controller
                 ]],
                 ['$unwind' => ['path' => '$task_doc', 'preserveNullAndEmptyArrays' => true]],
 
-                ['$lookup' => [
-                    'from' => 'projects',
-                    'let' => ['projectId' => ['$toObjectId' => '$task_doc.project_id']],
-                    'pipeline' => [
-                        ['$match' => ['$expr' => ['$eq' => ['$_id', '$$projectId']]]]
-                    ],
-                    'as' => 'project_doc'
-                ]],
-                ['$unwind' => ['path' => '$project_doc', 'preserveNullAndEmptyArrays' => true]],
-
-                ['$addFields' => [
-                    'total_minutes_calc' => [
-                        '$cond' => [
-                            'if' => ['$ifNull' => ['$timesheet_doc', false]],
-                            'then' => [
-                                '$reduce' => [
-                                    'input' => '$timesheet_doc.dates',
-                                    'initialValue' => 0,
-                                    'in' => [
-                                        '$add' => [
-                                            '$$value',
-                                            ['$reduce' => [
-                                                'input' => '$$this.time_log',
-                                                'initialValue' => 0,
-                                                'in' => [
-                                                    '$add' => [
-                                                        '$$value',
-                                                        ['$divide' => [
-                                                            ['$subtract' => [
-                                                                ['$dateFromString' => ['dateString' => ['$concat' => ['2024-01-01T', '$$this.end_time', ':00']]]],
-                                                                ['$dateFromString' => ['dateString' => ['$concat' => ['2024-01-01T', '$$this.start_time', ':00']]]]
-                                                            ]],
-                                                            60000
-                                                        ]]
-                                                    ]
-                                                ]
-                                            ]]
-                                        ]
-                                    ]
-                                ]
-                            ],
-                            'else' => 0
-                        ]
-                    ]
-                ]],
-                
-                 ['$addFields' => [
-                    'total_time_formatted' => [
-                        '$concat' => [
-                            ['$toString' => ['$floor' => ['$divide' => ['$total_minutes_calc', 60]]]],
-                            ':',
-                            ['$cond' => [
-                                'if' => ['$lt' => [['$mod' => ['$total_minutes_calc', 60]], 10]],
-                                'then' => ['$concat' => ['0', ['$toString' => ['$mod' => ['$total_minutes_calc', 60]]]]],
-                                'else' => ['$toString' => ['$mod' => ['$total_minutes_calc', 60]]]
-                            ]]
-                        ]
-                    ]
-                 ]],
-
                  ['$project' => [
                      '_id' => 1,
                      'name' => 1,
@@ -686,15 +675,20 @@ class TimesheetController extends Controller
                          '$cond' => [
                              'if' => ['$ifNull' => ['$task_doc', false]],
                              'then' => [
-                                 '$mergeObjects' => [
-                                     '$task_doc',
-                                     [
-                                         'project_name' => '$project_doc.project_name',
-                                         'total_time_spent' => '$total_time_formatted',
-                                         'working_description' => '$timesheet_doc.work_description'
-                                     ]
-                                 ]
-                             ],
+                                'title' => '$task_doc.title',
+                                'working_description' => '$timesheet_doc.work_description',
+                                'total_time_spent' => [
+                                    '$concat' => [
+                                        ['$toString' => ['$floor' => ['$divide' => ['$today_total_minutes', 60]]]],
+                                        ':',
+                                        ['$cond' => [
+                                            'if' => ['$lt' => [['$mod' => ['$today_total_minutes', 60]], 10]],
+                                            'then' => ['$concat' => ['0', ['$toString' => ['$mod' => ['$today_total_minutes', 60]]]]],
+                                            'else' => ['$toString' => ['$mod' => ['$today_total_minutes', 60]]]
+                                        ]]
+                                    ]
+                                ],
+                            ],
                              'else' => null
                          ]
                      ]
@@ -843,6 +837,34 @@ class TimesheetController extends Controller
             ], 422);
         }
 
+        if($request->user->role->name == 'QA'){
+
+            $task = Tasks::with('status')
+            ->where('_id', $request->task_id)
+            ->first();
+
+            if (!$task) {
+                return response()->json(['message' => 'Task not found'], 404);
+            }
+
+           if($task->status->name == 'Ready For QA' || $task->status->name == 'on hold' || $task->status->name == 'In Progress (QA)'){
+
+            $taskStatusId = TaskStatus::where('name', 'In Progress (QA)')
+            ->value('_id');
+
+            // update task status to 'Completed'
+            $task->update([
+                'status_id' => $taskStatusId
+            ]);
+           }         
+        }else{
+            $statusId = TaskStatus::where('name', 'in progress (Dev)')->value('_id');
+
+            Tasks::where('_id', $request->task_id)->update([
+                'status_id' => $statusId
+            ]);
+        }
+
         // Check if a timesheet already exists for this task and date
         $timesheet = Timesheet::where('task_id', $request->task_id)
             ->where('employee_id', $userId)
@@ -968,11 +990,34 @@ class TimesheetController extends Controller
         }
         $this->userBreakLogStart($userId);
 
-        $statusId = TaskStatus::where('name', 'on hold')->value('_id');
+        if($request->user->role->name == 'QA'){
+
+            $task = Tasks::with('status')
+            ->where('_id', $timesheet->task_id)
+            ->first();
+
+            if (!$task) {
+                return response()->json(['message' => 'Task not found'], 404);
+            }
+
+           if($task->status->name == 'Ready For QA' || $task->status->name == 'In Progress (QA)'){
+
+            $taskStatusId = TaskStatus::where('name', 'On Hold (QA)')
+            ->value('_id');
+
+            $task->update([
+                'status_id' => $taskStatusId
+            ]);
+           }         
+        }else{
+
+        $statusId = TaskStatus::where('name', 'On Hold')->value('_id');
 
         Tasks::where('_id', $timesheet->task_id)->update([
             'status_id' => $statusId
         ]);
+
+        }
 
         $formattedTotal = $this->calculate_total_time_spent_by_task($timesheet);
         $timesheetArray = $timesheet->toArray();
@@ -985,14 +1030,39 @@ class TimesheetController extends Controller
         if (!$timesheet) {
             return response()->json(['message' => 'Timesheet not found'], 404);
         }
-        $timesheet->status = 'Ready For QA';
-        $timesheet->save();
+         if($request->user->role->name == 'QA'){
+
+            $timesheet->status = 'completed';
+             $timesheet->save();
+
+            Timesheet::where('task_id', $timesheet->task_id)
+            ->update(['status' => 'completed']);
+
+         }else{
+
+            $timesheet->status = 'Ready For QA';
+            $timesheet->save();
+
+         }
+
         $userId = $request->user->id; // Get authenticated user ID
+
+        if($request->user->role->name == 'QA'){
+
+            $statusId = TaskStatus::where('name', 'Completed')->value('_id');
+
+            Tasks::where('_id', $timesheet->task_id)->update([
+                'status_id' => $statusId
+        ]); 
+
+        }else{
 
         $statusId = TaskStatus::where('name', 'Ready For QA')->value('_id');
         Tasks::where('_id', $timesheet->task_id)->update([
             'status_id' => $statusId
         ]); 
+
+        }
 
         if ($timesheet->task_type == 'Helping Hand') {
             $task_id = $timesheet->task_id;
@@ -1008,6 +1078,7 @@ class TimesheetController extends Controller
         $formattedTotal = $this->calculate_total_time_spent_by_task($timesheet);
         $timesheetArray = $timesheet->toArray();
         $timesheetArray['total_spent_time'] = $formattedTotal;
+
         return response()->json($timesheetArray);
     }
     
@@ -1096,12 +1167,34 @@ class TimesheetController extends Controller
             ->where('status', 'running')
             ->update(['status' => 'paused']);
 
+            if($request->user->role->name == 'QA'){
 
-$statusId = TaskStatus::where('name', 'in progress')->value('_id');
+            $task = Tasks::with('status')
+            ->where('_id', $timesheet->task_id)
+            ->first();
 
- Tasks::where('_id', $timesheet->task_id)->update([
-            'status_id' => $statusId
-        ]);
+            if (!$task) {
+                return response()->json(['message' => 'Task not found'], 404);
+            }
+
+           if($task->status->name == 'Ready For QA' || $task->status->name == 'On Hold (QA)'){
+
+            $taskStatusId = TaskStatus::where('name', 'In Progress (QA)')
+            ->value('_id');
+
+            // update task status to 'Completed'
+            $task->update([
+                'status_id' => $taskStatusId
+            ]);   
+           }         
+        }else{
+
+            $statusId = TaskStatus::where('name', 'in progress (Dev)')->value('_id');
+
+            Tasks::where('_id', $timesheet->task_id)->update([
+                        'status_id' => $statusId
+                    ]);
+        }
         
         // Stop break log if active.
         $this->userBreakLogStop($userId);

@@ -23,34 +23,39 @@ class TasksController extends Controller
         $limit = (int) $request->input('limit', -1);
         $skip = ($page - 1) * $limit;
 
-        if ($request->user->role->slug === 'employee') {
+        if ($request->user->role->slug === 'employee' || $request->user->role->slug === 'qa') {
             $matchStage->assignees = $request->user->id;
         } else if ($request->has('employee_id')) {
             $matchStage->assignees = $request->employee_id;
         }
 
         if ($request->user->role && $request->user->role->name === 'QA') {
-            $ReadyToQAStatus = TaskStatus::whereRaw([
-                'name' => ['$regex' => '^Ready To QA$', '$options' => 'i']
-            ])->first();
+            $qaStatuses = TaskStatus::whereIn('name', [
+                'Ready For QA',
+                'In Progress (QA)',
+                'On Hold (QA)',
+                'QA Failed'
+            ])->get();
 
-            if ($ReadyToQAStatus) {
+            $qaStatusIds = $qaStatuses->pluck('_id')->map(fn($id) => (string)$id)->toArray();
+
+            if (!empty($qaStatusIds)) {
                 if (isset($matchStage->assignees)) {
                     $matchStage->{'$or'} = [
                         ['assignees' => $matchStage->assignees],
                         [
                             'qa_id' => $request->user->id,
-                            'status_id' => $ReadyToQAStatus->_id
+                            'status_id' => ['$in' => $qaStatusIds]
                         ]
                     ];
                     unset($matchStage->assignees);
                 } else {
                     $matchStage->qa_id = $request->user->id;
-                    $matchStage->status_id = $ReadyToQAStatus->_id;
+                    $matchStage->status_id = ['$in' => $qaStatusIds];
                 }
             }
         }
-
+        
         // Filter by project name (partial match)
         if ($request->has('title')) {
             $matchStage->title = ['$regex' => $request->title, '$options' => 'i'];
@@ -92,6 +97,7 @@ class TasksController extends Controller
                 $matchStage->status_id = ['$ne' => (string) $completedStatus->_id];
             }
         }
+
         if ($request->has('task_type_id')) {
             $matchStage->task_type_id = $request->task_type_id;
         }
