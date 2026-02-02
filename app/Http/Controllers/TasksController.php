@@ -512,11 +512,37 @@ class TasksController extends Controller
                 ],
                 [
                     '$addFields' => [
+                        'calculated_total_raw_minutes' => [
+                            '$add' => [
+                                // Parent time
+                                ['$ifNull' => [['$arrayElemAt' => ['$timesheet_data.total_minutes', 0]], 0]],
+                                // Children time
+                                ['$reduce' => [
+                                    'input' => '$child_tasks',
+                                    'initialValue' => 0,
+                                    'in' => [
+                                        '$add' => [
+                                            '$$value',
+                                            ['$add' => [
+                                                ['$multiply' => [['$ifNull' => ['$$this.total_hours', 0]], 60]],
+                                                ['$ifNull' => ['$$this.total_minutes', 0]]
+                                            ]]
+                                        ]
+                                    ]
+                                ]]
+                            ]
+                        ]
+                    ]
+                ],
+                [
+                    '$addFields' => [
                         'total_hours' => [
-                            '$ifNull' => [['$arrayElemAt' => ['$timesheet_data.total_hours', 0]], 0]
+                            '$floor' => [
+                                '$divide' => ['$calculated_total_raw_minutes', 60] // Calculate total hours
+                            ]
                         ],
                         'total_minutes' => [
-                            '$ifNull' => [['$arrayElemAt' => ['$timesheet_data.remaining_minutes', 0]], 0]
+                            '$mod' => ['$calculated_total_raw_minutes', 60] // Calculate remaining minutes
                         ]
                     ]
                 ],
