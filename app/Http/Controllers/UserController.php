@@ -944,20 +944,17 @@ class UserController extends Controller
      */
         public function getAllEmployees()
     {
-        $users = User::whereHas('role', function ($query) {
-            $query->whereIn('name', ['Team Leader', 'Project Manager','QA']);
-        })
-            ->with('role')
-            ->get([
-                'name',
-                '_id', 
-                'last_name', 
-                'email', 
-                'contact_number', 
-                'role_id',
-                'profile_photo', 
-                'employee_id'
-            ]);
+        $users = User::with('role')
+        ->get([
+            'name',
+            '_id',
+            'last_name',
+            'email',
+            'contact_number',
+            'role_id',
+            'profile_photo',
+            'employee_id'
+        ]);
 
         // Check if users exist
         if ($users->isEmpty()) {
