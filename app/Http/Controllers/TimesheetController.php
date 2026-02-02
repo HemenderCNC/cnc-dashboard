@@ -18,6 +18,196 @@ use MongoDB\BSON\ObjectId;
 
 class TimesheetController extends Controller
 {
+
+        public function newTimesheetList(Request $request)
+    {
+
+
+        $matchStage = [];
+
+        // Pagination setup
+        $page = (int) $request->input('page', 1);
+        $limit = (int) $request->input('limit', -1);
+        $skip = ($page - 1) * $limit;
+
+        // Role check
+        if ($request->user->role->slug === 'employee' || $request->user->role->slug === 'qa') {
+            $matchStage['employee_id'] = $request->user->id;
+        }
+
+        if ($request->user->role && $request->user->role->name === 'Administrator') {
+            $matchStage['status'] = 'running';
+        }
+
+        // Basic filters
+        foreach (['employee_id', 'project_id'] as $field) {
+            if ($request->filled($field)) {
+                $matchStage[$field] = $request->$field;
+            }
+        }
+
+        // Exact date filter
+        if ($request->filled('date')) {
+            $matchStage['dates.date'] = $request->date;
+        }
+
+        // Date range filter
+        if ($request->has(['start_date', 'end_date'])) {
+            $matchStage['dates.date'] = [
+                '$gte' => $request->start_date,
+                '$lte' => $request->end_date,
+            ];
+        }
+
+        // Task name search
+        if ($request->filled('task_name')) {
+            $tasks = Tasks::where('title', 'like', "%{$request->task_name}%")->get();
+            $taskIds = Tasks::where('title', 'like', "%{$request->task_name}%")
+                ->pluck('id')
+                ->toArray();
+            if (!empty($taskIds)) {
+                $matchStage['task_id'] = ['$in' => $taskIds];
+            } else {
+                return response()->json(['message' => 'No tasks found matching the title.'], 404);
+            }
+        }
+
+        if (empty($matchStage)) {
+            $matchStage = (object)[];
+        }
+
+        $aggregation = Timesheet::raw(function ($collection) use ($matchStage, $limit, $skip) {
+            $pipeline = [
+                ['$match' => $matchStage],
+                ['$unwind' => '$dates'],
+                ['$unwind' => '$dates.time_log'],
+
+                // Pre-calculate time duration
+                ['$addFields' => [
+                    'start_time' => [
+                        '$toDate' => [
+                            '$concat' => ['$dates.date', 'T', '$dates.time_log.start_time', ':00']
+                        ]
+                    ],
+                    'end_time' => [
+                        '$toDate' => [
+                            '$concat' => ['$dates.date', 'T', '$dates.time_log.end_time', ':00']
+                        ]
+                    ]
+                ]],
+                ['$addFields' => [
+                    'duration_minutes' => [
+                        '$divide' => [
+                            ['$subtract' => ['$end_time', '$start_time']],
+                            60000
+                        ]
+                    ]
+                ]],
+
+                // Removed grouping to separate time logs
+                ['$addFields' => [
+                    'total_time_spent_minutes' => '$duration_minutes',
+                    'dates' => ['$dates']
+                ]],
+
+                // Join data (using simpler joins)
+                ['$addFields' => [
+                    'task_id' => ['$toObjectId' => '$task_id'],
+                    'project_id' => ['$toObjectId' => '$project_id'],
+                    'employee_id' => ['$toObjectId' => '$employee_id'],
+                ]],
+
+                ['$lookup' => [
+                    'from' => 'tasks',
+                    'localField' => 'task_id',
+                    'foreignField' => '_id',
+                    'as' => 'task'
+                ]],
+                
+                [
+                    '$addFields' => [
+                        'task.task_type' => '$task_type'
+                    ]
+                ],
+                ['$lookup' => [
+                    'from' => 'projects',
+                    'localField' => 'project_id',
+                    'foreignField' => '_id',
+                    'as' => 'project'
+                ]],
+                ['$lookup' => [
+                    'from' => 'users',
+                    'localField' => 'employee_id',
+                    'foreignField' => '_id',
+                    'as' => 'user'
+                ]],
+
+
+                // Format time string
+                ['$addFields' => [
+                    'total_hours' => ['$floor' => ['$divide' => ['$total_time_spent_minutes', 60]]],
+                    'total_minutes' => ['$mod' => ['$total_time_spent_minutes', 60]],
+                ]],
+                ['$addFields' => [
+                    'total_time_spent' => [
+                        '$concat' => [
+                            ['$toString' => '$total_hours'],
+                            ':',
+                            ['$cond' => [
+                                'if' => ['$lt' => ['$total_minutes', 10]],
+                                'then' => ['$concat' => ['0', ['$toString' => '$total_minutes']]],
+                                'else' => ['$toString' => '$total_minutes']
+                            ]]
+                        ]
+                    ]
+                ]],
+                ['$sort' => ['created_at' => -1]],
+                ['$project' => [
+                    '_id' => 1,
+                    'employee_id' => 1,
+                    'dates' => 1,
+                    'total_time_spent' => 1,
+                    'work_description' => 1,
+                    'status' => 1,
+                    'project.project_name' => 1,
+                    'task_type' => 1,
+                    'task.title' => 1,
+                    'user.name' => 1,
+                    'user.last_name' => 1,
+                    'user.profile_photo' => 1,
+                ]]
+            ];
+
+            if ($limit !== -1) {
+                $pipeline[] = ['$skip' => $skip];
+                $pipeline[] = ['$limit' => $limit];
+            }
+
+            return $collection->aggregate($pipeline);
+        });
+        
+        // Total count without pagination
+        $totalCount = Timesheet::raw(function ($collection) use ($matchStage) {
+            return $collection->aggregate([
+                ['$match' => $matchStage],
+                ['$unwind' => '$dates'],
+                ['$unwind' => '$dates.time_log'],
+
+                ['$count' => 'total']
+            ]);
+        })->first()['total'] ?? 0;
+
+        return response()->json([
+            'data' => $aggregation,
+            'meta' => [
+                'page' => $page,
+                'limit' => $limit,
+                'total' => $totalCount,
+                'total_pages' => $limit === -1 ? 1 : ceil($totalCount / $limit),
+            ]
+        ]);
+    }
+
     // Get all timesheets for an employee
     public function index(Request $request)
     {

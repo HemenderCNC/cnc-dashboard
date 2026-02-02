@@ -724,6 +724,7 @@ Route::middleware('api')->group(function () {
 
             Route::middleware(['permission:view_timesheet'])->group(function () {
                 Route::get('/', [TimesheetController::class, 'index']); // Get all timesheets
+                Route::get('/new-timesheet-list', [TimesheetController::class, 'newTimesheetList']); // Get all timesheets
                 Route::get('/mytimesheet', [TimesheetController::class, 'myTimesheet']); // Get a user's all timesheets
                 Route::get('/{id}', [TimesheetController::class, 'show']); // Get timesheet by ID
                 Route::get('/stop-task/{id}', [TimesheetController::class, 'stopTask']); // Get timesheet by ID
