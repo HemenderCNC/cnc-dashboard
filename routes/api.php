@@ -720,6 +720,9 @@ Route::middleware('api')->group(function () {
         //Timesheet Module
         Route::get('/resource-occupancy', [TimesheetController::class, 'resourceOccupancy'])->middleware('role:Administrator,Team Leader,Project Manager'); ; // Get timesheet by ID
        Route::get('/resource-avilible', [TimesheetController::class, 'resourceAvilible']);
+
+       Route::get('/spent-time-by-role', [TimesheetController::class, 'spentTimeByRole']);
+      
         Route::prefix('timesheet')->group(function () {
 
             Route::middleware(['permission:view_timesheet'])->group(function () {

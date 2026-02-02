@@ -22,7 +22,6 @@ class TimesheetController extends Controller
         public function newTimesheetList(Request $request)
     {
 
-
         $matchStage = [];
 
         // Pagination setup
@@ -169,9 +168,27 @@ class TimesheetController extends Controller
                     'total_time_spent' => 1,
                     'work_description' => 1,
                     'status' => 1,
-                    'project.project_name' => 1,
+                    'project' => [
+                        '$map' => [
+                            'input' => '$project',
+                            'as' => 'p',
+                            'in' => [
+                                'project_name' => '$$p.project_name',
+                                'id' => ['$toString' => '$$p._id']
+                            ]
+                        ]
+                    ],
                     'task_type' => 1,
-                    'task.title' => 1,
+                    'task' => [
+                        '$map' => [
+                            'input' => '$task',
+                            'as' => 't',
+                            'in' => [
+                                'title' => '$$t.title',
+                                'id' => ['$toString' => '$$t._id']
+                            ]
+                        ]
+                    ],
                     'user.name' => 1,
                     'user.last_name' => 1,
                     'user.profile_photo' => 1,
@@ -1536,4 +1553,105 @@ class TimesheetController extends Controller
 
         return response()->json(['message' => 'Timesheet entry deleted successfully.']);
     }
+
+
+    public function spentTimeByRole(Request $request)
+    {
+        $task_id = $request->task_id;
+
+        // Fetch child task IDs to identify "Bug" tasks
+        $childTaskIds = Tasks::where('parent_task_id', $task_id)
+            ->get(['_id'])
+            ->pluck('_id')
+            ->map(function ($id) {
+                return (string) $id;
+            })
+            ->toArray();
+
+        // All tasks to search for (Parent + Children)
+        $allTaskIds = array_merge([$task_id], $childTaskIds);
+
+        $data = Timesheet::raw(function ($collection) use ($allTaskIds, $task_id) {
+            return $collection->aggregate([
+                ['$match' => ['task_id' => ['$in' => $allTaskIds]]],
+                ['$unwind' => '$dates'],
+                ['$unwind' => '$dates.time_log'],
+                [
+                    '$addFields' => [
+                        'duration' => [
+                            '$subtract' => [
+                                ['$add' => [
+                                    ['$multiply' => [['$toInt' => ['$arrayElemAt' => [['$split' => ['$dates.time_log.end_time', ':']], 0]]], 60]],
+                                    ['$toInt' => ['$arrayElemAt' => [['$split' => ['$dates.time_log.end_time', ':']], 1]]]
+                                ]],
+                                ['$add' => [
+                                    ['$multiply' => [['$toInt' => ['$arrayElemAt' => [['$split' => ['$dates.time_log.start_time', ':']], 0]]], 60]],
+                                    ['$toInt' => ['$arrayElemAt' => [['$split' => ['$dates.time_log.start_time', ':']], 1]]]
+                                ]]
+                            ]
+                        ]
+                    ]
+                ],
+                [
+                    '$group' => [
+                        '_id' => '$employee_id',
+                        'dev_minutes' => [
+                            '$sum' => [
+                                '$cond' => [
+                                    'if' => ['$eq' => ['$task_id', $task_id]],
+                                    'then' => '$duration',
+                                    'else' => 0
+                                ]
+                            ]
+                        ],
+                        'bug_minutes' => [
+                            '$sum' => [
+                                '$cond' => [
+                                    'if' => ['$ne' => ['$task_id', $task_id]], // Any task not equal to parent is considered bug/child
+                                    'then' => '$duration',
+                                    'else' => 0
+                                ]
+                            ]
+                        ]
+                    ]
+                ]
+            ]);
+        });
+
+        $employeeIds = collect($data)->pluck('_id')->toArray();
+        $users = User::whereIn('_id', $employeeIds)->get()->keyBy('_id');
+
+        $formatted = collect($data)->map(function ($item) use ($users) {
+            $user = $users[(string)$item->_id] ?? null;
+
+            $formatTime = function ($totalMinutes) {
+                $hours = floor($totalMinutes / 60);
+                $minutes = $totalMinutes % 60;
+                return sprintf('%02d:%02d', $hours, $minutes);
+            };
+
+            $response = [
+                'id' => $item->_id,
+                'name' => $user->name ?? '',
+                'last_name' => $user->last_name ?? '',
+                'profile_photo' => $user->profile_photo ?? null,
+            ];
+
+            // Check if user is QA
+            if ($user && $user->role && ($user->role->name === 'QA' || $user->role->slug === 'qa')) {
+                $totalMinutes = $item->dev_minutes + $item->bug_minutes;
+                $response['total_spent_time'] = $formatTime($totalMinutes);
+            } else {
+                $response['Dev_spent_time'] = $formatTime($item->dev_minutes);
+                $response['Buge_spent_time'] = $formatTime($item->bug_minutes);
+            }
+
+            return $response;
+        });
+
+        return response()->json($formatted);
+    }
+
+
+
 }
