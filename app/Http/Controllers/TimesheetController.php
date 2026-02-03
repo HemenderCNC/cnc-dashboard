@@ -34,7 +34,7 @@ class TimesheetController extends Controller
             $matchStage['employee_id'] = $request->user->id;
         }
 
-        if ($request->user->role && $request->user->role->name === 'Administrator') {
+        if ($request->user->role && $request->user->role->name === 'Administrator' && $request->employee_id === null) {
             $matchStage['status'] = 'running';
         }
 
@@ -1635,15 +1635,16 @@ class TimesheetController extends Controller
                 'name' => $user->name ?? '',
                 'last_name' => $user->last_name ?? '',
                 'profile_photo' => $user->profile_photo ?? null,
+                'role' => $user->role->name ?? null,
             ];
 
             // Check if user is QA
             if ($user && $user->role && ($user->role->name === 'QA' || $user->role->slug === 'qa')) {
                 $totalMinutes = $item->dev_minutes + $item->bug_minutes;
-                $response['total_spent_time'] = $formatTime($totalMinutes);
+                $response['test_spent_time'] = $formatTime($totalMinutes);
             } else {
-                $response['Dev_spent_time'] = $formatTime($item->dev_minutes);
-                $response['Buge_spent_time'] = $formatTime($item->bug_minutes);
+                $response['dev_spent_time'] = $formatTime($item->dev_minutes);
+                $response['bug_spent_time'] = $formatTime($item->bug_minutes);
             }
 
             return $response;
