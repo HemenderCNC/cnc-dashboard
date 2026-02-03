@@ -333,6 +333,19 @@ class TasksController extends Controller
                             'as' => 'child_task_milestone'
                         ]],
                         ['$lookup' => [
+                            'from' => 'users',
+                            'let' => ['createdBy' => ['$toObjectId' => '$created_by']],
+                            'pipeline' => [
+                                ['$match' => ['$expr' => ['$eq' => ['$_id', '$$createdBy']]]],
+                                ['$project' => [
+                                    'name' => 1,
+                                    'last_name' => 1,
+                                    'profile_photo' => 1
+                                ]]
+                            ],
+                            'as' => 'created_bys'
+                        ]],
+                        ['$lookup' => [
                             'from' => 'timesheets',
                             'let' => ['childTaskId' => '$_id'],
                             'pipeline' => [
