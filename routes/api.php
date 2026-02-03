@@ -734,6 +734,7 @@ Route::middleware('api')->group(function () {
                 Route::get('/complete-task/{id}', [TimesheetController::class, 'completeTask']); // Get timesheet by ID
                 Route::get('/run-task/{id}', [TimesheetController::class, 'runTask']); // Get timesheet by ID
                 // Route::get('/complete-task/{id}', [TimesheetController::class, 'completeTask']); // Get timesheet by ID
+                Route::get('/qa-failed-task/{id}', [TimesheetController::class, 'qaFailedTask']);
             });
             Route::middleware(['permission:add_timesheet'])->group(function () {
                 Route::post('/', [TimesheetController::class, 'store']); // Create a timesheet
