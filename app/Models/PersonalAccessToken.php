@@ -19,7 +19,7 @@ class PersonalAccessToken extends Eloquent
         'last_used_at' => 'datetime',
     ];
 
-    public static function createToken($tokenable, $name, $abilities = ['*'], $expiresInMinutes = 6000)
+    public static function createToken($tokenable, $name, $abilities = ['*'], $expiresInMinutes = 800)
     {
         $plainToken = Str::random(64);
         $hashedToken = hash('sha256', $plainToken);

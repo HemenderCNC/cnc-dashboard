@@ -61,13 +61,13 @@ class AuthController extends Controller
 
         // return redirect()->route('login');
         // Create token
-        $token = PersonalAccessToken::createToken($user, 'auth_token', ['*'], 6000);
+        $token = PersonalAccessToken::createToken($user, 'auth_token', ['*'], 800);
 
         return response()->json([
             'access_token' => $token,
             'user' => $user,
             'token_type' => 'Bearer',
-            'expires_in' => 6000, // Expiration in minutes
+            'expires_in' => 800, // Expiration in minutes
         ]);
     }
 
@@ -105,7 +105,7 @@ class AuthController extends Controller
         }
 
         // Generate a custom token
-        $token = PersonalAccessToken::createToken($user, 'auth_token', ['*'],6000);
+        $token = PersonalAccessToken::createToken($user, 'auth_token', ['*'],800);
 
         // Return the token
         return response()->json([
