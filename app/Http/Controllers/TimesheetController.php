@@ -1067,17 +1067,26 @@ class TimesheetController extends Controller
                     'message' => 'Task already completed.'
                 ], 400);
             }
+
+            if($request->user->role->name == 'Employee' && $timesheet->status == 'Ready For QA'){
+             return response()->json([
+                    'message' => 'Task already assigned to QA.'
+                ], 400);
+            }
+
+            if($request->user->role->name == 'QA'){
+
                 $dates = $timesheet->dates ?? [];
 
                 $dateFound = false;
 
-                foreach ($dates as &$dateEntry) {
+            foreach ($dates as &$dateEntry) {
                     if ($dateEntry['date'] === $currentDate) {
                         $dateEntry['time_log'][] = $timeLogEntry;
                         $dateFound = true;
                         break;
                     }
-                }
+            }
 
                 if (!$dateFound) {
                     $dates[] = [
@@ -1091,9 +1100,11 @@ class TimesheetController extends Controller
                     'status' => 'running',
                 ]);
 
-            }else {
+            }
 
-            // Create a new timesheet entry
+        }else{
+
+             // Create a new timesheet entry
             $timesheet = Timesheet::create([
                 'project_id' => $request->project_id,
                 'task_id' => $request->task_id,
@@ -1113,6 +1124,7 @@ class TimesheetController extends Controller
                 'work_description' => $request->work_description,
                 'status' => 'running',
             ]);
+            
         }
 
         if($request->user->role->name == 'QA'){
