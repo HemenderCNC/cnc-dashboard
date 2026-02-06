@@ -789,6 +789,7 @@ class TimesheetController extends Controller
             ->where('task_type', '!=', 'R&D')
             ->where('status', '!=', 'paused')
             ->where('status', '!=', 'Ready For QA')
+            ->where('status', '!=', 'completed')
             ->groupBy('employee_id')
             ->pluck('employee_id')
             ->toArray();
