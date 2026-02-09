@@ -1161,6 +1161,7 @@ class TimesheetController extends Controller
         Timesheet::where('employee_id', $userId)
             ->where('_id', '!=', $timesheet->_id)
             ->where('status', '!=', 'completed')
+            ->where('status', '!=', 'Ready For QA')
             ->update(['status' => 'paused']);
 
         // Handle break session in LoginSession
@@ -1279,22 +1280,50 @@ class TimesheetController extends Controller
     public function completeTask(Request $request, $id)
     {
         $timesheet = Timesheet::where('id', $id)->first();
+
         if (!$timesheet) {
             return response()->json(['message' => 'Timesheet not found'], 404);
         }
+
+         $task = Tasks::where('_id', $timesheet->task_id)->first();
+
          if($request->user->role->name == 'QA'){
 
             $timesheet->status = 'completed';
-             $timesheet->save();
+            $timesheet->save();
 
             Timesheet::where('task_id', $timesheet->task_id)
             ->update(['status' => 'completed']);
 
+            $parent_task = Tasks::where('parent_task_id', $timesheet->task_id)->first();
+
+            if($parent_task){
+
+                $parent_task_timesheet = Timesheet::where('task_id', $parent_task->id)->first();
+                $parent_task_timesheet->status = 'completed';
+                $parent_task_timesheet->save();
+
+                $statusId = TaskStatus::where('name', 'Completed')->value('_id');
+
+                Tasks::where('_id', $parent_task->id)->update([
+                    'status_id' => $statusId
+                ]); 
+
+            }
+
          }else{
 
-            $timesheet->status = 'Ready For QA';
+            if (empty($task?->qa_id)) {
+            $timesheet->status = 'completed';
             $timesheet->save();
 
+            Timesheet::where('task_id', $timesheet->task_id)
+            ->update(['status' => 'completed']);
+            }else{
+            $timesheet->status = 'Ready For QA';
+            $timesheet->save();
+            }
+            
          }
 
         $userId = $request->user->id; // Get authenticated user ID
@@ -1305,14 +1334,26 @@ class TimesheetController extends Controller
 
             Tasks::where('_id', $timesheet->task_id)->update([
                 'status_id' => $statusId
-        ]); 
+
+            ]); 
 
         }else{
 
-        $statusId = TaskStatus::where('name', 'Ready For QA')->value('_id');
+        if (empty($task?->qa_id)) {
+
+           $statusId = TaskStatus::where('name', 'Completed')->value('_id');
+        
         Tasks::where('_id', $timesheet->task_id)->update([
             'status_id' => $statusId
         ]); 
+
+         }else{
+             $statusId = TaskStatus::where('name', 'Ready For QA')->value('_id');
+        
+        Tasks::where('_id', $timesheet->task_id)->update([
+            'status_id' => $statusId
+        ]); 
+         }
 
         }
 
