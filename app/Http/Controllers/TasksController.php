@@ -17,7 +17,14 @@ class TasksController extends Controller
 {
     public function index(Request $request)
     {
-        $matchStage = (object)[]; // Ensure it's an object, not an empty array
+        $matchStage = [];
+
+        if (!$request->boolean('with_child')) {
+            $matchStage['is_child_task'] = ['$ne' => true];
+        }
+
+        $matchStage = (object) $matchStage;
+
         // Pagination setup
         $page = (int) $request->input('page', 1);
         $limit = (int) $request->input('limit', -1);
