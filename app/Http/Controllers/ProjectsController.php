@@ -29,8 +29,12 @@ class ProjectsController extends Controller
             $matchStage->assignee = ['$in' => array_map('strval', (array) $user_id)];
         } else if ($request->user->role->slug === 'project-manager') {
             $user_id = $request->user->id;
-            $matchStage->project_manager_id = ['$in' => array_map('strval', (array) $user_id)];
+            $matchStage->{'$or'} = [
+                ['assignee' => ['$in' => array_map('strval', (array) $user_id)]],
+                ['project_manager_id' => ['$in' => array_map('strval', (array) $user_id)]]
+            ];
         }
+
         // Filter by project name (partial match)
         if ($request->has('project_name')) {
             $matchStage->project_name = ['$regex' => $request->project_name, '$options' => 'i'];
@@ -103,8 +107,24 @@ class ProjectsController extends Controller
                 // Lookup project_manager
                 ['$lookup' => [
                     'from' => 'users',
-                    'localField' => 'project_manager_id',
-                    'foreignField' => '_id',
+                    'let' => [
+                        'pmIds' => [
+                            '$map' => [
+                                'input' => ['$ifNull' => ['$project_manager_id', []]],
+                                'as' => 'id',
+                                'in' => ['$toObjectId' => '$$id']
+                            ]
+                        ]
+                    ],
+                    'pipeline' => [
+                        [
+                            '$match' => [
+                                '$expr' => [
+                                    '$in' => ['$_id', '$$pmIds']
+                                ]
+                            ]
+                        ]
+                    ],
                     'as' => 'project_manager'
                 ]],
 

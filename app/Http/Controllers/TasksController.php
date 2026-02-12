@@ -11,6 +11,7 @@ use App\Models\Timesheet;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use App\Services\FileUploadService;
+use App\Notifications\PushNotification;
 use Carbon\Carbon;
 
 class TasksController extends Controller
@@ -259,6 +260,16 @@ class TasksController extends Controller
                     ],
                     'as' => 'qa'
                 ]],
+                ['$lookup' => [
+                    'from' => 'tasks',
+                    'let' => ['parentTaskId' => ['$toObjectId' => '$parent_task_id']],
+                    'pipeline' => [
+                        ['$match' => ['$expr' => ['$eq' => ['$_id', '$$parentTaskId']]]],
+                        ['$project' => ['title' => 1]]
+                    ],
+                    'as' => 'parent_task'
+                ]],
+                ['$unwind' => ['path' => '$parent_task', 'preserveNullAndEmptyArrays' => true]],
                 ['$lookup' => [
                     'from' => 'tasks',
                     'let' => ['taskId' => ['$toString' => '$_id']],
@@ -966,6 +977,52 @@ class TasksController extends Controller
                 'estimated_hours' => $request->estimated_hours,
             ]
         );
+
+        if ($request->parent_task_id == null){
+
+      $task = Tasks::with('status')->find($id);
+
+        if (!$task || !$task->status) {
+        return;
+        }
+
+        $statusMessages = [
+        'Completed' => [
+            'title' => 'Task Completed',
+            'body'  => 'Your task is completed',
+        ],
+        'QA Failed' => [
+            'title' => 'Task QA Failed',
+            'body'  => 'Your task is QA Failed',
+        ],
+        ];
+
+        $statusName = $task->status->name;
+
+        if (!isset($statusMessages[$statusName])) {
+        return;
+        }
+
+        $assigneeId = $request->assignees[0] ?? null;
+
+        if (!$assigneeId) {
+        return;
+        }
+
+        $user = User::find($assigneeId);
+
+        if (!$user) {
+        return;
+        }
+
+        $user->notify(
+        new PushNotification(
+            $statusMessages[$statusName]['title'],
+            $statusMessages[$statusName]['body']
+        )
+        );
+
+    }
         return response()->json($task, 200);
     }
 
