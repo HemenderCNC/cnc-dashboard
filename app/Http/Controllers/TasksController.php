@@ -26,6 +26,12 @@ class TasksController extends Controller
 
         $matchStage = (object) $matchStage;
 
+        $isEmployee = $request->user->role->slug === 'employee';
+        $withChild = $request->boolean('with_child');
+
+        $qaFailedStatus = TaskStatus::where('name', 'QA Failed')->first();
+        $qaFailedStatusId = $qaFailedStatus ? (string)$qaFailedStatus->_id : null;
+
         // Pagination setup
         $page = (int) $request->input('page', 1);
         $limit = (int) $request->input('limit', -1);
@@ -158,13 +164,51 @@ class TasksController extends Controller
         }
 
         // MongoDB Aggregation Pipeline
-        $tasks = Tasks::raw(function ($collection) use ($matchStage, $sortStage, $matchDueDate, $skip, $limit) {
+        $tasks = Tasks::raw(function ($collection) use ($matchStage, $sortStage, $matchDueDate, $skip, $limit, $qaFailedStatusId, $isEmployee, $withChild) {
             $pipeline = [
                 ['$match' => $matchStage],  // Apply Filters
             ];
 
+            if ($withChild && $qaFailedStatusId) {
+                $pipeline[] = [
+                    '$lookup' => [
+                        'from' => 'tasks',
+                        'let' => ['pId' => ['$toObjectId' => '$parent_task_id']],
+                        'pipeline' => [
+                            ['$match' => ['$expr' => ['$eq' => ['$_id', '$$pId']]]],
+                            ['$project' => ['status_id' => 1]]
+                        ],
+                        'as' => 'parent_status_check'
+                    ]
+                ];
+                $pipeline[] = ['$unwind' => ['path' => '$parent_status_check', 'preserveNullAndEmptyArrays' => true]];
+                $pipeline[] = [
+                    '$match' => [
+                        '$expr' => [
+                            '$or' => [
+                                ['$eq' => ['$parent_task_id', null]], 
+                                ['$eq' => ['$parent_status_check.status_id', $qaFailedStatusId]]
+                            ]
+                        ]
+                    ]
+                ];
+                $pipeline[] = ['$project' => ['parent_status_check' => 0]];
+            }
+
             if ($matchDueDate) {
                 $pipeline[] = $matchDueDate;
+            }
+
+            // Define child task match condition based on user role
+            if ($isEmployee && $qaFailedStatusId) {
+                $childTaskMatch = [
+                    '$and' => [
+                        ['$eq' => ['$parent_task_id', '$$taskId']],
+                        ['$eq' => ['$$parentStatusId', $qaFailedStatusId]]
+                    ]
+                ];
+            } else {
+                $childTaskMatch = ['$eq' => ['$parent_task_id', '$$taskId']];
             }
 
             // Lookup operations
@@ -272,9 +316,11 @@ class TasksController extends Controller
                 ['$unwind' => ['path' => '$parent_task', 'preserveNullAndEmptyArrays' => true]],
                 ['$lookup' => [
                     'from' => 'tasks',
-                    'let' => ['taskId' => ['$toString' => '$_id']],
+                    'let' => ['taskId' => ['$toString' => '$_id'], 'parentStatusId' => '$status_id'],
                     'pipeline' => [
-                        ['$match' => ['$expr' => ['$eq' => ['$parent_task_id', '$$taskId']]]],
+                        ['$match' => [
+                            '$expr' => $childTaskMatch
+                        ]],
                         ['$lookup' => [
                             'from' => 'projects',
                             'let' => ['statusId' => ['$toObjectId' => '$project_id']], // Convert to ObjectId
@@ -618,15 +664,44 @@ class TasksController extends Controller
             return $collection->aggregate($pipeline);
         });
 
-        $totalCount = Tasks::raw(function ($collection) use ($matchStage) {
+        $totalCount = Tasks::raw(function ($collection) use ($matchStage, $withChild, $qaFailedStatusId) {
             $matchFilter = [];
             if (!empty($matchStage)) {
                 $matchFilter = $matchStage;
             }
-            return $collection->aggregate([
-                ['$match' => (object)$matchFilter],
-                ['$count' => 'total']
-            ]);
+
+            $pipeline = [
+                ['$match' => (object)$matchFilter]
+            ];
+
+            if ($withChild && $qaFailedStatusId) {
+                $pipeline[] = [
+                    '$lookup' => [
+                        'from' => 'tasks',
+                        'let' => ['pId' => ['$toObjectId' => '$parent_task_id']],
+                        'pipeline' => [
+                            ['$match' => ['$expr' => ['$eq' => ['$_id', '$$pId']]]],
+                            ['$project' => ['status_id' => 1]]
+                        ],
+                        'as' => 'parent_status_check'
+                    ]
+                ];
+                $pipeline[] = ['$unwind' => ['path' => '$parent_status_check', 'preserveNullAndEmptyArrays' => true]];
+                $pipeline[] = [
+                    '$match' => [
+                        '$expr' => [
+                            '$or' => [
+                                ['$eq' => ['$parent_task_id', null]],
+                                ['$eq' => ['$parent_status_check.status_id', $qaFailedStatusId]]
+                            ]
+                        ]
+                    ]
+                ];
+            }
+
+            $pipeline[] = ['$count' => 'total'];
+
+            return $collection->aggregate($pipeline);
         })->first()['total'] ?? 0;
 
         $tasks_data = [
@@ -775,12 +850,12 @@ class TasksController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'title' => 'required|string|unique:tasks,title',
+            'title' => 'required|string',
             'project_id' => 'required|exists:projects,_id',
-            'milestone_id' => 'nullable|exists:milestones,_id',
+            // 'milestone_id' => 'nullable|exists:milestones,_id',
             'status_id' => 'required|exists:task_statuses,_id',
             'task_type_id' => 'required|exists:task_types,_id',
-            'priority' => 'required|string',
+            'priority' => ($request->user->role && $request->user->role->name === 'QA') ? 'nullable' : 'required|string',
             'owner_id' => 'required|exists:users,_id',
             'qa_id' => 'nullable|exists:users,_id',
             'assignees' => 'required|array|min:1', // <-- updated for array
@@ -798,9 +873,10 @@ class TasksController extends Controller
                     }
                 }
             ],
-            'estimated_hours' => 'required|string',
+            'estimated_hours' => ($request->user->role && $request->user->role->name === 'QA') ? 'nullable' : 'required|string',
             'attachment' => 'nullable|file|mimes:pdf,jpeg,jpg,png|max:2048',
         ]);
+
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
@@ -812,13 +888,16 @@ class TasksController extends Controller
 
         // Check and update project assignee list
         $project = Project::find($request->project_id);
+
         if ($project) {
             $currentAssignees = $project->assignee ?? [];
+
             foreach ($request->assignees as $assigneeId) {
                 if (!in_array($assigneeId, $currentAssignees)) {
                     $currentAssignees[] = $assigneeId;
                 }
             }
+
             $project->assignee = $currentAssignees;
             $project->save();
         }
@@ -895,12 +974,12 @@ class TasksController extends Controller
             return response()->json(['message' => 'Task not found'], 404);
         }
         $validator = Validator::make($request->all(), [
-            'title' => 'required|string|unique:tasks,title,' . $id,
+            'title' => 'required|string',
             'project_id' => 'required|exists:projects,_id',
             'milestone_id' => 'nullable|exists:milestones,_id',
             'status_id' => 'required|exists:task_statuses,_id',
             'task_type_id' => 'required|exists:task_types,_id',
-            'priority' => 'required|string',
+            'priority' => ($request->user->role && $request->user->role->name === 'QA') ? 'nullable' : 'required|string',
             'owner_id' => 'required|exists:users,_id',
             'qa_id' => 'nullable|exists:users,_id',
             'parent_task_id' => 'nullable|exists:tasks,_id',
@@ -918,7 +997,7 @@ class TasksController extends Controller
                     }
                 }
             ],
-            'estimated_hours' => 'required|string',
+            'estimated_hours' => ($request->user->role && $request->user->role->name === 'QA') ? 'nullable' : 'required|string',
             'attachment' => 'nullable|file|mimes:pdf,jpeg,jpg,png|max:2048',
         ]);
 
@@ -977,6 +1056,21 @@ class TasksController extends Controller
                 'estimated_hours' => $request->estimated_hours,
             ]
         );
+
+        if ($request->user->role && $request->user->role->name === 'QA') {
+
+            $childTasks = Tasks::where('parent_task_id', $id)->get();
+            $completedStatus = TaskStatus::where('name', 'Completed')->first();
+
+            if($request->status_id == $completedStatus->id){
+
+                foreach ($childTasks as $childTask) {
+                    $childTask->update([
+                        'status_id' => $completedStatus->id,
+                    ]);
+                }
+            }
+        }
 
         if ($request->parent_task_id == null){
 
@@ -1294,15 +1388,119 @@ class TasksController extends Controller
 
     public function getParentTasks(Request $request)
     {
-        $tasks = Tasks::where('parent_task_id', null)
-            ->where('is_child_task', false)
-            ->get();
-        $tasks = $tasks->map(function ($task) {
-            return [
-                'id' => $task->_id,
-                'title' => $task->title,
-            ];
+        $tasks = Tasks::raw(function ($collection) {
+            return $collection->aggregate([
+                [
+                    '$match' => [
+                        'parent_task_id' => null,
+                        'is_child_task' => false
+                    ]
+                ],
+                [
+                    '$lookup' => [
+                        'from' => 'projects',
+                        'let' => [
+                            'projectId' => [
+                                '$cond' => [
+                                    'if' => ['$or' => [['$eq' => ['$project_id', null]], ['$eq' => ['$project_id', '']]]],
+                                    'then' => null,
+                                    'else' => ['$toObjectId' => '$project_id']
+                                ]
+                            ]
+                        ],
+                        'pipeline' => [
+                            ['$match' => ['$expr' => ['$eq' => ['$_id', '$$projectId']]]],
+                            ['$project' => ['project_name' => 1]]
+                        ],
+                        'as' => 'project_data'
+                    ]
+                ],
+                [
+                    '$lookup' => [
+                        'from' => 'users',
+                        'let' => [
+                            'ownerId' => [
+                                '$cond' => [
+                                    'if' => ['$or' => [['$eq' => ['$owner_id', null]], ['$eq' => ['$owner_id', '']]]],
+                                    'then' => null,
+                                    'else' => ['$toObjectId' => '$owner_id']
+                                ]
+                            ]
+                        ],
+                        'pipeline' => [
+                            ['$match' => ['$expr' => ['$eq' => ['$_id', '$$ownerId']]]],
+                            ['$project' => [
+                                'full_name' => ['$concat' => ['$name', ' ', ['$ifNull' => ['$last_name', '']]]]
+                            ]]
+                        ],
+                        'as' => 'owner_data'
+                    ]
+                ],
+                [
+                    '$lookup' => [
+                        'from' => 'users',
+                        'let' => [
+                            'qaId' => [
+                                '$cond' => [
+                                    'if' => ['$or' => [['$eq' => ['$qa_id', null]], ['$eq' => ['$qa_id', '']]]],
+                                    'then' => null,
+                                    'else' => ['$toObjectId' => '$qa_id']
+                                ]
+                            ]
+                        ],
+                        'pipeline' => [
+                            ['$match' => ['$expr' => ['$eq' => ['$_id', '$$qaId']]]],
+                            ['$project' => [
+                                'full_name' => ['$concat' => ['$name', ' ', ['$ifNull' => ['$last_name', '']]]]
+                            ]]
+                        ],
+                        'as' => 'qa_data'
+                    ]
+                ],
+                [
+                    '$lookup' => [
+                        'from' => 'users',
+                        'let' => [
+                            'assigneeIds' => [
+                                '$map' => [
+                                    'input' => ['$ifNull' => ['$assignees', []]],
+                                    'as' => 'id',
+                                    'in' => [
+                                        '$cond' => [
+                                            'if' => ['$or' => [['$eq' => ['$$id', null]], ['$eq' => ['$$id', '']]]],
+                                            'then' => null,
+                                            'else' => ['$toObjectId' => '$$id']
+                                        ]
+                                    ]
+                                ]
+                            ]
+                        ],
+                        'pipeline' => [
+                            ['$match' => ['$expr' => ['$in' => ['$_id', '$$assigneeIds']]]],
+                            ['$project' => [
+                                'full_name' => ['$concat' => ['$name', ' ', ['$ifNull' => ['$last_name', '']]]]
+                            ]]
+                        ],
+                        'as' => 'assignees_data'
+                    ]
+                ],
+                [
+                    '$project' => [
+                        '_id' => 0,
+                        'id' => ['$toString' => '$_id'],
+                        'title' => 1,
+                        'project_id' => 1,
+                        'project_name' => ['$ifNull' => [['$arrayElemAt' => ['$project_data.project_name', 0]], null]],
+                        'assignees' => 1,
+                        'assignee_names' => '$assignees_data.full_name',
+                        'qa_id' => 1,
+                        'qa_name' => ['$ifNull' => [['$arrayElemAt' => ['$qa_data.full_name', 0]], null]],
+                        'owner_id' => 1,
+                        'owner_name' => ['$ifNull' => [['$arrayElemAt' => ['$owner_data.full_name', 0]], null]],
+                    ]
+                ]
+            ]);
         });
-        return response()->json($tasks);
+        return response()->json(iterator_to_array($tasks));
     }
 }
