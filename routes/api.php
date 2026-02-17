@@ -547,7 +547,7 @@ Route::middleware('api')->group(function () {
             });
 
             // Add task
-            Route::post('/', [TasksController::class, 'store'])->middleware('permission:add_task');
+            Route::post('/', [TasksController::class, 'store'])->middleware('permission:add_task,add_bug');
 
             // Update task
             Route::post('/{id}', [TasksController::class, 'update'])->middleware('permission:edit_task');
