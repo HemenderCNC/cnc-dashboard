@@ -944,17 +944,53 @@ class UserController extends Controller
      */
         public function getAllEmployees()
     {
-        $users = User::with('role')
-        ->get([
-            'name',
-            '_id',
-            'last_name',
-            'email',
-            'contact_number',
-            'role_id',
-            'profile_photo',
-            'employee_id'
-        ]);
+        $users = User::raw(function ($collection) {
+            return $collection->aggregate([
+                // Convert role_id (string) to ObjectId for the lookup
+                [
+                    '$addFields' => [
+                        'role_id_object' => [
+                            '$cond' => [
+                                'if' => [
+                                    '$and' => [
+                                        ['$ne' => ['$role_id', null]],
+                                        ['$ne' => ['$role_id', '']],
+                                    ]
+                                ],
+                                'then' => ['$toObjectId' => '$role_id'],
+                                'else' => null
+                            ]
+                        ]
+                    ]
+                ],
+
+                // Lookup Role
+                [
+                    '$lookup' => [
+                        'from' => 'roles',
+                        'localField' => 'role_id_object',
+                        'foreignField' => '_id',
+                        'as' => 'role'
+                    ]
+                ],
+                ['$unwind' => ['path' => '$role', 'preserveNullAndEmptyArrays' => true]],
+
+                // Project Only Required Fields
+                [
+                    '$project' => [
+                        'name' => 1,
+                        '_id' => 1,
+                        'last_name' => 1,
+                        'email' => 1,
+                        'contact_number' => 1,
+                        'role_id' => 1,
+                        'role' => 1,
+                        'profile_photo' => 1,
+                        'employee_id' => 1,
+                    ]
+                ]
+            ]);
+        });
 
         // Check if users exist
         if ($users->isEmpty()) {
