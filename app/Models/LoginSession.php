@@ -32,92 +32,93 @@ class LoginSession extends Eloquent
         return !empty($this->time_log) ? $this->time_log[count($this->time_log) - 1]['end_time'] : null;
     }
     public function getTotalLoginTimeAttribute()
-    {
-        $totalMinutes = 0;
+{
+    $totalSeconds = 0;
 
-        if (!empty($this->time_log)) {
-            foreach ($this->time_log as $log) {
-                $start = Carbon::createFromFormat('H:i', $log['start_time']);
-                $end = Carbon::createFromFormat('H:i', $log['end_time']);
+    if (!empty($this->time_log)) {
+        foreach ($this->time_log as $log) {
+            $start = Carbon::createFromFormat('H:i', $log['start_time']);
+            $end   = Carbon::createFromFormat('H:i', $log['end_time']);
 
-                // Handle past-midnight checkout
-                if ($end->lt($start)) {
-                    $end->addDay();
-                }
-
-                $totalMinutes += $start->diffInMinutes($end);
+            if ($end->lt($start)) {
+                $end->addDay();
             }
+
+            if ($end->eq($start)) {
+                continue;
+            }
+
+            $totalSeconds += $start->diffInSeconds($end);
         }
-
-        $hours = floor($totalMinutes / 60);
-        $minutes = $totalMinutes % 60;
-
-        return sprintf("%02d:%02d", $hours, $minutes);
     }
+
+    return gmdate('H:i', $totalSeconds);
+}
+
     public function getTotalBreakTimeAttribute()
-    {
-        $totalMinutes = 0;
+{
+    $totalSeconds = 0;
 
-        if (!empty($this->break_log)) {
-            foreach ($this->break_log as $log) {
-                $start = Carbon::createFromFormat('H:i', $log['start_time']);
-                $end = Carbon::createFromFormat('H:i', $log['end_time']);
+    if (!empty($this->break_log)) {
+        foreach ($this->break_log as $log) {
 
-                // Handle past-midnight checkout
-                if ($end->lt($start)) {
-                    $end->addDay();
-                }
+            if (
+                empty($log['start_time']) ||
+                empty($log['end_time'])
+            ) {
+                continue;
+            }
 
-                $totalMinutes += $start->diffInMinutes($end);
+            $start = Carbon::createFromFormat('H:i', $log['start_time']);
+            $end   = Carbon::createFromFormat('H:i', $log['end_time']);
+
+            // Handle past-midnight
+            if ($end->lt($start)) {
+                $end->addDay();
+            }
+
+            $diffSeconds = $end->diffInSeconds($start);
+
+            // Ignore zero or negative breaks
+            if ($diffSeconds > 0) {
+                $totalSeconds += $diffSeconds;
             }
         }
-
-        $hours = floor($totalMinutes / 60);
-        $minutes = $totalMinutes % 60;
-
-        return sprintf("%02d:%02d", $hours, $minutes);
     }
+
+    return gmdate('H:i', $totalSeconds);
+}
+
     public function getTotalWorkingTimeAttribute()
-    {
-        $totalLoginMinutes = 0;
-        $totalBreakMinutes = 0;
+{
+    $loginSeconds = 0;
+    $breakSeconds = 0;
 
-        // Calculate total login time
-        if (!empty($this->time_log)) {
-            foreach ($this->time_log as $log) {
-                $start = Carbon::createFromFormat('H:i', $log['start_time']);
-                $end = Carbon::createFromFormat('H:i', $log['end_time']);
+    foreach ($this->time_log ?? [] as $log) {
+        $start = Carbon::createFromFormat('H:i', $log['start_time']);
+        $end   = Carbon::createFromFormat('H:i', $log['end_time']);
 
-                // Handle past-midnight checkout
-                if ($end->lt($start)) {
-                    $end->addDay();
-                }
-
-                $totalLoginMinutes += $start->diffInMinutes($end);
-            }
+        if ($end->lt($start)) {
+            $end->addDay();
         }
 
-        // Calculate total break time
-        if (!empty($this->break_log)) {
-            foreach ($this->break_log as $break) {
-                $start = Carbon::createFromFormat('H:i', $break['start_time']);
-                $end = Carbon::createFromFormat('H:i', $break['end_time']);
-
-                // Handle past-midnight break
-                if ($end->lt($start)) {
-                    $end->addDay();
-                }
-
-                $totalBreakMinutes += $start->diffInMinutes($end);
-            }
-        }
-
-        // Calculate total working time (Login Time - Break Time)
-        $totalWorkingMinutes = max(0, $totalLoginMinutes - $totalBreakMinutes);
-
-        $hours = floor($totalWorkingMinutes / 60);
-        $minutes = $totalWorkingMinutes % 60;
-
-        return sprintf("%02d:%02d", $hours, $minutes);
+        $loginSeconds += $start->diffInSeconds($end);
     }
+
+    foreach ($this->break_log ?? [] as $log) {
+        $start = Carbon::createFromFormat('H:i', $log['start_time']);
+        $end   = Carbon::createFromFormat('H:i', $log['end_time']);
+
+        if ($end->lt($start)) {
+            $end->addDay();
+        }
+
+        $breakSeconds += $start->diffInSeconds($end);
+    }
+
+    $workingSeconds = max(0, $loginSeconds - $breakSeconds);
+
+    return gmdate('H:i', $workingSeconds);
+}
+
 }

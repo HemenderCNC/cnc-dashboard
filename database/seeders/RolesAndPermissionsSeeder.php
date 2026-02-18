@@ -34,6 +34,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_employee',
             'delete_employee',
             'add_task',
+            'add_bug',
             'edit_task',
             'view_task',
             'delete_task',
