@@ -1336,19 +1336,22 @@ class TimesheetController extends Controller
                 }
             }
 
-            $parentTasks = Tasks::where('parent_task_id', $timesheet->task_id)->get();
+            if($task->is_child_task == false){
 
-            $statusId = TaskStatus::where('name', 'Completed')->value('_id');
+                $parentTasks = Tasks::where('parent_task_id', $timesheet->task_id)->get();
 
-            foreach ($parentTasks as $parentTask) {
+                $statusId = TaskStatus::where('name', 'Completed')->value('_id');
 
-                // Update parent task timesheet
-                Timesheet::where('task_id', $parentTask->_id)
-                    ->update(['status' => 'completed']);
+                foreach ($parentTasks as $parentTask) {
 
-                // Update parent task status
-                Tasks::where('_id', $parentTask->_id)
-                    ->update(['status_id' => $statusId]);
+                    // Update parent task timesheet
+                    Timesheet::where('task_id', $parentTask->_id)
+                        ->update(['status' => 'completed']);
+
+                    // Update parent task status
+                    Tasks::where('_id', $parentTask->_id)
+                        ->update(['status_id' => $statusId]);
+                }
             }
 
          }else{

@@ -29,8 +29,9 @@ class TasksController extends Controller
         $isEmployee = $request->user->role->slug === 'employee';
         $withChild = $request->boolean('with_child');
 
-        $qaFailedStatus = TaskStatus::where('name', 'QA Failed')->first();
-        $qaFailedStatusId = $qaFailedStatus ? (string)$qaFailedStatus->_id : null;
+        $statusNames = ['QA Failed', 'Completed', 'On Hold', 'In Progress (QA)', 'On Hold (QA)'];
+        $taskStatusesCollection = TaskStatus::whereIn('name', $statusNames)->get();
+        $allStatusIds = $taskStatusesCollection->pluck('_id')->map(fn($id) => (string)$id)->toArray();
 
         // Pagination setup
         $page = (int) $request->input('page', 1);
@@ -164,12 +165,12 @@ class TasksController extends Controller
         }
 
         // MongoDB Aggregation Pipeline
-        $tasks = Tasks::raw(function ($collection) use ($matchStage, $sortStage, $matchDueDate, $skip, $limit, $qaFailedStatusId, $isEmployee, $withChild) {
+        $tasks = Tasks::raw(function ($collection) use ($matchStage, $sortStage, $matchDueDate, $skip, $limit, $allStatusIds, $isEmployee, $withChild) {
             $pipeline = [
                 ['$match' => $matchStage],  // Apply Filters
             ];
 
-            if ($withChild && $qaFailedStatusId) {
+            if ($withChild && !empty($allStatusIds)) {
                 $pipeline[] = [
                     '$lookup' => [
                         'from' => 'tasks',
@@ -187,7 +188,7 @@ class TasksController extends Controller
                         '$expr' => [
                             '$or' => [
                                 ['$eq' => ['$parent_task_id', null]], 
-                                ['$eq' => ['$parent_status_check.status_id', $qaFailedStatusId]]
+                                ['$in' => ['$parent_status_check.status_id', $allStatusIds]]
                             ]
                         ]
                     ]
@@ -200,11 +201,11 @@ class TasksController extends Controller
             }
 
             // Define child task match condition based on user role
-            if ($isEmployee && $qaFailedStatusId) {
+            if ($isEmployee && !empty($allStatusIds)) {
                 $childTaskMatch = [
                     '$and' => [
                         ['$eq' => ['$parent_task_id', '$$taskId']],
-                        ['$eq' => ['$$parentStatusId', $qaFailedStatusId]]
+                        ['$in' => ['$$parentStatusId', $allStatusIds]]
                     ]
                 ];
             } else {
@@ -664,7 +665,7 @@ class TasksController extends Controller
             return $collection->aggregate($pipeline);
         });
 
-        $totalCount = Tasks::raw(function ($collection) use ($matchStage, $withChild, $qaFailedStatusId) {
+        $totalCount = Tasks::raw(function ($collection) use ($matchStage, $withChild, $allStatusIds) {
             $matchFilter = [];
             if (!empty($matchStage)) {
                 $matchFilter = $matchStage;
@@ -674,7 +675,7 @@ class TasksController extends Controller
                 ['$match' => (object)$matchFilter]
             ];
 
-            if ($withChild && $qaFailedStatusId) {
+            if ($withChild && !empty($allStatusIds)) {
                 $pipeline[] = [
                     '$lookup' => [
                         'from' => 'tasks',
@@ -692,7 +693,7 @@ class TasksController extends Controller
                         '$expr' => [
                             '$or' => [
                                 ['$eq' => ['$parent_task_id', null]],
-                                ['$eq' => ['$parent_status_check.status_id', $qaFailedStatusId]]
+                                ['$in' => ['$parent_status_check.status_id', $allStatusIds]]
                             ]
                         ]
                     ]
