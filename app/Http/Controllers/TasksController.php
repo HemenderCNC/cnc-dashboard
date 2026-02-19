@@ -1389,13 +1389,21 @@ class TasksController extends Controller
 
     public function getParentTasks(Request $request)
     {
-        $tasks = Tasks::raw(function ($collection) {
+        $project_id = $request->project_id;
+
+        $tasks = Tasks::raw(function ($collection) use ($project_id) {
+            $match = [
+                'parent_task_id' => null,
+                'is_child_task' => false
+            ];
+
+            if ($project_id) {
+                $match['project_id'] = (string) $project_id;
+            }
+
             return $collection->aggregate([
                 [
-                    '$match' => [
-                        'parent_task_id' => null,
-                        'is_child_task' => false
-                    ]
+                    '$match' => $match
                 ],
                 [
                     '$lookup' => [
