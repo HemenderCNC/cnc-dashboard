@@ -65,6 +65,7 @@ class LoginSessionController extends Controller
                 ];
             }
             $session->time_log = $timeLog;
+            $session->is_logout = false;
             $session->save();
 
             if ($session->break === true) {
@@ -87,6 +88,7 @@ class LoginSessionController extends Controller
                 }
 
                 $session->break_log = $breakLog;
+                $session->is_logout = false;
                 $session->save();
             }
         } else {
@@ -104,6 +106,7 @@ class LoginSessionController extends Controller
             LoginSession::create([
                 'employee_id' => $userId,
                 'date' => $currentDate,
+                'is_logout' => false,
                 'time_log' => [
                     [
                         'start_time' => $currentTime,

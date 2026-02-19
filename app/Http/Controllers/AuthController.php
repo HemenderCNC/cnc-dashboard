@@ -16,6 +16,7 @@ use App\Models\PersonalAccessToken;
 use App\Helpers\MailHelper;
 use App\Http\Controllers\TimesheetController;
 use App\Models\Timesheet;
+use App\Models\LoginSession;
 use Carbon\Carbon;
 
 class AuthController extends Controller
@@ -106,6 +107,16 @@ class AuthController extends Controller
 
         // Generate a custom token
         $token = PersonalAccessToken::createToken($user, 'auth_token', ['*'],800);
+
+         $loginSession = LoginSession::where('employee_id', $user->id)
+           ->where('date', now()->toDateString())
+           ->where('is_logout', true)
+            ->first();
+
+           if ($loginSession) {
+                $loginSession->is_logout = false;
+                $loginSession->save();
+            }
 
         // Return the token
         return response()->json([
@@ -221,11 +232,21 @@ class AuthController extends Controller
         $userID = $request->user->id;
         if($userID){
             $user = User::find($userID);
+            
             if($user){
                 $user->is_logout = true;
                 $user->save();
             }
-            
+
+            $loginSession = LoginSession::where('employee_id', $user->id)
+           ->where('date', now()->toDateString())
+            ->first();
+
+           if ($loginSession) {
+                $loginSession->is_logout = true;
+                $loginSession->save();
+            }
+
             $timesheet = Timesheet::where('employee_id', $userID)
             ->where('status', 'running')
             ->first();

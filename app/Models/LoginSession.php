@@ -21,7 +21,7 @@ class LoginSession extends Eloquent
         'break',
         'break_log',
     ];
-    protected $appends = ['check_in_time', 'check_out_time', 'total_login_time','total_working_time','total_break_time'];
+    protected $appends = ['check_in_time', 'check_out_time', 'total_login_time','total_working_time','total_break_time','is_logout'];
 
     public function getCheckInTimeAttribute()
     {
