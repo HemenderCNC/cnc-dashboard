@@ -119,7 +119,7 @@ Route::middleware('api')->group(function () {
         Route::get('users', [UserController::class, 'getAllUsers']); //Get all users
         Route::get('user/{id}', [UserController::class, 'getUserById']); // Get a user details by user ID
         Route::post('users', [UserController::class, 'addUser'])->middleware('permission:add_user');
-        Route::post('users/{id}', [UserController::class, 'editUser'])->middleware('permission:edit_user');  // Edit user
+        Route::post('users/{id}', [UserController::class, 'editUser']);  // Edit user
         Route::delete('users/{id}', [UserController::class, 'deleteUser'])->middleware('permission:delete_user');
 
         Route::get('getallotheremployees', [UserController::class, 'getAllOtherEmployees']); //Get all users
@@ -655,7 +655,8 @@ Route::middleware('api')->group(function () {
             Route::middleware(['permission:edit_notice'])->group(function () {
                 Route::put('/{id}', [NoticeController::class, 'update']); // Update a notice
             });
-            Route::middleware(['permission:change_status'])->group(function () {
+            Route::middleware(['permission:change_status'])->group(function ()
+            {
                 Route::put('/{id}/status', [NoticeController::class, 'changeStatus']);
             });
             Route::middleware(['permission:delete_notice'])->group(function () {

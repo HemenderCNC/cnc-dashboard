@@ -1058,6 +1058,7 @@ class TimesheetController extends Controller
             'time_log' => [$timeLogEntry],
         ]];
 
+
         if ($timesheet) {
 
             if ($timesheet->status === 'completed') {
@@ -1066,11 +1067,17 @@ class TimesheetController extends Controller
                 ], 400);
             }
 
-            if($request->user->role->name == 'Employee' && $timesheet->status == 'Ready For QA'){
+            if ($timesheet->status === 'paused') {
+                return response()->json([
+                    'message' => 'Task already selected.'
+                ], 400);
+            }
 
+            if($request->user->role->name == 'Employee' && $timesheet->status == 'Ready For QA'){
+                
                 $task = Tasks::with('status')
-            ->where('_id', $request->task_id)
-            ->first();  
+                ->where('_id', $request->task_id)
+                ->first();  
            
                 if($task->status->name == 'QA Failed'){
 
@@ -1078,13 +1085,13 @@ class TimesheetController extends Controller
 
                 $dateFound = false;
 
-            foreach ($dates as &$dateEntry) {
-                    if ($dateEntry['date'] === $currentDate) {
-                        $dateEntry['time_log'][] = $timeLogEntry;
-                        $dateFound = true;
-                        break;
+                    foreach ($dates as &$dateEntry) {
+                            if ($dateEntry['date'] === $currentDate) {
+                                $dateEntry['time_log'][] = $timeLogEntry;
+                                $dateFound = true;
+                                break;
+                            }
                     }
-            }
 
                 if (!$dateFound) {
                     $dates[] = [
@@ -1096,6 +1103,7 @@ class TimesheetController extends Controller
                 $timesheet->update([
                     'dates'  => $dates,
                     'status' => 'running',
+                    'work_description' => $request->work_description,
                 ]);
 
                 }else{
@@ -1111,13 +1119,13 @@ class TimesheetController extends Controller
 
                 $dateFound = false;
 
-            foreach ($dates as &$dateEntry) {
-                    if ($dateEntry['date'] === $currentDate) {
-                        $dateEntry['time_log'][] = $timeLogEntry;
-                        $dateFound = true;
-                        break;
-                    }
-            }
+                foreach ($dates as &$dateEntry) {
+                        if ($dateEntry['date'] === $currentDate) {
+                            $dateEntry['time_log'][] = $timeLogEntry;
+                            $dateFound = true;
+                            break;
+                        }
+                }
 
                 if (!$dateFound) {
                     $dates[] = [
@@ -1129,6 +1137,7 @@ class TimesheetController extends Controller
                 $timesheet->update([
                     'dates'  => $dates,
                     'status' => 'running',
+                    'work_description' => $request->work_description,
                 ]);
 
             }
@@ -1155,11 +1164,9 @@ class TimesheetController extends Controller
                 'work_description' => $request->work_description,
                 'status' => 'running',
             ]);
-            
         }
 
         if($request->user->role->name == 'QA'){
-
             $task = Tasks::with('status')
             ->where('_id', $request->task_id)
             ->first();
@@ -1180,13 +1187,14 @@ class TimesheetController extends Controller
            }         
         }
         else{
+
             $statusId = TaskStatus::where('name', 'In Progress (Dev)')->value('_id');
 
             Tasks::where('_id', $request->task_id)->update([
                 'status_id' => $statusId
             ]);
         }
-
+        
         // Pause any other running timesheets for the user
         Timesheet::where('employee_id', $userId)
             ->where('_id', '!=', $timesheet->_id)

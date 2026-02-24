@@ -20,6 +20,7 @@ class LoginSession extends Eloquent
         'time_log',
         'break',
         'break_log',
+        'is_logout',
     ];
     protected $appends = ['check_in_time', 'check_out_time', 'total_login_time','total_working_time','total_break_time','is_logout'];
 
@@ -120,5 +121,10 @@ class LoginSession extends Eloquent
 
     return gmdate('H:i', $workingSeconds);
 }
+
+    public function getIsLogoutAttribute()
+    {
+        return $this->attributes['is_logout'] ?? false;
+    }
 
 }
