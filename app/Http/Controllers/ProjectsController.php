@@ -24,17 +24,14 @@ class ProjectsController extends Controller
         $page = (int) $request->input('page', 1);
         $limit = (int) $request->input('limit', -1);
         $skip = ($page - 1) * $limit;
-        if ($request->user->role->slug === 'employee' || $request->user->role->slug === 'team-leader') {
+
+        if ($request->user->role->slug === 'employee') {
+
             $user_id = $request->user->id;
             $matchStage->assignee = ['$in' => array_map('strval', (array) $user_id)];
-        } else if ($request->user->role->slug === 'project-manager') {
-            $user_id = $request->user->id;
-            $matchStage->{'$or'} = [
-                ['assignee' => ['$in' => array_map('strval', (array) $user_id)]],
-                ['project_manager_id' => ['$in' => array_map('strval', (array) $user_id)]]
-            ];
-        }
 
+        } 
+        
         // Filter by project name (partial match)
         if ($request->has('project_name')) {
             $matchStage->project_name = ['$regex' => $request->project_name, '$options' => 'i'];
