@@ -537,6 +537,8 @@ Route::middleware('api')->group(function () {
 
         //Tasks API
         Route::prefix('tasks')->group(function () {
+            // R&D task
+            Route::post('/rnd-task', [TasksController::class, 'rndTask'])->middleware('permission:add_task');
             // View tasks
             Route::get('/project-milstones-summary', [TasksController::class, 'getProjectMilestonesSummary']);
             Route::get('/project-tasks-summary', [TasksController::class, 'getTasksByProject']);
@@ -555,7 +557,6 @@ Route::middleware('api')->group(function () {
             // Delete task
             Route::delete('/{id}', [TasksController::class, 'destroy'])->middleware('permission:delete_task');
         });
-
 
         // Route::prefix('tasks')->group(function () {
         //     //Get task of a project for logedin user

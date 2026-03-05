@@ -1018,6 +1018,7 @@ class TasksController extends Controller
 
         // Check and update project assignee list
         $project = Project::find($request->project_id);
+
         if ($project) {
             $currentAssignees = $project->assignee ?? [];
             foreach ($request->assignees as $assigneeId) {
@@ -1512,4 +1513,74 @@ class TasksController extends Controller
         });
         return response()->json(iterator_to_array($tasks));
     }
+
+    public function rndTask(Request $request)
+    
+{
+    $users = User::whereHas('role', function ($q) {
+        $q->whereNotIn('name', ['Administrator', 'HR']);
+    })->get();
+
+    $status = TaskStatus::where('name', 'To Do')->first();
+    $status_id = $status ? $status->id : null;
+
+    $lastTask = Tasks::orderBy('created_at', 'desc')->first();
+
+if ($lastTask && isset($lastTask->task_id)) {
+    $lastNumber = (int) str_replace('CNC-', '', $lastTask->task_id);
+    $nextNumber = $lastNumber + 1;
+} else {
+    $nextNumber = 1;
+}   
+
+    $tasks = [];
+
+    foreach ($users as $user) {
+
+        $project = Project::find('6970b436620a36803d0fece2');
+
+        $taskId = 'CNC-' . str_pad($nextNumber, 2, '0', STR_PAD_LEFT);
+        $nextNumber++;
+
+        if ($project) {
+            $currentAssignees = $project->assignee ?? [];
+
+            // 👇 SINGLE ID add karo (NO foreach needed)
+            if (!in_array((string) $user->id, $currentAssignees)) {
+                $currentAssignees[] = (string) $user->id;
+            }
+
+            $project->assignee = $currentAssignees;
+            $project->save();
+        }
+
+        $task = Tasks::create([
+            'title' => "R&D - " . $user->name . ' ' . $user->last_name,
+            'owner_id' => (string) $user->id,
+            'assignees' => [(string) $user->id],
+            'description' => "R&D",
+            'status_id' => $status_id,
+            'priority' => 'Medium',
+            'project_id' => '6970b436620a36803d0fece2',
+            
+            'task_type_id' => '6970b4f06f685f01a8000c52',
+            'is_child_task' => false,
+            'estimated_hours' => 100,
+            'task_id' => $taskId,
+            'updated_at' => now(),
+            'created_at' => now(),
+            'milestone_id' => null,
+            'parent_task_id' => null,
+            'qa_id' => null,
+            'due_date' => '2026-12-31T06:20:46.186+00:00',  
+            'start_date' => now(),  
+            'updated_by' => (string) $user->id,
+            'created_by' => (string) $user->id,
+        ]);
+
+        $tasks[] = $task;
+    }
+
+    return response()->json($tasks, 201);
+}
 }
