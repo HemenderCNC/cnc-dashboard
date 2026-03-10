@@ -1980,6 +1980,17 @@ class TimesheetController extends Controller
             ->where('status', '!=', 'Ready For QA')
             ->update(['status' => 'paused']);
 
+        $statusId = TaskStatus::where('name', 'In Progress (Dev)')->value('_id');
+
+        $onHold = TaskStatus::where('name', 'On Hold')->value('_id');
+
+        Tasks::whereIn('assignees', [$userId])
+            ->where('_id', '!=', $platform->id)
+            ->where('status_id', $statusId)
+            ->update([
+                'status_id' => $onHold
+            ]);
+
         return response()->json($timesheetArray, 201);
     }
 }
