@@ -73,7 +73,7 @@ Route::middleware('api')->group(function () {
         Route::get('roles', [RoleController::class, 'getAllRoles'])->middleware('permission:view_role'); // Get all roles
         Route::get('role/{id}', [RoleController::class, 'getRoleById'])->middleware('permission:view_role'); // Get all roles
 
-                // Example route for administrator and manager roles
+        // Example route for administrator and manager roles
         Route::post('users/update-password', [UserController::class, 'updateUserPassword'])
             ->middleware(['auth.token', 'role:Administrator,Team Leader,Project Manager']);
 
@@ -656,8 +656,7 @@ Route::middleware('api')->group(function () {
             Route::middleware(['permission:edit_notice'])->group(function () {
                 Route::put('/{id}', [NoticeController::class, 'update']); // Update a notice
             });
-            Route::middleware(['permission:change_status'])->group(function ()
-            {
+            Route::middleware(['permission:change_status'])->group(function () {
                 Route::put('/{id}/status', [NoticeController::class, 'changeStatus']);
             });
             Route::middleware(['permission:delete_notice'])->group(function () {
@@ -720,11 +719,11 @@ Route::middleware('api')->group(function () {
         });
 
         //Timesheet Module
-        Route::get('/resource-occupancy', [TimesheetController::class, 'resourceOccupancy'])->middleware('role:Administrator,Team Leader,Project Manager'); ; // Get timesheet by ID
-       Route::get('/resource-avilible', [TimesheetController::class, 'resourceAvilible']);
+        Route::get('/resource-occupancy', [TimesheetController::class, 'resourceOccupancy'])->middleware('role:Administrator,Team Leader,Project Manager');; // Get timesheet by ID
+        Route::get('/resource-avilible', [TimesheetController::class, 'resourceAvilible']);
 
-       Route::get('/spent-time-by-role', [TimesheetController::class, 'spentTimeByRole']);
-      
+        Route::get('/spent-time-by-role', [TimesheetController::class, 'spentTimeByRole']);
+
         Route::prefix('timesheet')->group(function () {
 
             Route::middleware(['permission:view_timesheet'])->group(function () {
@@ -762,6 +761,8 @@ Route::middleware('api')->group(function () {
         Route::get('/start-break', [TimesheetController::class, 'startBreak']);
         Route::get('/stop-break', [TimesheetController::class, 'stopBreak']);
 
+        Route::post('/meeting', [TimesheetController::class, 'meeting']);
+
         //General settings module
         Route::prefix('updategeneralsettings')->group(function () {
             //Route::get('/', [GeneralSettingsController::class, 'index']); // Get all settings
@@ -777,6 +778,10 @@ Route::middleware('api')->group(function () {
         //Activity Logs listing
         Route::get('/activity-logs', [ActivityLogController::class, 'getActivityLogs']);
         Route::get('getgeneralsettings/protected', [GeneralSettingsController::class, 'index']); // Update settings
+
+
+
+
     });
 });
 Route::get('getgeneralsettings/', [GeneralSettingsController::class, 'index']); // Update settings
