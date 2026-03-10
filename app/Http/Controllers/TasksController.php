@@ -8,6 +8,7 @@ use App\Models\Milestones;
 use App\Models\Project;
 use App\Models\User;
 use App\Models\Timesheet;
+use App\Models\TaskLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use App\Services\FileUploadService;
@@ -187,7 +188,7 @@ class TasksController extends Controller
                     '$match' => [
                         '$expr' => [
                             '$or' => [
-                                ['$eq' => ['$parent_task_id', null]], 
+                                ['$eq' => ['$parent_task_id', null]],
                                 ['$in' => ['$parent_status_check.status_id', $allStatusIds]]
                             ]
                         ]
@@ -1006,6 +1007,8 @@ class TasksController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        $oldData = $task->toArray();
+
         $service = app(FileUploadService::class);
         if ($request->hasFile('attachment')) {
             // Delete old profile photo if exists
@@ -1059,12 +1062,44 @@ class TasksController extends Controller
             ]
         );
 
+        $updatedData = $task->fresh()->toArray();
+
+        $ignoreFields = ['updated_at', 'created_at'];
+
+        foreach ($updatedData as $field => $newValue) {
+
+            if (in_array($field, $ignoreFields)) {
+                continue;
+            }
+
+            if (!array_key_exists($field, $oldData)) {
+                continue;
+            }
+
+            $oldValue = $oldData[$field];
+
+            if ($oldValue != $newValue) {
+
+                $oldValue = $this->getFieldValue($field, $oldValue);
+                $newValue = $this->getFieldValue($field, $newValue);
+
+                TaskLog::create([
+                    'task_id' => (string)$task->_id,
+                    'field_name' => $field,
+                    'old_value' => (string)$oldValue,
+                    'new_value' => (string)$newValue,
+                    'updated_user_id' => (string)$request->user->id,
+                    'created_at' => now()
+                ]);
+            }
+        }
+
         if ($request->user->role && $request->user->role->name === 'QA') {
 
             $childTasks = Tasks::where('parent_task_id', $id)->get();
             $completedStatus = TaskStatus::where('name', 'Completed')->first();
 
-            if($request->status_id == $completedStatus->id){
+            if ($request->status_id == $completedStatus->id) {
 
                 foreach ($childTasks as $childTask) {
                     $childTask->update([
@@ -1074,52 +1109,93 @@ class TasksController extends Controller
             }
         }
 
-        if ($request->parent_task_id == null){
+        if ($request->parent_task_id == null) {
 
-      $task = Tasks::with('status')->find($id);
+            $task = Tasks::with('status')->find($id);
 
-        if (!$task || !$task->status) {
-        return;
+            if (!$task || !$task->status) {
+                return;
+            }
+
+            $statusMessages = [
+                'Completed' => [
+                    'title' => 'Task Completed',
+                    'body'  => 'Your task is completed',
+                ],
+                'QA Failed' => [
+                    'title' => 'Task QA Failed',
+                    'body'  => 'Your task is QA Failed',
+                ],
+            ];
+
+            $statusName = $task->status->name;
+
+            if (!isset($statusMessages[$statusName])) {
+                return;
+            }
+
+            $assigneeId = $request->assignees[0] ?? null;
+
+            if (!$assigneeId) {
+                return;
+            }
+
+            $user = User::find($assigneeId);
+
+            if (!$user) {
+                return;
+            }
+
+            $user->notify(
+                new PushNotification(
+                    $statusMessages[$statusName]['title'],
+                    $statusMessages[$statusName]['body']
+                )
+            );
         }
-
-        $statusMessages = [
-        'Completed' => [
-            'title' => 'Task Completed',
-            'body'  => 'Your task is completed',
-        ],
-        'QA Failed' => [
-            'title' => 'Task QA Failed',
-            'body'  => 'Your task is QA Failed',
-        ],
-        ];
-
-        $statusName = $task->status->name;
-
-        if (!isset($statusMessages[$statusName])) {
-        return;
-        }
-
-        $assigneeId = $request->assignees[0] ?? null;
-
-        if (!$assigneeId) {
-        return;
-        }
-
-        $user = User::find($assigneeId);
-
-        if (!$user) {
-        return;
-        }
-
-        $user->notify(
-        new PushNotification(
-            $statusMessages[$statusName]['title'],
-            $statusMessages[$statusName]['body']
-        )
-        );
-
-    }
         return response()->json($task, 200);
+    }
+
+    private function getFieldValue($field, $value)
+    {
+        if (!$value) {
+            return null;
+        }
+
+        switch ($field) {
+
+            case 'status_id':
+                return \App\Models\TaskStatus::find($value)->name ?? $value;
+
+            case 'task_type_id':
+                return \App\Models\TaskType::find($value)->name ?? $value;
+
+            case 'project_id':
+                return \App\Models\Project::find($value)->project_name ?? $value;
+
+            case 'owner_id':
+                $user = \App\Models\User::find($value);
+                return $user ? trim($user->name . ' ' . $user->last_name) : $value;
+
+            case 'qa_id':
+                $user = \App\Models\User::find($value);
+                return $user ? trim($user->name . ' ' . $user->last_name) : $value;
+
+            case 'assignees':
+                $users = \App\Models\User::whereIn('_id', (array)$value)->get()->map(function ($u) {
+                    return trim($u->name . ' ' . $u->last_name);
+                })->toArray();
+                return implode(', ', $users);
+
+            case 'attachment':
+                if (is_array($value)) {
+                    return isset($value['file_name']) ? $value['file_name'] : (isset($value['file_path']) ? basename($value['file_path']) : json_encode($value));
+                }
+                return $value;
+
+            default:
+                return is_array($value) ? json_encode($value) : $value;
+        }
     }
 
     /**
@@ -1515,72 +1591,121 @@ class TasksController extends Controller
     }
 
     public function rndTask(Request $request)
-    
-{
-    $users = User::whereHas('role', function ($q) {
-        $q->whereNotIn('name', ['Administrator', 'HR']);
-    })->get();
 
-    $status = TaskStatus::where('name', 'To Do')->first();
-    $status_id = $status ? $status->id : null;
+    {
+        $users = User::whereHas('role', function ($q) {
+            $q->whereNotIn('name', ['Administrator', 'HR']);
+        })->get();
 
-    $lastTask = Tasks::orderBy('created_at', 'desc')->first();
+        $status = TaskStatus::where('name', 'To Do')->first();
+        $status_id = $status ? $status->id : null;
 
-if ($lastTask && isset($lastTask->task_id)) {
-    $lastNumber = (int) str_replace('CNC-', '', $lastTask->task_id);
-    $nextNumber = $lastNumber + 1;
-} else {
-    $nextNumber = 1;
-}   
+        $lastTask = Tasks::orderBy('created_at', 'desc')->first();
 
-    $tasks = [];
-
-    foreach ($users as $user) {
-
-        $project = Project::find('6970b436620a36803d0fece2');
-
-        $taskId = 'CNC-' . str_pad($nextNumber, 2, '0', STR_PAD_LEFT);
-        $nextNumber++;
-
-        if ($project) {
-            $currentAssignees = $project->assignee ?? [];
-
-            // 👇 SINGLE ID add karo (NO foreach needed)
-            if (!in_array((string) $user->id, $currentAssignees)) {
-                $currentAssignees[] = (string) $user->id;
-            }
-
-            $project->assignee = $currentAssignees;
-            $project->save();
+        if ($lastTask && isset($lastTask->task_id)) {
+            $lastNumber = (int) str_replace('CNC-', '', $lastTask->task_id);
+            $nextNumber = $lastNumber + 1;
+        } else {
+            $nextNumber = 1;
         }
 
-        $task = Tasks::create([
-            'title' => "R&D - " . $user->name . ' ' . $user->last_name,
-            'owner_id' => (string) $user->id,
-            'assignees' => [(string) $user->id],
-            'description' => "R&D",
-            'status_id' => $status_id,
-            'priority' => 'Medium',
-            'project_id' => '6970b436620a36803d0fece2',
-            
-            'task_type_id' => '6970b4f06f685f01a8000c52',
-            'is_child_task' => false,
-            'estimated_hours' => 100,
-            'task_id' => $taskId,
-            'updated_at' => now(),
-            'created_at' => now(),
-            'milestone_id' => null,
-            'parent_task_id' => null,
-            'qa_id' => null,
-            'due_date' => '2026-12-31T06:20:46.186+00:00',  
-            'start_date' => now(),  
-            'updated_by' => (string) $user->id,
-            'created_by' => (string) $user->id,
-        ]);
+        $tasks = [];
 
-        $tasks[] = $task;
+        foreach ($users as $user) {
+
+            $project = Project::find('6970b436620a36803d0fece2');
+
+            $taskId = 'CNC-' . str_pad($nextNumber, 2, '0', STR_PAD_LEFT);
+            $nextNumber++;
+
+            if ($project) {
+                $currentAssignees = $project->assignee ?? [];
+
+                // 👇 SINGLE ID add karo (NO foreach needed)
+                if (!in_array((string) $user->id, $currentAssignees)) {
+                    $currentAssignees[] = (string) $user->id;
+                }
+
+                $project->assignee = $currentAssignees;
+                $project->save();
+            }
+
+            $task = Tasks::create([
+                'title' => "R&D - " . $user->name . ' ' . $user->last_name,
+                'owner_id' => (string) $user->id,
+                'assignees' => [(string) $user->id],
+                'description' => "R&D",
+                'status_id' => $status_id,
+                'priority' => 'Medium',
+                'project_id' => '6970b436620a36803d0fece2',
+
+                'task_type_id' => '6970b4f06f685f01a8000c52',
+                'is_child_task' => false,
+                'estimated_hours' => 100,
+                'task_id' => $taskId,
+                'updated_at' => now(),
+                'created_at' => now(),
+                'milestone_id' => null,
+                'parent_task_id' => null,
+                'qa_id' => null,
+                'due_date' => '2026-12-31T06:20:46.186+00:00',
+                'start_date' => now(),
+                'updated_by' => (string) $user->id,
+                'created_by' => (string) $user->id,
+            ]);
+
+            $tasks[] = $task;
+        }
+
+        return response()->json($tasks, 201);
     }
 
-    return response()->json($tasks, 201);
-}
+    public function updateTaskLog(Request $request, $id = null)
+    {
+        $query = TaskLog::query();
+
+        $taskId = $id ?? $request->task_id;
+
+        if ($taskId) {
+            $query->where('task_id', $taskId);
+        }
+
+        $limit = (int) $request->input('limit', 10);
+        $page = (int) $request->input('page', 1);
+
+        $totalCount = $query->count();
+
+        if ($limit <= 0) {
+            $taskLogs = $query->orderBy('created_at', 'desc')->get();
+        } else {
+            $taskLogs = $query->orderBy('created_at', 'desc')
+                ->skip(($page - 1) * $limit)
+                ->take($limit)
+                ->get();
+        }
+
+        $userIds = $taskLogs->pluck('updated_user_id')->filter()->unique()->toArray();
+        $users = User::whereIn('_id', $userIds)->get()->keyBy(function ($item) {
+            return (string) $item->_id;
+        });
+
+        $taskLogs->map(function ($log) use ($users) {
+            $userId = (string) $log->updated_user_id;
+            $user = $users->get($userId);
+            $log->updated_user_name = $user ? trim($user->name . ' ' . $user->last_name) : null;
+            return $log;
+        });
+
+        $tasks_data = [
+            'data' => $taskLogs,
+            'meta' => [
+                'page' => $page,
+                'limit' => $limit,
+                'total' => $totalCount,
+                'total_pages' => $limit <= 0 ? 1 : (int) ceil($totalCount / $limit),
+            ]
+        ];
+
+        return response()->json($tasks_data, 200);
+    }
 }

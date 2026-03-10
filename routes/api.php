@@ -556,6 +556,8 @@ Route::middleware('api')->group(function () {
 
             // Delete task
             Route::delete('/{id}', [TasksController::class, 'destroy'])->middleware('permission:delete_task');
+
+            Route::get('/update-task-log/{id}', [TasksController::class, 'updateTaskLog']);
         });
 
         // Route::prefix('tasks')->group(function () {
