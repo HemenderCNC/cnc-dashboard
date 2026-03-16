@@ -1007,6 +1007,8 @@ class TasksController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        $completedStatus = TaskStatus::where('name', 'Completed')->first();
+
         $oldData = $task->toArray();
 
         $service = app(FileUploadService::class);
@@ -1062,6 +1064,19 @@ class TasksController extends Controller
             ]
         );
 
+
+
+        if ($task->status_id !== $completedStatus->id) {
+
+            $timesheet = Timesheet::where('task_id', $id)->first();
+
+            if ($timesheet) {
+                $timesheet->update([
+                    'status' => 'paused',
+                ]);
+            }
+        }
+
         $updatedData = $task->fresh()->toArray();
 
         $ignoreFields = ['updated_at', 'created_at'];
@@ -1097,7 +1112,8 @@ class TasksController extends Controller
         if ($request->user->role && $request->user->role->name === 'QA') {
 
             $childTasks = Tasks::where('parent_task_id', $id)->get();
-            $completedStatus = TaskStatus::where('name', 'Completed')->first();
+            
+            
 
             if ($request->status_id == $completedStatus->id) {
 
