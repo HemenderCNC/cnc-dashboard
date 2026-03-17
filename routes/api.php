@@ -578,6 +578,8 @@ Route::middleware('api')->group(function () {
             Route::get('/', [ProjectsController::class, 'index']); // Get all projects
 
 
+             Route::get('/get-all-projects', [ProjectsController::class, 'getAllProjects']); // Get all projects
+
             // Add project
             Route::post('/', [ProjectsController::class, 'store'])->middleware('permission:add_project'); // Add a project
 
@@ -590,6 +592,8 @@ Route::middleware('api')->group(function () {
                 Route::get('/summary', [ProjectsController::class, 'summary']); // Get summary
                 Route::get('/{id}', [ProjectsController::class, 'show']); // Get single project
             });
+
+
         });
 
 

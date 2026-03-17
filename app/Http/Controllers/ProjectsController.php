@@ -580,4 +580,23 @@ class ProjectsController extends Controller
         $project->delete();
         return response()->json(['message' => 'Project deleted successfully'], 200);
     }
+
+
+    public function getAllProjects(){
+
+        $projects = Project::select(
+            'id',
+            'project_name',
+        )->get();
+
+        return response()->json([
+            'data' => $projects,
+            'meta' => [
+                'page' => 0,
+                'limit' => 0,
+                'total' => 0,
+                'total_pages' => 0,
+            ]
+        ]);
+    }
 }
