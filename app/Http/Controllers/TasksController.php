@@ -981,7 +981,7 @@ class TasksController extends Controller
             'milestone_id' => 'nullable|exists:milestones,_id',
             'status_id' => 'required|exists:task_statuses,_id',
             'task_type_id' => 'required|exists:task_types,_id',
-            'priority' => ($request->user->role && $request->user->role->name === 'QA') ? 'nullable' : 'required|string',
+            'priority' => ($request->user->role && $request->user->role->name === 'QA') ? 'nullable' : 'nullable|string',
             'owner_id' => 'required|exists:users,_id',
             'qa_id' => 'nullable|exists:users,_id',
             'parent_task_id' => 'nullable|exists:tasks,_id',
@@ -999,7 +999,7 @@ class TasksController extends Controller
                     }
                 }
             ],
-            'estimated_hours' => ($request->user->role && $request->user->role->name === 'QA') ? 'nullable' : 'required|string',
+            'estimated_hours' => ($request->user->role && $request->user->role->name === 'QA') ? 'nullable' : 'nullable|string',
             'attachment' => 'nullable|file|mimes:pdf,jpeg,jpg,png|max:2048',
         ]);
 
@@ -1012,6 +1012,7 @@ class TasksController extends Controller
         $oldData = $task->toArray();
 
         $service = app(FileUploadService::class);
+
         if ($request->hasFile('attachment')) {
             // Delete old profile photo if exists
             if ($task->attachment) {
@@ -1064,19 +1065,6 @@ class TasksController extends Controller
             ]
         );
 
-
-
-        if ($task->status_id !== $completedStatus->id) {
-
-            $timesheet = Timesheet::where('task_id', $id)->first();
-
-            if ($timesheet) {
-                $timesheet->update([
-                    'status' => 'paused',
-                ]);
-            }
-        }
-
         $updatedData = $task->fresh()->toArray();
 
         $ignoreFields = ['updated_at', 'created_at'];
@@ -1113,8 +1101,6 @@ class TasksController extends Controller
 
             $childTasks = Tasks::where('parent_task_id', $id)->get();
             
-            
-
             if ($request->status_id == $completedStatus->id) {
 
                 foreach ($childTasks as $childTask) {
