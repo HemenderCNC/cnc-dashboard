@@ -33,7 +33,7 @@ class TimesheetController extends Controller
         $skip = ($page - 1) * $limit;
 
         // Role check
-        if ($request->user->role->slug === 'employee' || $request->user->role->slug === 'qa') {
+        if ($request->user->role->slug !== 'project-manager' && $request->user->role->slug !== 'administrator') {
             $matchStage['employee_id'] = $request->user->id;
         }
 
@@ -239,7 +239,7 @@ class TimesheetController extends Controller
             $matchStage['employee_id'] = $request->user->id;
         }
 
-        if ($request->user->role && $request->user->role->name === 'Administrator') {
+        if ($request->user->role && $request->user->role->slug === 'administrator') {
             $matchStage['status'] = 'running';
         }
 
@@ -423,13 +423,15 @@ class TimesheetController extends Controller
     {
         $matchStage = [];
 
-        if ($request->user->role->name == 'QA') {
+        if ($request->user->role->slug == 'qa') {
             $matchStage['status'] = ['$nin' => ['completed', 'QA Failed']];
         }
 
-        if ($request->user->role->name == 'Employee') {
+        if ($request->user->role->slug !== 'qa') {
             $matchStage['status'] = ['$nin' => ['completed', 'Ready For QA']];
         }
+
+         $matchStage['is_display'] = ['$ne' => false];
 
         // Filter by Employee Role
         // if ($request->user->role->slug === 'employee') {
@@ -617,6 +619,7 @@ class TimesheetController extends Controller
                     'task' => 1,
                     'user' => 1,
                     'updated_at' => 1,
+                    'is_display' => 1,
                 ]]
             ]);
         });
@@ -1048,167 +1051,59 @@ class TimesheetController extends Controller
         // Check if a timesheet already exists for this task and date
         $timesheet = Timesheet::where('task_id', $request->task_id)
             ->where('employee_id', $userId)
+            ->orderBy('_id', 'desc') // latest record
             ->first();
-
-        $timeLogEntry = [
-            'start_time' => now()->format('H:i'),
-            'end_time' => now()->format('H:i'),
-        ];
-
-        $datesArray = [[
-            'date' => $currentDate,
-            'time_log' => [$timeLogEntry],
-        ]];
-
-        if ($timesheet && $timesheet->task_type === 'R&D') {
-
-            $dates = $timesheet->dates ?? [];
-
-            $dateFound = false;
-
-            foreach ($dates as &$dateEntry) {
-                if ($dateEntry['date'] === $currentDate) {
-                    $dateEntry['time_log'][] = $timeLogEntry;
-                    $dateFound = true;
-                    break;
-                }
-            }
-
-            if (!$dateFound) {
-                $dates[] = [
-                    'date' => $currentDate,
-                    'time_log' => [$timeLogEntry],
-                ];
-            }
-
-            $timesheet->update([
-                'dates'  => $dates,
-                'status' => 'running',
-                'work_description' => $request->work_description,
-            ]);
-
-            $statusId = TaskStatus::where('name', 'In Progress (Dev)')->value('_id');
-
-            $taskToUpdate = Tasks::with('status')->where('_id', $request->task_id)->first();
-            if ($taskToUpdate && $taskToUpdate->status_id != $statusId) {
-                $oldValueName = $taskToUpdate->status ? $taskToUpdate->status->name : $taskToUpdate->status_id;
-                
-                $taskToUpdate->update([
-                    'status_id' => $statusId
-                ]);
-
-                TaskLog::create([
-                    'task_id' => (string)$taskToUpdate->_id,
-                    'field_name' => 'status_id',
-                    'old_value' => (string)$oldValueName,
-                    'new_value' => 'In Progress (Dev)',
-                    'updated_user_id' => (string)$userId,
-                    'created_at' => now()
-                ]);
-            }
-
-            // Pause any other running timesheets for the user
-            Timesheet::where('employee_id', $userId)
-                ->where('_id', '!=', $timesheet->_id)
-                ->where('status', '!=', 'completed')
-                ->where('status', '!=', 'Ready For QA')
-                ->update(['status' => 'paused']);
-
-            // Handle break session in LoginSession
-            $session = LoginSession::where('employee_id', $userId)
-                ->where('date', $currentDate)
-                ->first();
-
-            if ($session && $session->break === true && !empty($session->break_log)) {
-                $session->break = false;
-                $session->save();
-            }
-
-            return response()->json($timesheet, 201);
-        }
 
         if ($timesheet) {
 
-            if ($timesheet->status === 'completed') {
+            if ($timesheet->status === 'completed' && $timesheet->task_type !== 'R&D') {
                 return response()->json([
                     'message' => 'Task already completed.'
                 ], 400);
             }
 
-            if ($timesheet->status === 'paused') {
+            if ($timesheet->status === 'paused' && $timesheet->is_display !== false) {
                 return response()->json([
                     'message' => 'Task already selected.'
                 ], 400);
             }
 
-            if ($request->user->role->name == 'Employee' && $timesheet->status == 'Ready For QA') {
-
+            if ($request->user->role->slug !== 'qa' && ($timesheet->status == 'Ready For QA' || $timesheet->status == 'paused' || $timesheet->task_type == 'R&D')) {
                 $task = Tasks::with('status')
                     ->where('_id', $request->task_id)
                     ->first();
 
                 if ($task->status->name == 'In Progress (QA)' || $task->status->name == 'Ready For QA') {
-
+               
                     return response()->json([
                         'message' => 'Task already assigned to QA.'
                     ], 400);
                 } else {
-                    $dates = $timesheet->dates ?? [];
-
-                    $dateFound = false;
-
-                    foreach ($dates as &$dateEntry) {
-                        if ($dateEntry['date'] === $currentDate) {
-                            $dateEntry['time_log'][] = $timeLogEntry;
-                            $dateFound = true;
-                            break;
-                        }
-                    }
-
-                    if (!$dateFound) {
-                        $dates[] = [
-                            'date' => $currentDate,
-                            'time_log' => [$timeLogEntry],
-                        ];
-                    }
-
-                    $timesheet->update([
-                        'dates'  => $dates,
-                        'status' => 'running',
-                        'work_description' => $request->work_description,
-                    ]);
+                    $new_timesheet = new Timesheet();
+                    $new_timesheet->project_id = $request->project_id;
+                    $new_timesheet->task_id = $request->task_id;
+                    $new_timesheet->task_type = $request->task_type;
+                    $new_timesheet->employee_id = $request->user->id;
+                    $new_timesheet->dates = [['date' => $currentDate,'time_log' => [['start_time' => now()->format('H:i'),'end_time' => now()->format('H:i'),]],]];
+                    $new_timesheet->status = 'running';
+                    $new_timesheet->work_description = $request->work_description;
+                    $new_timesheet->save();
                 }
             }
 
-            if ($request->user->role->name == 'QA') {
-
-                $dates = $timesheet->dates ?? [];
-
-                $dateFound = false;
-
-                foreach ($dates as &$dateEntry) {
-                    if ($dateEntry['date'] === $currentDate) {
-                        $dateEntry['time_log'][] = $timeLogEntry;
-                        $dateFound = true;
-                        break;
-                    }
-                }
-
-                if (!$dateFound) {
-                    $dates[] = [
-                        'date' => $currentDate,
-                        'time_log' => [$timeLogEntry],
-                    ];
-                }
-
-                $timesheet->update([
-                    'dates'  => $dates,
-                    'status' => 'running',
-                    'work_description' => $request->work_description,
-                ]);
+            if ($request->user->role->slug == 'qa') {
+                    $new_timesheet = new Timesheet();
+                    $new_timesheet->project_id = $request->project_id;
+                    $new_timesheet->task_id = $request->task_id;
+                    $new_timesheet->task_type = $request->task_type;
+                    $new_timesheet->employee_id = $request->user->id;
+                    $new_timesheet->dates = [['date' => $currentDate,'time_log' => [['start_time' => now()->format('H:i'),'end_time' => now()->format('H:i'),]],]];
+                    $new_timesheet->status = 'running';
+                    $new_timesheet->work_description = $request->work_description;
+                    $new_timesheet->save();
             }
+
         } else {
-
             // Create a new timesheet entry
             $timesheet = Timesheet::create([
                 'project_id' => $request->project_id,
@@ -1229,9 +1124,11 @@ class TimesheetController extends Controller
                 'work_description' => $request->work_description,
                 'status' => 'running',
             ]);
+
+            $new_timesheet = null;
         }
 
-        if ($request->user->role->name == 'QA') {
+        if ($request->user->role->slug == 'qa') {
             $task = Tasks::with('status')
                 ->where('_id', $request->task_id)
                 ->first();
@@ -1239,8 +1136,6 @@ class TimesheetController extends Controller
             if (!$task) {
                 return response()->json(['message' => 'Task not found'], 404);
             }
-
-            if ($task->status->name == 'Ready For QA' || $task->status->name == 'on hold' || $task->status->name == 'In Progress (QA)' || $task->status->name == 'QA Failed') {
 
                 $taskStatusId = TaskStatus::where('name', 'In Progress (QA)')
                     ->value('_id');
@@ -1261,7 +1156,6 @@ class TimesheetController extends Controller
                         'updated_user_id' => (string)$userId,
                         'created_at' => now()
                     ]);
-                }
             }
         } else {
 
@@ -1285,12 +1179,15 @@ class TimesheetController extends Controller
                 ]);
             }
         }
-
         // Pause any other running timesheets for the user
         Timesheet::where('employee_id', $userId)
             ->where('_id', '!=', $timesheet->_id)
+            ->when(!empty($new_timesheet), function ($q) use ($new_timesheet) {
+                $q->where('_id', '!=', $new_timesheet->_id);
+            })
             ->where('status', '!=', 'completed')
             ->where('status', '!=', 'Ready For QA')
+            ->where('status', '!=', 'QA Failed')
             ->update(['status' => 'paused']);
 
         // Handle break session in LoginSession
@@ -1302,8 +1199,10 @@ class TimesheetController extends Controller
             $session->break = false;
             $session->save();
         }
-
-        return response()->json($timesheet, 201);
+        return response()->json([
+            'timesheetArray' => $timesheet,
+            'new_timesheet_record' => $new_timesheet
+        ], 201);
     }
 
     public function manualEntry(Request $request)
@@ -1371,7 +1270,7 @@ class TimesheetController extends Controller
         }
         $this->userBreakLogStart($userId);
 
-        if ($request->user->role->name == 'QA') {
+        if ($request->user->role->slug == 'qa') {
 
             $task = Tasks::with('status')
                 ->where('_id', $timesheet->task_id)
@@ -1429,6 +1328,7 @@ class TimesheetController extends Controller
         $formattedTotal = $this->calculate_total_time_spent_by_task($timesheet);
         $timesheetArray = $timesheet->toArray();
         $timesheetArray['total_spent_time'] = $formattedTotal;
+
         return response()->json($timesheetArray);
     }
 
@@ -1442,13 +1342,13 @@ class TimesheetController extends Controller
 
         $task = Tasks::where('_id', $timesheet->task_id)->first();
 
-        if ($request->user->role->name == 'QA') {
+        if ($request->user->role->slug == 'qa') {
 
             $timesheet->status = 'completed';
             $timesheet->save();
 
-            Timesheet::where('task_id', $timesheet->task_id)
-                ->update(['status' => 'completed']);
+            // Timesheet::where('task_id', $timesheet->task_id)
+            //     ->update(['status' => 'completed']);
 
             $assigneeId = $task->assignees[0] ?? null;
 
@@ -1469,8 +1369,8 @@ class TimesheetController extends Controller
                 foreach ($parentTasks as $parentTask) {
 
                     // Update parent task timesheet
-                    Timesheet::where('task_id', $parentTask->_id)
-                        ->update(['status' => 'completed']);
+                    // Timesheet::where('task_id', $parentTask->_id)
+                    //            ->update(['status' => 'completed']);
 
                     if ($parentTask->status_id != $statusId) {
                         $oldValueName = $parentTask->status ? $parentTask->status->name : $parentTask->status_id;
@@ -1494,8 +1394,8 @@ class TimesheetController extends Controller
                 $timesheet->status = 'completed';
                 $timesheet->save();
 
-                Timesheet::where('task_id', $timesheet->task_id)
-                    ->update(['status' => 'completed']);
+                // Timesheet::where('task_id', $timesheet->task_id)
+                //     ->update(['status' => 'completed']);
             } else {
                 $timesheet->status = 'Ready For QA';
                 $timesheet->save();
@@ -1507,10 +1407,12 @@ class TimesheetController extends Controller
 
         $userId = $request->user->id; // Get authenticated user ID
 
-        if ($request->user->role->name == 'QA') {
+        if ($request->user->role->slug == 'qa') {
             $statusId = TaskStatus::where('name', 'Completed')->value('_id');
 
+            if (strtoupper(trim($timesheet->task_type)) !== 'R&D') {
             $taskToUpdate = Tasks::with('status')->where('_id', $timesheet->task_id)->first();
+
             if ($taskToUpdate && $taskToUpdate->status_id != $statusId) {
                 $oldValueName = $taskToUpdate->status ? $taskToUpdate->status->name : $taskToUpdate->status_id;
 
@@ -1527,12 +1429,37 @@ class TimesheetController extends Controller
                     'created_at' => now()
                 ]);
             }
+            }else {
+                $statusId = TaskStatus::where('name', 'To Do')->value('_id');
+
+                    $taskToUpdate = Tasks::with('status')->where('_id', $timesheet->task_id)->first();
+                    
+                    if ($taskToUpdate && $taskToUpdate->status_id != $statusId) {
+                        $oldValueName = $taskToUpdate->status ? $taskToUpdate->status->name : $taskToUpdate->status_id;
+
+                        $taskToUpdate->update([
+                            'status_id' => $statusId
+                        ]);
+
+                        TaskLog::create([
+                            'task_id' => (string)$taskToUpdate->_id,
+                            'field_name' => 'status_id',
+                            'old_value' => (string)$oldValueName,
+                            'new_value' => 'To Do',
+                            'updated_user_id' => (string)$userId,
+                            'created_at' => now()
+                        ]);
+                    }
+            }
+
         } else {
             if (empty($task?->qa_id)) {
                 $statusId = TaskStatus::where('name', 'Completed')->value('_id');
 
                 if (strtoupper(trim($timesheet->task_type)) !== 'R&D') {
+
                     $taskToUpdate = Tasks::with('status')->where('_id', $timesheet->task_id)->first();
+
                     if ($taskToUpdate && $taskToUpdate->status_id != $statusId) {
                         $oldValueName = $taskToUpdate->status ? $taskToUpdate->status->name : $taskToUpdate->status_id;
 
@@ -1661,17 +1588,38 @@ class TimesheetController extends Controller
         if ($existingDateKey !== false) {
             // Today's entry exists.
             $timeLogs = $dates[$existingDateKey]['time_log'] ?? [];
+
             if (!empty($timeLogs)) {
                 if ($diffMinutes >= 1) {
                     // If more than 5 minutes have passed, create a new time log entry.
-                    $timeLogs[] = [
-                        'start_time' => $now->format('H:i'),
-                        'end_time'   => Carbon::now()->format('H:i'),
-                    ];
+                   $new_timesheet = new Timesheet();
+                    $new_timesheet->project_id = $timesheet->project_id;
+                    $new_timesheet->task_id = $timesheet->task_id;
+                    $new_timesheet->task_type = $timesheet->task_type;
+                    $new_timesheet->employee_id = $userId;
+                    $new_timesheet->dates = [['date' => $currentDate,'time_log' => [['start_time' => now()->format('H:i'),'end_time' => now()->format('H:i'),]],]];
+                    $new_timesheet->status = 'running';
+                    $new_timesheet->work_description = $timesheet->work_description;
+                    $new_timesheet->save();
+
+                    Timesheet::where('project_id', $timesheet->project_id)
+                    ->where('task_id', $timesheet->task_id)
+                    ->where('employee_id', $userId)
+                    ->where('status', 'paused')
+                    ->update([
+                        'is_display' => false
+                    ]);
+
                 } else {
                     // Otherwise, update the end_time of the last log.
                     $lastIndex = count($timeLogs) - 1;
                     $timeLogs[$lastIndex]['end_time'] = Carbon::now()->format('H:i');
+
+                    $new_timesheet = null;
+
+                    $timesheet->dates = $dates;
+                    $timesheet->status = 'running';
+                    $timesheet->save();
                 }
             } else {
                 // If there are no time logs, create one.
@@ -1679,31 +1627,45 @@ class TimesheetController extends Controller
                     'start_time' => $now->format('H:i'),
                     'end_time'   => Carbon::now()->format('H:i'),
                 ];
+
+                $new_timesheet = null;
+
+                $timesheet->dates = $dates;
+                $timesheet->status = 'running';
+                $timesheet->save();
             }
             $dates[$existingDateKey]['time_log'] = $timeLogs;
         } else {
             // If today's date does not exist, create a new entry with a new time log.
-            $dates[] = [
-                'date'     => $currentDate,
-                'time_log' => [[
-                    'start_time' => $now->format('H:i'),
-                    'end_time'   => Carbon::now()->format('H:i'),
-                ]]
-            ];
-        }
+            $new_timesheet = new Timesheet();
+            $new_timesheet->project_id = $timesheet->project_id;
+            $new_timesheet->task_id = $timesheet->task_id;
+            $new_timesheet->task_type = $timesheet->task_type;
+            $new_timesheet->employee_id = $userId;
+            $new_timesheet->dates = [['date' => $currentDate,'time_log' => [['start_time' => now()->format('H:i'),'end_time' => now()->format('H:i'),]],]];
+            $new_timesheet->status = 'running';
+            $new_timesheet->work_description = $timesheet->work_description;
+            $new_timesheet->save();
 
-        // Assign modified dates array back to the model and update status.
-        $timesheet->dates = $dates;
-        $timesheet->status = 'running';
-        $timesheet->save();
+            Timesheet::where('project_id', $timesheet->project_id)
+            ->where('task_id', $timesheet->task_id)
+            ->where('employee_id', $userId)
+            ->where('status', 'paused')
+            ->update([
+                'is_display' => false
+            ]);
+        }
 
         // Pause any other running tasks for the same employee.
         Timesheet::where('employee_id', $userId)
-            ->where('_id', '!=', $timesheet->_id)
+            ->where('_id', '!=', $timesheet->id)
+            ->when($new_timesheet, function ($q) use ($new_timesheet) {
+                $q->where('_id', '!=', is_object($new_timesheet) ? $new_timesheet->id : $new_timesheet);
+            })
             ->where('status', 'running')
             ->update(['status' => 'paused']);
 
-        if ($request->user->role->name == 'QA') {
+        if ($request->user->role->slug == 'qa') {
 
             $taskToUpdate = Tasks::with('status')->where('_id', $timesheet->task_id)->first();
 
@@ -1762,7 +1724,11 @@ class TimesheetController extends Controller
         $formattedTotal = $this->calculate_total_time_spent_by_task($timesheet);
         $timesheetArray = $timesheet->toArray();
         $timesheetArray['total_spent_time'] = $formattedTotal;
-        return response()->json($timesheetArray);
+
+        return response()->json([
+            'timesheetArray' => $timesheetArray,
+            'new_timesheet_record' => $new_timesheet
+        ]);
     }
 
     public function qaFailedTask(Request $request, $id)
@@ -2169,4 +2135,36 @@ class TimesheetController extends Controller
 
         return response()->json($timesheetArray, 201);
     }
-}
+
+    public function changeDescription(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'timesheet_id' => 'required',
+            'description' => 'required',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => $validator->errors()->first(),
+            ], 422);
+        }
+
+        $timesheet = Timesheet::find($request->timesheet_id);
+        if (!$timesheet) {
+            return response()->json([
+                'message' => 'Timesheet not found',
+            ], 404);
+        }
+
+        $timesheet->work_description = $request->description;
+        $timesheet->save();
+
+        return response()->json([
+            'timesheet' => $timesheet,
+            'message' => 'Description changed successfully',
+        ], 200);
+    }
+
+
+    
+}   

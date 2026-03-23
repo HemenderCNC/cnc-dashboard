@@ -769,6 +769,8 @@ Route::middleware('api')->group(function () {
 
         Route::post('/meeting', [TimesheetController::class, 'meeting']);
 
+        Route::post('/change-description', [TimesheetController::class, 'changeDescription']);
+
         //General settings module
         Route::prefix('updategeneralsettings')->group(function () {
             //Route::get('/', [GeneralSettingsController::class, 'index']); // Get all settings
