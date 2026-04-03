@@ -10,37 +10,48 @@ use Illuminate\Validation\Rule;
 use Carbon\Carbon;
 use App\Models\Holiday;
 use MongoDB\BSON\UTCDateTime;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\LeaveRequestedMail;
+
 
 class LeaveController extends Controller
 {
     // Employee can view only their own leave requests
     public function index(Request $request)
     {
-        // $query = Leave::query();
         $query = Leave::with(['employee:id,name,last_name']);
+
         // Pagination setup
         $page = (int) $request->input('page', 1);
         $limit = (int) $request->input('limit', -1);
-        $skip = ($page - 1) * $limit;
+
         // If user is an Employee, restrict to their own records
         if ($request->user->role->slug === 'employee') {
             $query->where('employee_id', $request->user->id);
-        } else if ($request->has('employee_id')) {
+        } else if ($request->filled('employee_id')) {
             $query->where('employee_id', $request->employee_id);
         }
 
         // Filter by date range (start_date, end_date)
-        if ($request->has('start_date') && $request->has('end_date')) {
+        if ($request->filled('start_date') && $request->filled('end_date')) {
             $query->whereBetween('start_date', [$request->start_date, $request->end_date]);
         }
 
-        // Filter by status
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
+        // Filter by status (Supports multiple statuses separated by comma)
+if ($request->filled('status')) {
+    $statuses = explode(',', $request->status);
+
+    $query->where(function ($q) use ($statuses) {
+        foreach ($statuses as $status) {
+            $q->orWhere('status', 'regex', new \MongoDB\BSON\Regex("^$status$", 'i'));
         }
+    });
+}
+
+        $query->orderBy('created_at', 'desc');
 
         if ($limit == -1) {
-            $leaves = $query->orderBy('created_at', 'desc')->get();
+            $leaves = $query->get();
 
             return response()->json([
                 'data' => $leaves,
@@ -54,7 +65,7 @@ class LeaveController extends Controller
         }
 
         // Else use pagination
-        $leaves = $query->orderBy('created_at', 'desc')->paginate($limit, ['*'], 'page', $page);
+        $leaves = $query->paginate($limit, ['*'], 'page', $page);
 
         return response()->json([
             'data' => $leaves->items(),
@@ -62,7 +73,7 @@ class LeaveController extends Controller
                 'page' => $leaves->currentPage(),
                 'limit' => $leaves->perPage(),
                 'total' => $leaves->total(),
-                'total_pages' => ceil($leaves->total() / $leaves->perPage()),
+                'total_pages' => $leaves->lastPage(),
             ]
         ], 200);
     }
@@ -146,7 +157,33 @@ class LeaveController extends Controller
             'half_day_type' => $request->half_day ? $request->half_day_type : null,
             'reason' => $request->reason,
             'status' => 'pending',
+            'leave_type' => $request->leave_type ?? 'Leave Request',
         ]);
+
+        // try {
+        //     $reportingManager = $request->user->reportingManager;
+        //     $ccList = [
+        //         'nagender@codeandcore.com',
+        //         'saurabhsoni.cnc@gmail.com',
+        //         'nikul@codeandcore.com'
+        //     ];
+
+        //     if ($reportingManager && !empty($reportingManager->email)) {
+        //         $ccList[] = $reportingManager->email;
+        //     }
+            
+        //     $ccList = array_unique($ccList);
+
+        //     Mail::to('hr@codeandcore.com')
+        //         ->cc($ccList)
+        //         ->send(new LeaveRequestedMail($leave, $request->user));
+        // } catch (\Exception $e) {
+
+        //     return response()->json([
+        //         'message' => 'Leave request created successfully, but email notification failed.',
+        //         'error' => $e->getMessage()
+        //     ], 500);
+        // }
 
         return response()->json($leave, 201);
     }
