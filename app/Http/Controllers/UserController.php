@@ -1092,7 +1092,9 @@ class UserController extends Controller
                 // Match users with the role "administrator" exclude
                 [
                     '$match' => [
-                        'role.slug' => ['$eq' => 'project-manager'],
+                        'role.slug' => [
+                            '$in' => ['project-manager', 'administrator']
+                        ],
                     ]
                 ],
 

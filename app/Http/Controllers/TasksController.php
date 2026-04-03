@@ -34,6 +34,9 @@ class TasksController extends Controller
         $taskStatusesCollection = TaskStatus::whereIn('name', $statusNames)->get();
         $allStatusIds = $taskStatusesCollection->pluck('_id')->map(fn($id) => (string)$id)->toArray();
 
+        $priorityStatuses = TaskStatus::whereIn('name', ['In Progress (QA)', 'In Progress (Dev)'])->get();
+        $priorityStatusIds = $priorityStatuses->pluck('_id')->map(fn($id) => (string)$id)->toArray();
+
         // Pagination setup
         $page = (int) $request->input('page', 1);
         $limit = (int) $request->input('limit', -1);
@@ -157,16 +160,16 @@ class TasksController extends Controller
         if (empty((array) $matchStage)) {
             $matchStage = (object)[]; // Empty object for MongoDB
         }
-        $sortStage = ['$sort' => ['created_at' => -1]]; // Default sorting by created_at (Descending)
+        $sortStage = ['$sort' => ['status_priority' => 1, 'created_at' => -1]]; // Default sorting by created_at (Descending)
         $matchDueDate = null;
         if ($request->has('sort') && $request->sort === 'due_date') {
             $todayTimestamp = Carbon::today()->toIso8601String(); // Convert to milliseconds
             $matchDueDate = ['$match' => ['due_date' => ['$gte' => $todayTimestamp]]];
-            $sortStage = ['$sort' => ['due_date' => 1]];
+            $sortStage = ['$sort' => ['status_priority' => 1, 'due_date' => 1]];
         }
 
         // MongoDB Aggregation Pipeline
-        $tasks = Tasks::raw(function ($collection) use ($matchStage, $sortStage, $matchDueDate, $skip, $limit, $allStatusIds, $isEmployee, $withChild) {
+        $tasks = Tasks::raw(function ($collection) use ($matchStage, $sortStage, $matchDueDate, $skip, $limit, $allStatusIds, $priorityStatusIds, $isEmployee, $withChild) {
             $pipeline = [
                 ['$match' => $matchStage],  // Apply Filters
             ];
@@ -622,6 +625,17 @@ class TasksController extends Controller
                         ],
                         'total_minutes' => [
                             '$mod' => ['$calculated_total_raw_minutes', 60] // Calculate remaining minutes
+                        ]
+                    ]
+                ],
+                [
+                    '$addFields' => [
+                        'status_priority' => [
+                            '$cond' => [
+                                'if' => ['$in' => ['$status_id', $priorityStatusIds]],
+                                'then' => 0,
+                                'else' => 1
+                            ]
                         ]
                     ]
                 ],

@@ -30,6 +30,7 @@ class Project extends Eloquent
         'assignee',
         'project_manager_id',
         'created_by',
+        'is_ongoing',
     ];
 
     protected static function boot()

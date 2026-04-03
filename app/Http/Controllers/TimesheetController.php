@@ -78,6 +78,7 @@ class TimesheetController extends Controller
             $pipeline = [
                 ['$match' => $matchStage],
                 ['$unwind' => '$dates'],
+                ['$match' => isset(((array) $matchStage)['dates.date']) ? ['dates.date' => ((array) $matchStage)['dates.date']] : (object)[]],
                 ['$unwind' => '$dates.time_log'],
 
                 // Pre-calculate time duration
@@ -207,6 +208,7 @@ class TimesheetController extends Controller
             return $collection->aggregate([
                 ['$match' => $matchStage],
                 ['$unwind' => '$dates'],
+                ['$match' => isset(((array) $matchStage)['dates.date']) ? ['dates.date' => ((array) $matchStage)['dates.date']] : (object)[]],
                 ['$unwind' => '$dates.time_log'],
 
                 ['$count' => 'total']
@@ -241,6 +243,21 @@ class TimesheetController extends Controller
 
         if ($request->user->role && $request->user->role->slug === 'administrator') {
             $matchStage['status'] = 'running';
+        }
+
+        if ($request->user->role && $request->user->role->slug === 'team-leader') {
+            $childEmployeeIds = User::where('reporting_manager_id', (string)$request->user->id)->pluck('id')->toArray();
+            $matchStage['employee_id'] = ['$in' => $childEmployeeIds];
+        }
+
+        if ($request->has('admin_dashbord_call')) {
+            $rdProject = Project::where('project_name', 'Research and Development')->first();
+            if ($rdProject) {
+                $matchStage['$or'] = [
+                    ['project_id' => ['$ne' => (string)$rdProject->_id]],
+                    ['task_type' => ['$ne' => 'R&D']]
+                ];
+            }
         }
 
         // Basic filters
@@ -284,6 +301,7 @@ class TimesheetController extends Controller
             $pipeline = [
                 ['$match' => $matchStage],
                 ['$unwind' => '$dates'],
+                ['$match' => isset(((array) $matchStage)['dates.date']) ? ['dates.date' => ((array) $matchStage)['dates.date']] : (object)[]],
                 ['$unwind' => '$dates.time_log'],
 
                 // Pre-calculate time duration
@@ -401,6 +419,7 @@ class TimesheetController extends Controller
             return $collection->aggregate([
                 ['$match' => $matchStage],
                 ['$unwind' => '$dates'],
+                ['$match' => isset(((array) $matchStage)['dates.date']) ? ['dates.date' => ((array) $matchStage)['dates.date']] : (object)[]],
                 ['$unwind' => '$dates.time_log'],
                 ['$group' => ['_id' => '$_id']],
                 ['$count' => 'total']
@@ -482,6 +501,8 @@ class TimesheetController extends Controller
 
                 // 2. Unwind the dates array (if stored correctly, no need to convert type)
                 ['$unwind' => '$dates'],
+
+                ['$match' => isset(((array) $matchStage)['dates.date']) ? ['dates.date' => ((array) $matchStage)['dates.date']] : (object)[]],
 
                 // 3. Unwind the time_log array within each date
                 ['$unwind' => '$dates.time_log'],
@@ -1251,11 +1272,30 @@ class TimesheetController extends Controller
 
     public function stopTask(Request $request, $id)
     {
-        $timesheet = Timesheet::where('id', $id)->first();
+        $timesheet = Timesheet::where('_id', $id)->first();
 
         if (!$timesheet) {
             return response()->json(['message' => 'Timesheet not found'], 404);
         }
+
+        if ($timesheet->status == 'running') {
+            $currentDate = Carbon::now()->toDateString();
+            $dates = $timesheet->dates;
+
+            if (is_array($dates)) {
+                $existingDateKey = array_search($currentDate, array_column($dates, 'date'));
+                if ($existingDateKey !== false) {
+                    $timeLogs = $dates[$existingDateKey]['time_log'] ?? [];
+                    if (!empty($timeLogs)) {
+                        $lastIndex = count($timeLogs) - 1;
+                        $timeLogs[$lastIndex]['end_time'] = Carbon::now()->format('H:i');
+                        $dates[$existingDateKey]['time_log'] = $timeLogs;
+                        $timesheet->dates = $dates;
+                    }
+                }
+            }
+        }
+
         $timesheet->status = 'paused';
         $timesheet->save();
         $userId = $request->user->id; // Get authenticated user ID
@@ -1334,10 +1374,28 @@ class TimesheetController extends Controller
 
     public function completeTask(Request $request, $id)
     {
-        $timesheet = Timesheet::where('id', $id)->first();
+        $timesheet = Timesheet::where('_id', $id)->first();
 
         if (!$timesheet) {
             return response()->json(['message' => 'Timesheet not found'], 404);
+        }
+
+        if ($timesheet->status == 'running') {
+            $currentDate = Carbon::now()->toDateString();
+            $dates = $timesheet->dates;
+
+            if (is_array($dates)) {
+                $existingDateKey = array_search($currentDate, array_column($dates, 'date'));
+                if ($existingDateKey !== false) {
+                    $timeLogs = $dates[$existingDateKey]['time_log'] ?? [];
+                    if (!empty($timeLogs)) {
+                        $lastIndex = count($timeLogs) - 1;
+                        $timeLogs[$lastIndex]['end_time'] = Carbon::now()->format('H:i');
+                        $dates[$existingDateKey]['time_log'] = $timeLogs;
+                        $timesheet->dates = $dates;
+                    }
+                }
+            }
         }
 
         $task = Tasks::where('_id', $timesheet->task_id)->first();
@@ -1733,11 +1791,30 @@ class TimesheetController extends Controller
 
     public function qaFailedTask(Request $request, $id)
     {
-        $timesheet = Timesheet::where('id', $id)->first();
+        $timesheet = Timesheet::where('_id', $id)->first();
 
         if (!$timesheet) {
             return response()->json(['message' => 'Timesheet not found'], 404);
         }
+
+        if ($timesheet->status == 'running') {
+            $currentDate = Carbon::now()->toDateString();
+            $dates = $timesheet->dates;
+
+            if (is_array($dates)) {
+                $existingDateKey = array_search($currentDate, array_column($dates, 'date'));
+                if ($existingDateKey !== false) {
+                    $timeLogs = $dates[$existingDateKey]['time_log'] ?? [];
+                    if (!empty($timeLogs)) {
+                        $lastIndex = count($timeLogs) - 1;
+                        $timeLogs[$lastIndex]['end_time'] = Carbon::now()->format('H:i');
+                        $dates[$existingDateKey]['time_log'] = $timeLogs;
+                        $timesheet->dates = $dates;
+                    }
+                }
+            }
+        }
+
         $timesheet->status = 'QA Failed';
         $timesheet->save();
 
@@ -2165,6 +2242,39 @@ class TimesheetController extends Controller
         ], 200);
     }
 
+    public function getTaskByDate(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'date' => 'required',
+        ]);
 
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => $validator->errors()->first(),
+            ], 422);
+        }
+
+        $date = $request->date;
+
+        $timesheet = Timesheet::where('employee_id', $request->user->id)
+            ->whereDate('created_at', $date)
+            ->get();
+
+        $timesheet = $timesheet->unique('task_id')->values();
+
+        $tasks = Tasks::whereIn('_id', $timesheet->pluck('task_id'))->get();
+
+        if ($tasks->isEmpty()) {
+            return response()->json([
+                'tasks' => [],
+                'message' => 'No task found for this date',
+            ], 404);
+        }
+
+        return response()->json([
+            'tasks' => $tasks,
+            'message' => 'Timesheet found successfully',
+        ], 200);
+    }
     
 }   
