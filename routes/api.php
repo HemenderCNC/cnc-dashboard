@@ -39,6 +39,7 @@ use App\Http\Controllers\PermissionModulesController;
 use App\Http\Controllers\MovieTicketController;
 use App\Http\Controllers\ChartController;
 use App\Http\Controllers\BugsController;
+use App\Http\Controllers\OvertimeController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -596,7 +597,6 @@ Route::middleware('api')->group(function () {
 
         });
 
-
         // Route::prefix('projects')->group(function () {
         //     Route::get('/summary', [ProjectsController::class, 'summary']); // Get all holidays
         //     Route::get('/', [ProjectsController::class, 'index']); // Get all holidays
@@ -771,6 +771,8 @@ Route::middleware('api')->group(function () {
 
         Route::post('/change-description', [TimesheetController::class, 'changeDescription']);
 
+        Route::get('/get-task-by-date', [TimesheetController::class, 'getTaskByDate']);
+
         //General settings module
         Route::prefix('updategeneralsettings')->group(function () {
             //Route::get('/', [GeneralSettingsController::class, 'index']); // Get all settings
@@ -787,8 +789,16 @@ Route::middleware('api')->group(function () {
         Route::get('/activity-logs', [ActivityLogController::class, 'getActivityLogs']);
         Route::get('getgeneralsettings/protected', [GeneralSettingsController::class, 'index']); // Update settings
 
+        Route::post('/OT-claim', [OvertimeController::class, 'otClaimStore']);
+        Route::get('/OT-claim-list', [OvertimeController::class, 'otClaimList']);
+        Route::post('/OT-approve', [OvertimeController::class, 'otApprove']);
+        Route::post('/OT-reject', [OvertimeController::class, 'otReject']);
+        Route::post('/OT-partial-approve', [OvertimeController::class, 'otPartialApprove']);
+        Route::post('/OT-update', [OvertimeController::class, 'otUpdate']);
 
 
+        Route::get('/pre-defiend-review-notes', [OvertimeController::class, 'preDefiendReviewNotes']);
+        Route::post('/pre-defiend-review-notes-store', [OvertimeController::class, 'preDefiendReviewNotesStore']);
 
     });
 });
