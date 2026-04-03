@@ -450,6 +450,7 @@ class ProjectsController extends Controller
             'assignee.*' => 'exists:users,_id',
             'project_manager_id' => 'nullable|array',
             'project_manager_id.*' => 'exists:users,_id',
+            'is_ongoing' => 'nullable',
         ]);
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
@@ -474,6 +475,7 @@ class ProjectsController extends Controller
             'assignee' => $request->assignee,
             'project_manager_id' => $request->project_manager_id,
             'created_by' => $request->user->id,
+            'is_ongoing' => $request->is_ongoing,
         ]);
 
         // Send email to all assignees
@@ -537,6 +539,7 @@ class ProjectsController extends Controller
             'assignee.*' => 'exists:users,_id',
             'project_manager_id' => 'nullable|array',
             'project_manager_id.*' => 'exists:users,_id',
+            'is_ongoing' => 'nullable',
         ]);
 
         if ($validator->fails()) {
@@ -562,6 +565,7 @@ class ProjectsController extends Controller
                 'client_id' => $request->client_id,
                 'assignee' => $request->assignee,
                 'project_manager_id' => $request->project_manager_id,
+                'is_ongoing' => $request->is_ongoing,
             ]
         );
         return response()->json($project, 200);
