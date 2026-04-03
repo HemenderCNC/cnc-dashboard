@@ -60,7 +60,7 @@ class ClientsController extends Controller
                 // Lookup country
                 ['$lookup' => [
                     'from' => 'countries',
-                    'let' => ['countryId' => ['$toInt' => '$country']], // Convert country to integer
+                    'let' => ['countryId' => ['$convert' => ['input' => '$country', 'to' => 'int', 'onError' => null, 'onNull' => null]]], // Convert country to integer
                     'pipeline' => [
                         ['$match' => ['$expr' => ['$eq' => ['$id', '$$countryId']]]]
                     ],
@@ -71,7 +71,7 @@ class ClientsController extends Controller
                 // Lookup state
                 ['$lookup' => [
                     'from' => 'states',
-                    'let' => ['stateId' => ['$toInt' => '$state']], // Convert state to integer
+                    'let' => ['stateId' => ['$convert' => ['input' => '$state', 'to' => 'int', 'onError' => null, 'onNull' => null]]], // Convert state to integer
                     'pipeline' => [
                         ['$match' => ['$expr' => ['$eq' => ['$id', '$$stateId']]]]
                     ],
@@ -82,7 +82,7 @@ class ClientsController extends Controller
                 // Lookup city
                 ['$lookup' => [
                     'from' => 'cities',
-                    'let' => ['cityId' => ['$toInt' => '$city']], // Convert city to integer
+                    'let' => ['cityId' => ['$convert' => ['input' => '$city', 'to' => 'int', 'onError' => null, 'onNull' => null]]], // Convert city to integer
                     'pipeline' => [
                         ['$match' => ['$expr' => ['$eq' => ['$id', '$$cityId']]]]
                     ],
@@ -99,7 +99,7 @@ class ClientsController extends Controller
                         [
                             '$lookup' => [
                                 'from' => 'project_statuses',
-                                'let' => ['statusId' => ['$toObjectId' => '$project_status_id']],
+                                'let' => ['statusId' => ['$convert' => ['input' => '$project_status_id', 'to' => 'objectId', 'onError' => null, 'onNull' => null]]],
                                 'pipeline' => [
                                     [
                                         '$match' => [
@@ -286,17 +286,17 @@ class ClientsController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'company_name' => 'required|string',
-            'first_name' => 'required|string',
-            'last_name' => 'required|string',
+            'company_name' => 'nullable|string',
+            'first_name' => 'nullable|string',
+            'last_name' => 'nullable|string',
             'about_client' => 'nullable|string',
-            'client_type' => 'required|string',
+            'client_type' => 'nullable|string',
             'profile_photo' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
-            'country' => 'required',
-            'state' => 'required',
-            'city' => 'required',
+            'country' => 'nullable',
+            'state' => 'nullable',
+            'city' => 'nullable',
             'industry_type' => 'nullable|string',
-            'status' => 'required|string',
+            'status' => 'nullable|string',
             'client_priority' => 'nullable|string',
             'preferred_communication' => 'nullable|string',
             'client_notes' => 'nullable|string',
@@ -311,39 +311,39 @@ class ClientsController extends Controller
             ], 422);
         }
         // Check if the country exists in the "countries" collection with the given id
-        $countryExists = DB::getMongoDB()->selectCollection('countries')->findOne([
-            'id' => (int) $request->country
-        ]);
+        // $countryExists = DB::getMongoDB()->selectCollection('countries')->findOne([
+        //     'id' => (int) $request->country
+        // ]);
 
 
-        if (!$countryExists) {
-            return response()->json([
-                'message' => 'The specified country does not exist.'
-            ], 422);
-        }
+        // if (!$countryExists) {
+        //     return response()->json([
+        //         'message' => 'The specified country does not exist.'
+        //     ], 422);
+        // }
         // Check if the state exists in the "states" collection with the given id and country_id
-        $stateExists = DB::getMongoDB()->selectCollection('states')->findOne([
-            'id' => (int) $request->state,
-            'country_id' => (int) $request->country
-        ]);
-        if (!$stateExists) {
-            return response()->json([
-                'message' => 'The specified state does not exist in the given country.'
-            ], 422);
-        }
+        // $stateExists = DB::getMongoDB()->selectCollection('states')->findOne([
+        //     'id' => (int) $request->state,
+        //     'country_id' => (int) $request->country
+        // ]);
+        // if (!$stateExists) {
+        //     return response()->json([
+        //         'message' => 'The specified state does not exist in the given country.'
+        //     ], 422);
+        // }
 
 
         // Check if the city exists in the "city" collection with the given id, country_id and state_id
-        $cityExists = DB::getMongoDB()->selectCollection('cities')->findOne([
-            'id' => (int) $request->city,
-            'country_id' => (int) $request->country,
-            'state_id' => (int) $request->state
-        ]);
-        if (!$cityExists) {
-            return response()->json([
-                'message' => 'The specified city does not exist in the given country and state.'
-            ], 422);
-        }
+        // $cityExists = DB::getMongoDB()->selectCollection('cities')->findOne([
+        //     'id' => (int) $request->city,
+        //     'country_id' => (int) $request->country,
+        //     'state_id' => (int) $request->state
+        // ]);
+        // if (!$cityExists) {
+        //     return response()->json([
+        //         'message' => 'The specified city does not exist in the given country and state.'
+        //     ], 422);
+        // }
 
         $profile_photo = null;
         if ($request->hasFile('profile_photo')) {
@@ -357,9 +357,9 @@ class ClientsController extends Controller
             'about_client' => $request->about_client,
             'client_type' => $request->client_type,
             'profile_photo' => $profile_photo,
-            'country' => $request->country,
-            'state' => $request->state,
-            'city' => $request->city,
+            'country' => ($request->country && $request->country !== 'undefined') ? $request->country : "0",
+            'state'   => ($request->state && $request->state !== 'undefined') ? $request->state : "0",
+            'city'    => ($request->city && $request->city !== 'undefined') ? $request->city : "0",
             'industry_type' => $request->industry_type,
             'status' => $request->status,
             'client_priority' => $request->client_priority,
@@ -420,17 +420,17 @@ class ClientsController extends Controller
         $client = Clients::findOrFail($id);
 
         $validator = Validator::make($request->all(), [
-            'company_name' => 'required|string',
-            'first_name' => 'required|string',
-            'last_name' => 'required|string',
+            'company_name' => 'nullable|string',
+            'first_name' => 'nullable|string',
+            'last_name' => 'nullable|string',
             'about_client' => 'nullable|string',
-            'client_type' => 'required|string',
+            'client_type' => 'nullable|string',
             'profile_photo' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
-            'country' => 'required',
-            'state' => 'required',
-            'city' => 'required',
+            'country' => 'nullable',
+            'state' => 'nullable',
+            'city' => 'nullable',
             'industry_type' => 'nullable|string',
-            'status' => 'required|string',
+            'status' => 'nullable|string',
             'client_priority' => 'nullable|string',
             'preferred_communication' => 'nullable|string',
             'client_notes' => 'nullable|string',
@@ -446,46 +446,46 @@ class ClientsController extends Controller
         }
 
         // Validate country if provided
-        if ($request->has('country')) {
-            $countryExists = DB::getMongoDB()->selectCollection('countries')->findOne([
-                'id' => (int) $request->country
-            ]);
+        // if ($request->has('country')) {
+        //     $countryExists = DB::getMongoDB()->selectCollection('countries')->findOne([
+        //         'id' => (int) $request->country
+        //     ]);
 
-            if (!$countryExists) {
-                return response()->json([
-                    'message' => 'The specified country does not exist.'
-                ], 422);
-            }
-        }
+        //     if (!$countryExists) {
+        //         return response()->json([
+        //             'message' => 'The specified country does not exist.'
+        //         ], 422);
+        //     }
+        // }
 
         // Validate state if provided
-        if ($request->has('state') && $request->has('country')) {
-            $stateExists = DB::getMongoDB()->selectCollection('states')->findOne([
-                'id' => (int) $request->state,
-                'country_id' => (int) $request->country
-            ]);
+        // if ($request->has('state') && $request->has('country')) {
+        //     $stateExists = DB::getMongoDB()->selectCollection('states')->findOne([
+        //         'id' => (int) $request->state,
+        //         'country_id' => (int) $request->country
+        //     ]);
 
-            if (!$stateExists) {
-                return response()->json([
-                    'message' => 'The specified state does not exist in the given country.'
-                ], 422);
-            }
-        }
+        //     if (!$stateExists) {
+        //         return response()->json([
+        //             'message' => 'The specified state does not exist in the given country.'
+        //         ], 422);
+        //     }
+        // }
 
         // Validate city if provided
-        if ($request->has('city') && $request->has('state') && $request->has('country')) {
-            $cityExists = DB::getMongoDB()->selectCollection('cities')->findOne([
-                'id' => (int) $request->city,
-                'country_id' => (int) $request->country,
-                'state_id' => (int) $request->state
-            ]);
+        // if ($request->has('city') && $request->has('state') && $request->has('country')) {
+        //     $cityExists = DB::getMongoDB()->selectCollection('cities')->findOne([
+        //         'id' => (int) $request->city,
+        //         'country_id' => (int) $request->country,
+        //         'state_id' => (int) $request->state
+        //     ]);
 
-            if (!$cityExists) {
-                return response()->json([
-                    'message' => 'The specified city does not exist in the given country and state.'
-                ], 422);
-            }
-        }
+        //     if (!$cityExists) {
+        //         return response()->json([
+        //             'message' => 'The specified city does not exist in the given country and state.'
+        //         ], 422);
+        //     }
+        // }
 
         $service = app(FileUploadService::class);
 
@@ -505,9 +505,9 @@ class ClientsController extends Controller
             'last_name' => $request->last_name,
             'about_client' => $request->about_client,
             'client_type' => $request->client_type,
-            'country' => $request->country,
-            'state' => $request->state,
-            'city' => $request->city,
+            'country' => $request->country ?? null,
+            'state' => $request->state ?? null,
+            'city' => $request->city ?? null,
             'industry_type' => $request->industry_type,
             'status' => $request->status,
             'client_priority' => $request->client_priority,
