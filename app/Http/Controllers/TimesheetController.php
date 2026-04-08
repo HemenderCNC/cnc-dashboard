@@ -1614,7 +1614,7 @@ class TimesheetController extends Controller
         foreach ($timesheet->dates as $dateEntry) {
             foreach ($dateEntry['time_log'] as $log) {
                 if (!empty($log['start_time']) && !empty($log['end_time'])) {
-                $start = Carbon::createFromFormat('H:i', $log['start_time']);
+                    $start = Carbon::createFromFormat('H:i', $log['start_time']);
                     $end = Carbon::createFromFormat('H:i', $log['end_time']);
                     $diff = $end->diffInMinutes($start);
                     $totalMinutes += $diff;
@@ -1644,7 +1644,6 @@ class TimesheetController extends Controller
         $lastUpdated = Carbon::parse($timesheet->updated_at);
 
         $now = Carbon::now();
-        $new_timesheet = null;
 
         $diffMinutes = $lastUpdated->diffInMinutes($now);
 
@@ -1659,7 +1658,6 @@ class TimesheetController extends Controller
             $timeLogs = $dates[$existingDateKey]['time_log'] ?? [];
 
             if (!empty($timeLogs)) {
-                if ($diffMinutes >= 1) {
                     // If more than 5 minutes have passed, create a new time log entry.
                    $new_timesheet = new Timesheet();
                     $new_timesheet->project_id = $timesheet->project_id;
@@ -1679,29 +1677,18 @@ class TimesheetController extends Controller
                         'is_display' => false
                     ]);
 
-                } else {
-                    // Otherwise, update the end_time of the last log.
-                    $lastIndex = count($timeLogs) - 1;
-                    $timeLogs[$lastIndex]['end_time'] = Carbon::now()->format('H:i');
-
-                    $new_timesheet = null;
-
-            $timesheet->dates = $dates;
-            $timesheet->status = 'running';
-            $timesheet->save();
-                }
-        } else {
+            } else {
                 // If there are no time logs, create one.
                 $timeLogs[] = [
                     'start_time' => $now->format('H:i'),
                     'end_time'   => Carbon::now()->format('H:i'),
-            ];
+                ];
 
                 $new_timesheet = null;
 
-            $timesheet->dates = $dates;
-            $timesheet->status = 'running';
-            $timesheet->save();
+                $timesheet->dates = $dates;
+                $timesheet->status = 'running';
+                $timesheet->save();
             }
             $dates[$existingDateKey]['time_log'] = $timeLogs;
         } else {
@@ -2188,10 +2175,10 @@ class TimesheetController extends Controller
                 [
                     'date' => $currentDate,
                     'time_log' => [
-                    [
-                        'start_time' => now()->format('H:i'),
+                        [
+                            'start_time' => now()->format('H:i'),
                             'end_time' => now()->format('H:i'),
-                    ]
+                        ]
                     ],
                 ]
             ], // Store as a plain PHP array
