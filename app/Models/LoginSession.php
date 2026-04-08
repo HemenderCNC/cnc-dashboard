@@ -91,36 +91,52 @@ class LoginSession extends Eloquent
 }
 
     public function getTotalWorkingTimeAttribute()
-{
-    $loginSeconds = 0;
-    $breakSeconds = 0;
+    {
+        $employeeId = $this->employee_id;
+        $sessionDate = $this->date;
+        $workingSeconds = 0;
 
-    foreach ($this->time_log ?? [] as $log) {
-        $start = Carbon::createFromFormat('H:i', $log['start_time']);
-        $end   = Carbon::createFromFormat('H:i', $log['end_time']);
+        if ($employeeId && $sessionDate) {
+            // Fetch timesheets for this employee where dates array contains this session's date
+            $timesheets = \App\Models\Timesheet::where('employee_id', $employeeId)
+                ->where('dates.date', $sessionDate)
+                ->get();
 
-        if ($end->lt($start)) {
-            $end->addDay();
+            foreach ($timesheets as $timesheet) {
+                $dates = $timesheet->dates ?? [];
+                foreach ($dates as $dateEntry) {
+                    // Match the specific date
+                    if (isset($dateEntry['date']) && $dateEntry['date'] === $sessionDate) {
+                        $timeLogs = $dateEntry['time_log'] ?? [];
+                        
+                        foreach ($timeLogs as $log) {
+                            if (!empty($log['start_time']) && !empty($log['end_time'])) {
+                                try {
+                                    $start = \Carbon\Carbon::createFromFormat('H:i', $log['start_time']);
+                                    $end   = \Carbon\Carbon::createFromFormat('H:i', $log['end_time']);
+
+                                    if ($end->lt($start)) {
+                                        $end->addDay();
+                                    }
+
+                                    $workingSeconds += $start->diffInSeconds($end);
+                                } catch (\Exception $e) {
+                                    // Ignore if time format is invalid
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
-        $loginSeconds += $start->diffInSeconds($end);
+        return gmdate('H:i', $workingSeconds);
     }
 
-    foreach ($this->break_log ?? [] as $log) {
-        $start = Carbon::createFromFormat('H:i', $log['start_time']);
-        $end   = Carbon::createFromFormat('H:i', $log['end_time']);
 
-        if ($end->lt($start)) {
-            $end->addDay();
-        }
 
-        $breakSeconds += $start->diffInSeconds($end);
-    }
 
-    $workingSeconds = max(0, $loginSeconds - $breakSeconds);
 
-    return gmdate('H:i', $workingSeconds);
-}
 
     public function getIsLogoutAttribute()
     {
