@@ -63,7 +63,7 @@ class AppServiceProvider extends ServiceProvider
                 }
 
                 if (class_exists($modelClass) && is_subclass_of($modelClass, Model::class)) {
-                    $modelClass::observe(ActivityLogObserver::class);
+                    // $modelClass::observe(ActivityLogObserver::class);
                 }
             }
 
