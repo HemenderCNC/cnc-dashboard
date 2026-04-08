@@ -61,6 +61,7 @@ class UserController extends Controller
             'employee_status_id' => 'nullable|exists:employee_statuses,_id',
             'work_location_id' => 'nullable|exists:work_locations,_id',
             'created_by' => 'required|exists:users,_id',
+            'original_certificate_no' => 'required|string',
 
             //Skills
             'skills' => 'nullable|array',
@@ -207,6 +208,7 @@ class UserController extends Controller
             'account_type' => $request->account_type,
             'bank_ifsc_code' => $request->bank_ifsc_code,
             'bank_branch_location' => $request->bank_branch_location,
+            'original_certificate_no' => $request->original_certificate_no,
 
             //document details
             'document_type_id' => $request->document_type_id,
@@ -261,6 +263,7 @@ class UserController extends Controller
             'city' => 'nullable',
             'postal_code' => 'nullable|string',
             'emergency_contact_number' => 'nullable|string',
+            'original_certificate_no' => 'required|string',
 
             // Other fields...
         ]);
@@ -398,6 +401,7 @@ class UserController extends Controller
             'employee_status_id' => $request->employee_status_id,
             'work_location_id' => $request->work_location_id,
             'office_location' => $request->office_location,
+            'original_certificate_no' => $request->original_certificate_no,
 
             'created_by' => $request->user->id,
 

@@ -54,6 +54,7 @@ class User extends Eloquent
         'created_by',
         //Skills
         'skills',
+        'original_certificate_no',
 
         //Bank details
         'account_holde_name',
