@@ -807,19 +807,29 @@ class TimesheetController extends Controller
             ->pluck('employee_id')
             ->toArray();
 
+        $projectIds = Project::where('project_name', 'Research and Development')->pluck('id');
+
         //  Employees who already have timesheet today (BUSY)
         $busyEmployeeIds = Timesheet::where('dates.date', $today)
-            ->where('task_type', '!=', 'R&D')
-            ->where('status', '!=', 'paused')
-            ->where('status', '!=', 'Ready For QA')
-            ->where('status', '!=', 'completed')
+            ->where('task_type', '!=','R&D')
+            ->where('status', '!=','paused')
+            ->where('status', '!=','Ready For QA')
+            ->where('status', '!=','completed')
             ->groupBy('employee_id')
             ->pluck('employee_id')
             ->toArray();
 
-        $userlist = User::raw(function ($collection) use ($roleId, $loggedInEmployeeIds, $busyEmployeeIds, $today) {
+        $busyEmployeeIdsRnd = Timesheet::where('dates.date', $today)
+            ->where('task_type','R&D')
+            ->whereNotIn('project_id',$projectIds)
+            ->groupBy('employee_id')
+            ->pluck('employee_id')
+            ->toArray();
+
+        $userlist = User::raw(function ($collection) use ($roleId, $loggedInEmployeeIds, $busyEmployeeIds, $today, $busyEmployeeIdsRnd) {
             $loggedInOids = array_map(fn($id) => new ObjectId($id), array_values($loggedInEmployeeIds));
             $busyOids = array_map(fn($id) => new ObjectId($id), array_values($busyEmployeeIds));
+            $busyOidsRnd = array_map(fn($id) => new ObjectId($id), array_values($busyEmployeeIdsRnd));
 
             return $collection->aggregate([
                 ['$match' => [
@@ -827,7 +837,7 @@ class TimesheetController extends Controller
                     'is_logout' => ['$ne' => true],
                     '_id' => [
                         '$in' => $loggedInOids,
-                        '$nin' => $busyOids
+                      '$nin' => array_merge($busyOids, $busyOidsRnd)
                     ]
                 ]],
 
@@ -1604,7 +1614,7 @@ class TimesheetController extends Controller
         foreach ($timesheet->dates as $dateEntry) {
             foreach ($dateEntry['time_log'] as $log) {
                 if (!empty($log['start_time']) && !empty($log['end_time'])) {
-                    $start = Carbon::createFromFormat('H:i', $log['start_time']);
+                $start = Carbon::createFromFormat('H:i', $log['start_time']);
                     $end = Carbon::createFromFormat('H:i', $log['end_time']);
                     $diff = $end->diffInMinutes($start);
                     $totalMinutes += $diff;
@@ -1634,6 +1644,7 @@ class TimesheetController extends Controller
         $lastUpdated = Carbon::parse($timesheet->updated_at);
 
         $now = Carbon::now();
+        $new_timesheet = null;
 
         $diffMinutes = $lastUpdated->diffInMinutes($now);
 
@@ -1675,22 +1686,22 @@ class TimesheetController extends Controller
 
                     $new_timesheet = null;
 
-                    $timesheet->dates = $dates;
-                    $timesheet->status = 'running';
-                    $timesheet->save();
+            $timesheet->dates = $dates;
+            $timesheet->status = 'running';
+            $timesheet->save();
                 }
-            } else {
+        } else {
                 // If there are no time logs, create one.
                 $timeLogs[] = [
                     'start_time' => $now->format('H:i'),
                     'end_time'   => Carbon::now()->format('H:i'),
-                ];
+            ];
 
                 $new_timesheet = null;
 
-                $timesheet->dates = $dates;
-                $timesheet->status = 'running';
-                $timesheet->save();
+            $timesheet->dates = $dates;
+            $timesheet->status = 'running';
+            $timesheet->save();
             }
             $dates[$existingDateKey]['time_log'] = $timeLogs;
         } else {
@@ -2177,10 +2188,10 @@ class TimesheetController extends Controller
                 [
                     'date' => $currentDate,
                     'time_log' => [
-                        [
-                            'start_time' => now()->format('H:i'),
+                    [
+                        'start_time' => now()->format('H:i'),
                             'end_time' => now()->format('H:i'),
-                        ]
+                    ]
                     ],
                 ]
             ], // Store as a plain PHP array
