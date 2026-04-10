@@ -138,6 +138,7 @@ class LoginSessionController extends Controller
         $session = LoginSession::where('employee_id', $userId)
             ->where('date', $currentDate)
             ->first();
+            
         if ($session && $session->break === true) {
             $session->break = false;
             $session->save();
@@ -166,18 +167,9 @@ class LoginSessionController extends Controller
             // Today's date entry exists.
             $timeLogs = $dates[$existingDateKey]['time_log'] ?? [];
             if (!empty($timeLogs)) {
-                // Decide if we need to create a new time log or update the last one.
-                if ($diffMinutes >= 5) {
-                    // More than 5 minutes since last update; append a new time log.
-                    $timeLogs[] = [
-                        'start_time' => $formattedStart,
-                        'end_time'   => $formattedEnd,
-                    ];
-                } else {
-                    // Less than 5 minutes; update the end_time of the last log.
-                    $lastIndex = count($timeLogs) - 1;
-                    $timeLogs[$lastIndex]['end_time'] = $formattedEnd;
-                }
+                // Update the end_time of the last log instead of creating a new one
+                $lastIndex = count($timeLogs) - 1;
+                $timeLogs[$lastIndex]['end_time'] = $formattedEnd;
             } else {
                 // No time logs exist for today; create one.
                 $timeLogs[] = [

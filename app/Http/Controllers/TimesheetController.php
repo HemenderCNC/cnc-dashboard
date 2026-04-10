@@ -1282,33 +1282,29 @@ class TimesheetController extends Controller
 
     public function stopTask(Request $request, $id)
     {
-        $timesheet = Timesheet::where('_id', $id)->first();
+        $timesheet = Timesheet::where('_id', $id)
+        ->where('employee_id', $request->user->id)
+        ->where('status', 'running')
+        ->first();
 
         if (!$timesheet) {
             return response()->json(['message' => 'Timesheet not found'], 404);
         }
 
         if ($timesheet->status == 'running') {
-            $currentDate = Carbon::now()->toDateString();
-            $dates = $timesheet->dates;
+             $dates = $timesheet->dates;
 
-            if (is_array($dates)) {
-                $existingDateKey = array_search($currentDate, array_column($dates, 'date'));
-                if ($existingDateKey !== false) {
-                    $timeLogs = $dates[$existingDateKey]['time_log'] ?? [];
-                    if (!empty($timeLogs)) {
-                        $lastIndex = count($timeLogs) - 1;
-                        $timeLogs[$lastIndex]['end_time'] = Carbon::now()->format('H:i');
-                        $dates[$existingDateKey]['time_log'] = $timeLogs;
-                        $timesheet->dates = $dates;
-                    }
-                }
+            if (!empty($dates[0]['time_log'][0])) {
+
+                $dates[0]['time_log'][0]['end_time'] = Carbon::now()->format('H:i');
+
+                $timesheet->dates = $dates;
             }
         }
 
         $timesheet->status = 'paused';
         $timesheet->save();
-        $userId = $request->user->id; // Get authenticated user ID
+        $userId = $request->user->id;
         if ($timesheet->task_type == 'Helping Hand') {
             $task_id = $timesheet->task_id;
             $HelpingHand = HelpingHand::where('task_id', $task_id)->where('to_id', $userId)->where('status', 'accepted')->first();
@@ -1391,20 +1387,13 @@ class TimesheetController extends Controller
         }
 
         if ($timesheet->status == 'running') {
-            $currentDate = Carbon::now()->toDateString();
             $dates = $timesheet->dates;
 
-            if (is_array($dates)) {
-                $existingDateKey = array_search($currentDate, array_column($dates, 'date'));
-                if ($existingDateKey !== false) {
-                    $timeLogs = $dates[$existingDateKey]['time_log'] ?? [];
-                    if (!empty($timeLogs)) {
-                        $lastIndex = count($timeLogs) - 1;
-                        $timeLogs[$lastIndex]['end_time'] = Carbon::now()->format('H:i');
-                        $dates[$existingDateKey]['time_log'] = $timeLogs;
-                        $timesheet->dates = $dates;
-                    }
-                }
+            if (isset($dates[0]['time_log'][0])) {
+
+                $dates[0]['time_log'][0]['end_time'] = Carbon::now()->format('H:i');
+
+                $timesheet->dates = $dates;
             }
         }
 
@@ -1640,77 +1629,24 @@ class TimesheetController extends Controller
         $currentDate = Carbon::now()->toDateString();
         $userId = $request->user->id;
 
-        // Get the last updated time from the timesheet (before any modifications)
-        $lastUpdated = Carbon::parse($timesheet->updated_at);
+    Timesheet::where('project_id', $timesheet->project_id)
+    ->where('task_id', $timesheet->task_id)
+    ->where('employee_id', $userId)
+    ->where('status', 'paused')
+    ->update([
+        'is_display' => false
+    ]);
 
-        $now = Carbon::now();
-
-        $diffMinutes = $lastUpdated->diffInMinutes($now);
-
-        // Ensure `dates` is an array
-        $dates = $timesheet->dates ?? [];
-
-        // Find the entry for today's date
-        $existingDateKey = array_search($currentDate, array_column($dates, 'date'));
-
-        if ($existingDateKey !== false) {
-            // Today's entry exists.
-            $timeLogs = $dates[$existingDateKey]['time_log'] ?? [];
-
-            if (!empty($timeLogs)) {
-                    // If more than 5 minutes have passed, create a new time log entry.
-                   $new_timesheet = new Timesheet();
-                    $new_timesheet->project_id = $timesheet->project_id;
-                    $new_timesheet->task_id = $timesheet->task_id;
-                    $new_timesheet->task_type = $timesheet->task_type;
-                    $new_timesheet->employee_id = $userId;
-                    $new_timesheet->dates = [['date' => $currentDate,'time_log' => [['start_time' => now()->format('H:i'),'end_time' => now()->format('H:i'),]],]];
-                    $new_timesheet->status = 'running';
-                    $new_timesheet->work_description = $timesheet->work_description;
-                    $new_timesheet->save();
-
-                    Timesheet::where('project_id', $timesheet->project_id)
-                    ->where('task_id', $timesheet->task_id)
-                    ->where('employee_id', $userId)
-                    ->where('status', 'paused')
-                    ->update([
-                        'is_display' => false
-                    ]);
-
-            } else {
-                // If there are no time logs, create one.
-                $timeLogs[] = [
-                    'start_time' => $now->format('H:i'),
-                    'end_time'   => Carbon::now()->format('H:i'),
-                ];
-
-                $new_timesheet = null;
-
-                $timesheet->dates = $dates;
-                $timesheet->status = 'running';
-                $timesheet->save();
-            }
-            $dates[$existingDateKey]['time_log'] = $timeLogs;
-        } else {
-            // If today's date does not exist, create a new entry with a new time log.
-            $new_timesheet = new Timesheet();
-            $new_timesheet->project_id = $timesheet->project_id;
-            $new_timesheet->task_id = $timesheet->task_id;
-            $new_timesheet->task_type = $timesheet->task_type;
-            $new_timesheet->employee_id = $userId;
-            $new_timesheet->dates = [['date' => $currentDate,'time_log' => [['start_time' => now()->format('H:i'),'end_time' => now()->format('H:i'),]],]];
-            $new_timesheet->status = 'running';
-            $new_timesheet->work_description = $timesheet->work_description;
-            $new_timesheet->save();
-
-            Timesheet::where('project_id', $timesheet->project_id)
-            ->where('task_id', $timesheet->task_id)
-            ->where('employee_id', $userId)
-            ->where('status', 'paused')
-            ->update([
-                'is_display' => false
-            ]);
-        }
+        // If today's date does not exist, create a new entry with a new time log.
+        $new_timesheet = new Timesheet();
+        $new_timesheet->project_id = $timesheet->project_id;
+        $new_timesheet->task_id = $timesheet->task_id;
+        $new_timesheet->task_type = $timesheet->task_type;
+        $new_timesheet->employee_id = $userId;
+        $new_timesheet->dates = [['date' => $currentDate,'time_log' => [['start_time' => now()->format('H:i'),'end_time' => now()->format('H:i'),]],]];
+        $new_timesheet->status = 'running';
+        $new_timesheet->work_description = $timesheet->work_description;
+        $new_timesheet->save();
 
         // Pause any other running tasks for the same employee.
         Timesheet::where('employee_id', $userId)
