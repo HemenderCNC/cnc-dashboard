@@ -785,28 +785,24 @@ class TasksController extends Controller
 
 
 
-            $estimated_project_hours = Tasks::raw(function ($collection) use ($request) {
-                return $collection->aggregate([
-                    ['$match' => ['project_id' => $request->project_id]],
-                    [
-                        '$group' => [
-                            '_id' => null,
-                            'total' => [
-                                '$sum' => [
-                                    '$convert' => [
-                                        'input' => '$estimated_hours',
-                                        'to' => 'int',
-                                        'onError' => 0,
-                                        'onNull' => 0
-                                    ]
-                                ]
-                            ]
-                        ]
-                    ]
-                ]);
-            });
-
-            $estimated_project_hours = $estimated_project_hours[0]['total'] ?? 0;
+            $tasksForProject = Tasks::where('project_id', $request->project_id)->get(['estimated_hours']);
+            $totalEstMinutes = 0;
+            foreach ($tasksForProject as $t) {
+                if (!empty($t->estimated_hours)) {
+                    $est = (string)$t->estimated_hours;
+                    if (str_contains($est, ':')) {
+                        $parts = explode(':', $est);
+                        $totalEstMinutes += (((int)$parts[0]) * 60) + (int)($parts[1] ?? 0);
+                    } else if (str_contains($est, '.')) {
+                        $totalEstMinutes += (int)((float)$est * 60);
+                    } else {
+                        $totalEstMinutes += ((int)$est) * 60;
+                    }
+                }
+            }
+            $est_hours = intdiv($totalEstMinutes, 60);
+            $est_minutes = $totalEstMinutes % 60;
+            $estimated_project_hours = sprintf('%02d:%02d', $est_hours, $est_minutes);
 
 
             $totalMinutes = Timesheet::raw(function ($collection) use ($request) {
