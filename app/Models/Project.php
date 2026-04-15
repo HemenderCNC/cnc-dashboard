@@ -31,6 +31,7 @@ class Project extends Eloquent
         'project_manager_id',
         'created_by',
         'is_ongoing',
+        'attachment',
     ];
 
     protected static function boot()

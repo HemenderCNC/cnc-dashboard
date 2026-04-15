@@ -11,6 +11,7 @@ use MongoDB\BSON\ObjectId;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\ProjectAssignedMail;
 use App\Models\User;
+use App\Services\FileUploadService;
 
 class ProjectsController extends Controller
 {
@@ -190,7 +191,11 @@ class ProjectsController extends Controller
                         ['$addFields' => [
                             'diff_minutes' => [
                                 '$divide' => [
-                                    ['$subtract' => ['$end', '$start']],
+                                    ['$cond' => [
+                                        'if' => ['$lt' => ['$end', '$start']],
+                                        'then' => ['$add' => [['$subtract' => ['$end', '$start']], 24 * 60 * 60 * 1000]],
+                                        'else' => ['$subtract' => ['$end', '$start']]
+                                    ]],
                                     1000 * 60
                                 ]
                             ]
@@ -451,9 +456,16 @@ class ProjectsController extends Controller
             'project_manager_id' => 'nullable|array',
             'project_manager_id.*' => 'exists:users,_id',
             'is_ongoing' => 'nullable',
+            'attachment' => 'nullable|file|max:2048',
         ]);
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $service = app(FileUploadService::class);
+        $attachment = '';
+        if ($request->hasFile('attachment')) {
+            $attachment = $service->upload($request->file('attachment'), 'uploads', $request->user->id);
         }
 
         $platform = Project::create([
@@ -476,6 +488,7 @@ class ProjectsController extends Controller
             'project_manager_id' => $request->project_manager_id,
             'created_by' => $request->user->id,
             'is_ongoing' => $request->is_ongoing,
+            'attachment' => $attachment,
         ]);
 
         // Send email to all assignees
@@ -540,10 +553,22 @@ class ProjectsController extends Controller
             'project_manager_id' => 'nullable|array',
             'project_manager_id.*' => 'exists:users,_id',
             'is_ongoing' => 'nullable',
+            'attachment' => 'nullable|file|max:2048',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $service = app(FileUploadService::class);
+
+        if ($request->hasFile('attachment')) {
+            // Delete old profile photo if exists
+            if ($project->attachment) {
+                $service->delete($project->attachment['file_path'], $project->attachment['media_id']);
+            }
+            $attachment = $service->upload($request->file('attachment'), 'uploads', $request->user->id);
+            $project->attachment = $attachment;
         }
 
         $project->update(

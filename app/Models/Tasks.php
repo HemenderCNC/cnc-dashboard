@@ -9,7 +9,7 @@ class Tasks extends Eloquent
     protected $connection = 'mongodb';
     protected $collection = 'tasks';
     protected $fillable = ['task_id', 'title', 'project_id', 'milestone_id', 'status_id', 'task_type_id', 'priority', 'owner_id', 'assignee_id', 'assignees', 'description', 'due_date', 'estimated_hours', 'attachment', 'created_by', 'start_date', 
-    'qa_id','parent_task_id','is_child_task','defective_type'];
+    'qa_id','parent_task_id','is_child_task','defective_type','is_billable'];
     public static function boot()
     {
         parent::boot();

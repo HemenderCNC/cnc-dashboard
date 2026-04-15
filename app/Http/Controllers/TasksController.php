@@ -468,7 +468,11 @@ class TasksController extends Controller
                                     '$addFields' => [
                                         'durationInMinutes' => [
                                             '$divide' => [
-                                                ['$subtract' => ['$end', '$start']],
+                                                ['$cond' => [
+                                                    'if' => ['$lt' => ['$end', '$start']],
+                                                    'then' => ['$add' => [['$subtract' => ['$end', '$start']], 24 * 60 * 60 * 1000]],
+                                                    'else' => ['$subtract' => ['$end', '$start']]
+                                                ]],
                                                 1000 * 60
                                             ]
                                         ]
@@ -564,7 +568,11 @@ class TasksController extends Controller
                                 '$addFields' => [
                                     'durationInMinutes' => [
                                         '$divide' => [
-                                            ['$subtract' => ['$end', '$start']],
+                                            ['$cond' => [
+                                                'if' => ['$lt' => ['$end', '$start']],
+                                                'then' => ['$add' => [['$subtract' => ['$end', '$start']], 24 * 60 * 60 * 1000]],
+                                                'else' => ['$subtract' => ['$end', '$start']]
+                                            ]],
                                             1000 * 60
                                         ]
                                     ]
@@ -888,6 +896,7 @@ class TasksController extends Controller
             'estimated_hours' => ($request->user->role && $request->user->role->name === 'QA') ? 'nullable' : 'required|string',
             'attachment' => 'nullable|file|mimes:pdf,jpeg,jpg,png|max:2048',
             'defective_type' => 'nullable|string',
+            'is_billable' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -943,6 +952,7 @@ class TasksController extends Controller
             'attachment' => $attachment,
             'created_by' => $request->user->id,
             'defective_type' => $request->defective_type ?? null,
+            'is_billable' => $request->is_billable ?? null,
         ]);
         return response()->json($platform, 201);
     }
@@ -1014,6 +1024,7 @@ class TasksController extends Controller
             'estimated_hours' => ($request->user->role && $request->user->role->name === 'QA') ? 'nullable' : 'nullable|string',
             'attachment' => 'nullable|file|mimes:pdf,jpeg,jpg,png|max:2048',
             'defective_type' => 'nullable|string',
+            'is_billable' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -1076,6 +1087,7 @@ class TasksController extends Controller
                 'due_date' => $dueDate,
                 'estimated_hours' => $request->estimated_hours,
                 'defective_type' => $request->defective_type ?? null,
+                'is_billable' => $request->is_billable ?? null,
             ]
         );
 
