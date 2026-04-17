@@ -97,7 +97,11 @@ class TimesheetController extends Controller
                 ['$addFields' => [
                     'duration_minutes' => [
                         '$divide' => [
-                            ['$subtract' => ['$end_time', '$start_time']],
+                            ['$cond' => [
+                                'if' => ['$lt' => ['$end_time', '$start_time']],
+                                'then' => ['$add' => [['$subtract' => ['$end_time', '$start_time']], 24 * 60 * 60 * 1000]],
+                                'else' => ['$subtract' => ['$end_time', '$start_time']]
+                            ]],
                             60000
                         ]
                     ]
@@ -320,7 +324,11 @@ class TimesheetController extends Controller
                 ['$addFields' => [
                     'duration_minutes' => [
                         '$divide' => [
-                            ['$subtract' => ['$end_time', '$start_time']],
+                            ['$cond' => [
+                                'if' => ['$lt' => ['$end_time', '$start_time']],
+                                'then' => ['$add' => [['$subtract' => ['$end_time', '$start_time']], 24 * 60 * 60 * 1000]],
+                                'else' => ['$subtract' => ['$end_time', '$start_time']]
+                            ]],
                             60000
                         ]
                     ]
@@ -580,12 +588,11 @@ class TimesheetController extends Controller
                 ['$addFields' => [
                     'duration_minutes' => [
                         '$divide' => [
-                            [
-                                '$subtract' => [
-                                    '$end_time_date',
-                                    '$start_time_date'
-                                ]
-                            ],
+                            ['$cond' => [
+                                'if' => ['$lt' => ['$end_time_date', '$start_time_date']],
+                                'then' => ['$add' => [['$subtract' => ['$end_time_date', '$start_time_date']], 24 * 60 * 60 * 1000]],
+                                'else' => ['$subtract' => ['$end_time_date', '$start_time_date']]
+                            ]],
                             60000
                         ]
                     ]
@@ -702,7 +709,11 @@ class TimesheetController extends Controller
             ['$addFields' => [
                 'minutes' => [
                     '$divide' => [
-                        ['$subtract' => ['$end_time_date', '$start_time_date']],
+                        ['$cond' => [
+                            'if' => ['$lt' => ['$end_time_date', '$start_time_date']],
+                            'then' => ['$add' => [['$subtract' => ['$end_time_date', '$start_time_date']], 24 * 60 * 60 * 1000]],
+                            'else' => ['$subtract' => ['$end_time_date', '$start_time_date']]
+                        ]],
                         60000
                     ]
                 ]
@@ -1397,7 +1408,7 @@ class TimesheetController extends Controller
             }
         }
 
-        $task = Tasks::where('_id', $timesheet->task_id)->first();
+        $task = Tasks::with('project')->where('_id', $timesheet->task_id)->first();
 
         if ($request->user->role->slug == 'qa') {
 
@@ -1467,7 +1478,7 @@ class TimesheetController extends Controller
         if ($request->user->role->slug == 'qa') {
             $statusId = TaskStatus::where('name', 'Completed')->value('_id');
 
-            if (strtoupper(trim($timesheet->task_type)) !== 'R&D') {
+            if (strtoupper(trim($timesheet->task_type)) !== 'R&D' || ($task->project && $task->project->project_name !== 'Research and Development')) {
             $taskToUpdate = Tasks::with('status')->where('_id', $timesheet->task_id)->first();
 
             if ($taskToUpdate && $taskToUpdate->status_id != $statusId) {
@@ -1513,7 +1524,7 @@ class TimesheetController extends Controller
             if (empty($task?->qa_id)) {
                 $statusId = TaskStatus::where('name', 'Completed')->value('_id');
 
-                if (strtoupper(trim($timesheet->task_type)) !== 'R&D') {
+                if (strtoupper(trim($timesheet->task_type)) !== 'R&D' || ($task->project && $task->project->project_name !== 'Research and Development')) {
 
                     $taskToUpdate = Tasks::with('status')->where('_id', $timesheet->task_id)->first();
 

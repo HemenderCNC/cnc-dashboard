@@ -678,7 +678,8 @@ class TasksController extends Controller
                     'is_child_task' => 1,
                     'child_tasks' => 1,
                     'total_hours' => 1,
-                    'total_minutes' => 1
+                    'total_minutes' => 1,
+                    'is_billable' => 1
                 ]]
             ]);
             if ($limit !== -1) {

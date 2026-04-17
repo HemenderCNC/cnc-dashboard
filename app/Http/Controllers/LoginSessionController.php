@@ -129,6 +129,7 @@ class LoginSessionController extends Controller
 
         // Retrieve the running timesheet for this user.
         $timesheet = Timesheet::where('employee_id', $userId)
+            ->whereDate('created_at', $currentDate)   
             ->where('status', 'running')
             ->first();
 
