@@ -207,17 +207,55 @@ class TimesheetController extends Controller
             return $collection->aggregate($pipeline);
         });
 
-        // Total count without pagination
-        $totalCount = Timesheet::raw(function ($collection) use ($matchStage) {
+        // Total count and total minutes without pagination
+        $totalCountWithSum = Timesheet::raw(function ($collection) use ($matchStage) {
             return $collection->aggregate([
                 ['$match' => $matchStage],
                 ['$unwind' => '$dates'],
                 ['$match' => isset(((array) $matchStage)['dates.date']) ? ['dates.date' => ((array) $matchStage)['dates.date']] : (object)[]],
                 ['$unwind' => '$dates.time_log'],
 
-                ['$count' => 'total']
+                // Calculate duration to sum it up
+                ['$addFields' => [
+                    'start_time' => [
+                        '$toDate' => [
+                            '$concat' => ['$dates.date', 'T', '$dates.time_log.start_time', ':00']
+                        ]
+                    ],
+                    'end_time' => [
+                        '$toDate' => [
+                            '$concat' => ['$dates.date', 'T', '$dates.time_log.end_time', ':00']
+                        ]
+                    ]
+                ]],
+                ['$addFields' => [
+                    'duration_minutes' => [
+                        '$divide' => [
+                            ['$cond' => [
+                                'if' => ['$lt' => ['$end_time', '$start_time']],
+                                'then' => ['$add' => [['$subtract' => ['$end_time', '$start_time']], 24 * 60 * 60 * 1000]],
+                                'else' => ['$subtract' => ['$end_time', '$start_time']]
+                            ]],
+                            60000
+                        ]
+                    ]
+                ]],
+
+                ['$group' => [
+                    '_id' => null,
+                    'total' => ['$sum' => 1],
+                    'total_minutes' => ['$sum' => '$duration_minutes']
+                ]]
             ]);
-        })->first()['total'] ?? 0;
+        })->first();
+
+        $totalCount = $totalCountWithSum['total'] ?? 0;
+        $allTotalMinutes = current((array)$totalCountWithSum)['total_minutes'] ?? ($totalCountWithSum['total_minutes'] ?? 0);
+        $allTotalMinutes = (int)$allTotalMinutes;
+
+        $allTotalHours = floor($allTotalMinutes / 60);
+        $allTotalRemMinutes = $allTotalMinutes % 60;
+        $All_total_spent_time = sprintf('%02d:%02d', $allTotalHours, $allTotalRemMinutes);
 
         return response()->json([
             'data' => $aggregation,
@@ -226,7 +264,8 @@ class TimesheetController extends Controller
                 'limit' => $limit,
                 'total' => $totalCount,
                 'total_pages' => $limit === -1 ? 1 : ceil($totalCount / $limit),
-            ]
+            ],
+            'All_total_spent_time' => $All_total_spent_time
         ]);
     }
 
