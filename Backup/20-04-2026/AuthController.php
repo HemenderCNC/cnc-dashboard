@@ -115,33 +115,7 @@ class AuthController extends Controller
 
            if ($loginSession) {
                 $loginSession->is_logout = false;
-                $loginSession->actual_check_out_time = null;
-                $loginSession->actual_check_out_date = null;
                 $loginSession->save();
-            }
-            else{
-                LoginSession::create([
-                    'employee_id' => $user->id,
-                    'actual_check_in_time' => now()->format('H:i'),
-                    'actual_check_in_date' => now()->toDateString(),
-                    'actual_check_out_time' => null,
-                    'actual_check_out_date' => null,
-                    'date' => now()->toDateString(),
-                    'is_logout' => false,
-                    'time_log' => [
-                        [
-                            'start_time' => now()->format('H:i'),
-                            'end_time' => now()->format('H:i'),
-                        ]
-                    ],
-                    'break' => true,
-                    'break_log' => [
-                        [
-                            'start_time' => now()->format('H:i'),
-                            'end_time' => now()->format('H:i'),
-                        ]
-                    ],
-                ]);
             }
 
         // Return the token
@@ -265,21 +239,17 @@ class AuthController extends Controller
             }
 
             $loginSession = LoginSession::where('employee_id', $user->id)
-                ->where('date', now()->toDateString())
-                ->where('is_logout', false)
-                ->first();
+           ->where('date', now()->toDateString())
+            ->first();
 
            if ($loginSession) {
                 $loginSession->is_logout = true;
-                $loginSession->actual_check_out_time = now()->format('H:i');
-                $loginSession->actual_check_out_date = now()->toDateString();
                 $loginSession->save();
             }
 
             $timesheet = Timesheet::where('employee_id', $userID)
             ->where('status', 'running')
             ->first();
-
             if ($timesheet) {
                 $timesheet->status = 'paused';
                 $timesheet->save();

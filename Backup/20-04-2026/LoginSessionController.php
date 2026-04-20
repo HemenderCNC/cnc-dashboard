@@ -50,7 +50,7 @@ class LoginSessionController extends Controller
             // }
 
             $timeLog = $session->time_log ?? [];
-            if (!empty($timeLog) && ($now - $lastUpdatedTime) >= 600) {
+            if (!empty($timeLog) && ($now - $lastUpdatedTime) >= 300) {
                 $timeLog[] = [
                     'start_time' => Carbon::now()->format('H:i'),
                     'end_time' => Carbon::now()->format('H:i'),
@@ -70,7 +70,7 @@ class LoginSessionController extends Controller
 
             if ($session->break === true) {
                 $breakLog = $session->break_log ?? [];
-                if (!empty($breakLog) && ($now - $lastUpdatedTime) >= 600) {
+                if (!empty($breakLog) && ($now - $lastUpdatedTime) >= 300) {
                     $breakLog[] = [
                         'start_time' => Carbon::now()->format('H:i'),
                         'end_time' => Carbon::now()->format('H:i'),
@@ -129,7 +129,6 @@ class LoginSessionController extends Controller
 
         // Retrieve the running timesheet for this user.
         $timesheet = Timesheet::where('employee_id', $userId)
-            ->whereDate('created_at', $currentDate)   
             ->where('status', 'running')
             ->first();
 
@@ -236,7 +235,6 @@ class LoginSessionController extends Controller
         $query->whereBetween('start_date', [$stdate, $enddate]);
         $total_leaves = $query->where('status', 'approved')->sum('leave_duration');
         $days_present = $session_count;
-
         return [
             'total_days' => $endDate->day,
             'total_working_days' => $adjustedWorkingDays,

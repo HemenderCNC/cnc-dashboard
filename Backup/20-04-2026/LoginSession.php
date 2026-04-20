@@ -21,52 +21,9 @@ class LoginSession extends Eloquent
         'break',
         'break_log',
         'is_logout',
-        'actual_check_in_time',
-        'actual_check_in_date',
-        'actual_check_out_time',
-        'actual_check_out_date',
     ];
+    protected $appends = ['check_in_time', 'check_out_time', 'total_login_time','total_working_time','total_break_time','is_logout'];
 
-    protected $appends = ['actual_total_login_time','actual_check_in_time', 'actual_check_in_date', 'actual_check_out_time', 'actual_check_out_date', 'check_in_time', 'check_out_time', 'total_login_time','total_working_time','total_break_time','is_logout'];
-
-    public function getActualTotalLoginTimeAttribute()
-    {
-        $totalSeconds = 0;
-
-        if (!empty($this->actual_check_in_time) && !empty($this->actual_check_out_time)) {
-            try {
-                $start = Carbon::createFromFormat('H:i', $this->actual_check_in_time);
-                $end = Carbon::createFromFormat('H:i', $this->actual_check_out_time);
-
-                if ($end->lt($start)) {
-                    $end->addDay();
-                }
-
-                $totalSeconds = $start->diffInSeconds($end);
-            } catch (\Exception $e) {
-                // Return 00:00 if time format is invalid
-            }
-        }
-
-        return gmdate('H:i', $totalSeconds);
-    }
-
-    public function getActualCheckInTimeAttribute()
-    {
-        return $this->attributes['actual_check_in_time'] ?? null;
-    }
-    public function getActualCheckOutTimeAttribute()
-    {
-        return $this->attributes['actual_check_out_time'] ?? null;
-    }
-    public function getActualCheckInDateAttribute()
-    {
-        return $this->attributes['actual_check_in_date'] ?? null;
-    }
-    public function getActualCheckOutDateAttribute()
-    {
-        return $this->attributes['actual_check_out_date'] ?? null;
-    }
     public function getCheckInTimeAttribute()
     {
         return !empty($this->time_log) ? $this->time_log[0]['start_time'] : null;
@@ -80,7 +37,6 @@ class LoginSession extends Eloquent
     $totalSeconds = 0;
 
     if (!empty($this->time_log)) {
-
         foreach ($this->time_log as $log) {
             $start = Carbon::createFromFormat('H:i', $log['start_time']);
             $end   = Carbon::createFromFormat('H:i', $log['end_time']);
@@ -105,7 +61,6 @@ class LoginSession extends Eloquent
     $totalSeconds = 0;
 
     if (!empty($this->break_log)) {
-        
         foreach ($this->break_log as $log) {
 
             if (
