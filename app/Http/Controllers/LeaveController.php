@@ -160,30 +160,30 @@ if ($request->filled('status')) {
             'leave_type' => $request->leave_type ?? 'Leave Request',
         ]);
 
-        // try {
-        //     $reportingManager = $request->user->reportingManager;
-        //     $ccList = [
-        //         'nagender@codeandcore.com',
-        //         'saurabhsoni.cnc@gmail.com',
-        //         'nikul@codeandcore.com'
-        //     ];
+        try {
+            $reportingManager = $request->user->reportingManager;
+            $ccList = [
+                'nagender@codeandcore.com',
+                'saurabhsoni.cnc@gmail.com',
+                'nikul@codeandcore.com'
+            ];
 
-        //     if ($reportingManager && !empty($reportingManager->email)) {
-        //         $ccList[] = $reportingManager->email;
-        //     }
+            if ($reportingManager && !empty($reportingManager->email)) {
+                $ccList[] = $reportingManager->email;
+            }
             
-        //     $ccList = array_unique($ccList);
+            $ccList = array_unique($ccList);
 
-        //     Mail::to('hr@codeandcore.com')
-        //         ->cc($ccList)
-        //         ->send(new LeaveRequestedMail($leave, $request->user));
-        // } catch (\Exception $e) {
+            Mail::to('hr@codeandcore.com')
+                ->cc($ccList)
+                ->send(new LeaveRequestedMail($leave, $request->user));
+        } catch (\Exception $e) {
 
-        //     return response()->json([
-        //         'message' => 'Leave request created successfully, but email notification failed.',
-        //         'error' => $e->getMessage()
-        //     ], 500);
-        // }
+            return response()->json([
+                'message' => 'Leave request created successfully, but email notification failed.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
 
         return response()->json($leave, 201);
     }
