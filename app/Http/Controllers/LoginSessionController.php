@@ -36,21 +36,24 @@ class LoginSessionController extends Controller
     }
     public function trackLoginSessions($userId)
     {
-        $currentDate = Carbon::now()->toDateString(); // Uses default timezone from config
-        $currentTime = Carbon::now()->format('H:i');
-        $endTime = Carbon::now()->addMinute()->format('H:i');
+        $now = Carbon::now();
+        $currentDate = $now->toDateString();
+        $currentTime = $now->format('H:i');
+
         $session = LoginSession::where('employee_id', $userId)
             ->where('date', $currentDate)
             ->first();
+
         if ($session) {
+            /*
+            |--------------------------------------------------------------------------
+            | TIME LOG (WORK TRACKING)
+            |--------------------------------------------------------------------------
+            */
             $lastUpdatedTime = Carbon::parse($session->updated_at)->timestamp;
             $now = Carbon::now()->timestamp;
-            // if (($now - $lastUpdatedTime) < 60) {
-            //     return response()->json(['message' => 'Already updated recently'], 200);
-            // }
-
             $timeLog = $session->time_log ?? [];
-            if (!empty($timeLog) && ($now - $lastUpdatedTime) >= 600) {
+            if (!empty($timeLog) && ($now - $lastUpdatedTime) >= 300) {
                 $timeLog[] = [
                     'start_time' => Carbon::now()->format('H:i'),
                     'end_time' => Carbon::now()->format('H:i'),
@@ -68,41 +71,44 @@ class LoginSessionController extends Controller
             $session->is_logout = false;
             $session->save();
 
+            /*
+            |--------------------------------------------------------------------------
+            | BREAK LOG (ONLY UPDATE — NO NEW ENTRY HERE)
+            |--------------------------------------------------------------------------
+            */
             if ($session->break === true) {
+
                 $breakLog = $session->break_log ?? [];
-                if (!empty($breakLog) && ($now - $lastUpdatedTime) >= 600) {
-                    $breakLog[] = [
-                        'start_time' => Carbon::now()->format('H:i'),
-                        'end_time' => Carbon::now()->format('H:i'),
-                    ];
-                } else if (!empty($breakLog)) {
-                    // Update the end_time of the last break log entry
+
+                if (!empty($breakLog)) {
                     $lastIndex = count($breakLog) - 1;
-                    $breakLog[$lastIndex]['end_time'] = Carbon::now()->format('H:i');
-                } else {
-                    // First break log entry
-                    $breakLog[] = [
-                        'start_time' => Carbon::now()->format('H:i'),
-                        'end_time' => Carbon::now()->format('H:i'),
-                    ];
+
+                    // ONLY CONTINUE (NO NEW ENTRY)
+                    $breakLog[$lastIndex]['end_time'] = $currentTime;
                 }
 
                 $session->break_log = $breakLog;
-                $session->is_logout = false;
-                $session->save();
             }
+
+            $session->save();
+
         } else {
+
+            /*
+            |--------------------------------------------------------------------------
+            | CREATE NEW SESSION
+            |--------------------------------------------------------------------------
+            */
             $breakStatus = true;
+
             $timesheet = Timesheet::where('employee_id', $userId)
                 ->where('status', 'running')
                 ->first();
+
             if ($timesheet) {
                 $breakStatus = false;
             }
-            /**
-             * END FIX
-             */
-            // Create new session entry
+
             LoginSession::create([
                 'employee_id' => $userId,
                 'date' => $currentDate,
@@ -110,14 +116,14 @@ class LoginSessionController extends Controller
                 'time_log' => [
                     [
                         'start_time' => $currentTime,
-                        'end_time' => $currentTime,
+                        'end_time'   => $currentTime,
                     ]
                 ],
                 'break' => $breakStatus,
                 'break_log' => [
                     [
                         'start_time' => $currentTime,
-                        'end_time' => $currentTime,
+                        'end_time'   => $currentTime,
                     ]
                 ],
             ]);
@@ -195,7 +201,6 @@ class LoginSessionController extends Controller
         $timesheet->dates = $dates;
         $timesheet->save();
     }
-
     public function attendance(Request $request)
     {
         $now = Carbon::now(); // Get current date

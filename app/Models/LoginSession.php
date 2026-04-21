@@ -27,8 +27,12 @@ class LoginSession extends Eloquent
         'actual_check_out_date',
     ];
 
-    protected $appends = ['actual_total_login_time','actual_check_in_time', 'actual_check_in_date', 'actual_check_out_time', 'actual_check_out_date', 'check_in_time', 'check_out_time', 'total_login_time','total_working_time','total_break_time','is_logout'];
+    protected $appends = ['last_updated_at','actual_total_login_time','actual_check_in_time', 'actual_check_in_date', 'actual_check_out_time', 'actual_check_out_date', 'check_in_time', 'check_out_time', 'total_login_time','total_working_time','total_break_time','is_logout'];
 
+    public function getLastUpdatedAtAttribute()
+    {
+        return $this->attributes['updated_at'] ?? null;
+    }
     public function getActualTotalLoginTimeAttribute()
     {
         $totalSeconds = 0;

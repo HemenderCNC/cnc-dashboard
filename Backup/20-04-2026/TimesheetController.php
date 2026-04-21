@@ -1902,52 +1902,51 @@ class TimesheetController extends Controller
    
     public function userBreakLogStart($userId)
     {
-        $now = Carbon::now();
-        $currentDate = $now->toDateString();
-        $currentTime = $now->format('H:i');
+        $currentDate = Carbon::now()->toDateString();
+        $currentTime = Carbon::now()->format('H:i');
 
-        $session = LoginSession::where('employee_id', $userId)
-            ->where('date', $currentDate)
-            ->first();
+        $session = LoginSession::where('employee_id', $userId)->where('date', $currentDate)->first();
 
-        if (!$session) return;
+        if ($session) {
+            $breakLog = $session->break_log ?? [];
 
-        if ($session->break === true) return;
+            // Check if an entry with the same start_time already exists
+            $existingEntry = collect($breakLog)->firstWhere('start_time', Carbon::now()->format('H:i'));
 
-        $breakLog = $session->break_log ?? [];
-
-        $breakLog[] = [
-            'start_time' => $currentTime,
-            'end_time'   => $currentTime,
-        ];
-
-        $session->break = true;
-        $session->break_log = $breakLog;
-        $session->save();
+            if ($existingEntry) {
+                // If an entry with the same start_time exists, do nothing
+                // return;
+                // If no entry exists, execute the current code
+                $session->break = true;
+                // $endTime = Carbon::now()->format('H:i');
+                $breakLog[] = [
+                    'start_time' => Carbon::now()->format('H:i'),
+                    'end_time' => Carbon::now()->format('H:i'),
+                ];
+                $session->break_log = $breakLog;
+                $session->save();
+            } else {
+                // If no entry exists, execute the current code
+                $session->break = true;
+                // $endTime = Carbon::now()->format('H:i');
+                $breakLog[] = [
+                    'start_time' => Carbon::now()->format('H:i'),
+                    'end_time' => Carbon::now()->format('H:i'),
+                ];
+                $session->break_log = $breakLog;
+                $session->save();
+            }
+        }
     }
 
     public function userBreakLogStop($userId)
     {
-        $now = Carbon::now();
-        $currentTime = $now->format('H:i');
-        $currentDate = $now->toDateString();
-
-        $session = LoginSession::where('employee_id', $userId)
-            ->where('date', $currentDate)
-            ->first();
-
-        if (!$session || $session->break === false) return;
-
-        $breakLog = $session->break_log ?? [];
-
-        if (!empty($breakLog)) {
-            $lastIndex = count($breakLog) - 1;
-            $breakLog[$lastIndex]['end_time'] = $currentTime;
+        $currentDate = Carbon::now()->toDateString();
+        $session = LoginSession::where('employee_id', $userId)->where('date', $currentDate)->first();
+        if ($session) {
+            $session->break = false;
+            $session->save();
         }
-
-        $session->break = false;
-        $session->break_log = $breakLog;
-        $session->save();
     }
 
     // Show a specific timesheet entry

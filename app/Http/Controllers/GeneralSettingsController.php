@@ -40,6 +40,7 @@ class GeneralSettingsController extends Controller
             'total_hrs' => $total_hrs,
             'total_working_hrs' => $total_working_hrs,
             'total_break_hrs' => $total_break_hrs,
+            'last_updated_at' => $LoginSession->updated_at ?? null,
         ]));
     }
 
