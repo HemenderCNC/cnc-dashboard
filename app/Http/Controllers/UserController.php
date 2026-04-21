@@ -61,7 +61,7 @@ class UserController extends Controller
             'employee_status_id' => 'nullable|exists:employee_statuses,_id',
             'work_location_id' => 'nullable|exists:work_locations,_id',
             'created_by' => 'required|exists:users,_id',
-            'original_certificate_no' => 'required|string',
+            'original_certificate_no' => 'nullable|string',
 
             //Skills
             'skills' => 'nullable|array',
@@ -263,7 +263,7 @@ class UserController extends Controller
             'city' => 'nullable',
             'postal_code' => 'nullable|string',
             'emergency_contact_number' => 'nullable|string',
-            'original_certificate_no' => 'required|string',
+            'original_certificate_no' => 'nullable|string',
 
             // Other fields...
         ]);
