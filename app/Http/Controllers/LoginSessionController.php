@@ -53,7 +53,7 @@ class LoginSessionController extends Controller
             $lastUpdatedTime = Carbon::parse($session->updated_at)->timestamp;
             $now = Carbon::now()->timestamp;
             $timeLog = $session->time_log ?? [];
-            if (!empty($timeLog) && ($now - $lastUpdatedTime) >= 300) {
+            if (!empty($timeLog) && ($now - $lastUpdatedTime) >= 900) {
                 $timeLog[] = [
                     'start_time' => Carbon::now()->format('H:i'),
                     'end_time' => Carbon::now()->format('H:i'),

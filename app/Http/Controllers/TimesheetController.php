@@ -1342,13 +1342,21 @@ class TimesheetController extends Controller
         }
 
         if ($timesheet->status == 'running') {
-             $dates = $timesheet->dates;
-
-            if (!empty($dates[0]['time_log'][0])) {
-
-                $dates[0]['time_log'][0]['end_time'] = Carbon::now()->format('H:i');
-
-                $timesheet->dates = $dates;
+            $dates = $timesheet->dates;
+            if (is_array($dates)) {
+                $lastDateIndex = count($dates) - 1;
+                if ($lastDateIndex >= 0) {
+                    $lastDateStr = $dates[$lastDateIndex]['date'] ?? null;
+                    if ($lastDateStr === Carbon::now()->toDateString()) {
+                        $timeLogs = $dates[$lastDateIndex]['time_log'] ?? [];
+                        if (!empty($timeLogs)) {
+                            $lastLogIndex = count($timeLogs) - 1;
+                            $timeLogs[$lastLogIndex]['end_time'] = Carbon::now()->format('H:i');
+                            $dates[$lastDateIndex]['time_log'] = $timeLogs;
+                            $timesheet->dates = $dates;
+                        }
+                    }
+                }
             }
         }
 
@@ -1430,7 +1438,9 @@ class TimesheetController extends Controller
 
     public function completeTask(Request $request, $id)
     {
-        $timesheet = Timesheet::where('_id', $id)->first();
+        $timesheet = Timesheet::where('_id', $id)
+            ->where('employee_id', $request->user->id)
+            ->first();
 
         if (!$timesheet) {
             return response()->json(['message' => 'Timesheet not found'], 404);
@@ -1438,12 +1448,20 @@ class TimesheetController extends Controller
 
         if ($timesheet->status == 'running') {
             $dates = $timesheet->dates;
-
-            if (isset($dates[0]['time_log'][0])) {
-
-                $dates[0]['time_log'][0]['end_time'] = Carbon::now()->format('H:i');
-
-                $timesheet->dates = $dates;
+            if (is_array($dates)) {
+                $lastDateIndex = count($dates) - 1;
+                if ($lastDateIndex >= 0) {
+                    $lastDateStr = $dates[$lastDateIndex]['date'] ?? null;
+                    if ($lastDateStr === Carbon::now()->toDateString()) {
+                        $timeLogs = $dates[$lastDateIndex]['time_log'] ?? [];
+                        if (!empty($timeLogs)) {
+                            $lastLogIndex = count($timeLogs) - 1;
+                            $timeLogs[$lastLogIndex]['end_time'] = Carbon::now()->format('H:i');
+                            $dates[$lastDateIndex]['time_log'] = $timeLogs;
+                            $timesheet->dates = $dates;
+                        }
+                    }
+                }
             }
         }
 
@@ -1678,6 +1696,16 @@ class TimesheetController extends Controller
 
         $currentDate = Carbon::now()->toDateString();
         $userId = $request->user->id;
+
+        // Prevent race condition: check if already running
+        $activeTask = Timesheet::where('employee_id', $userId)
+            ->where('task_id', $timesheet->task_id)
+            ->where('status', 'running')
+            ->first();
+
+        if ($activeTask) {
+            return response()->json(['message' => 'This task is already running.'], 422);
+        }
 
     Timesheet::where('project_id', $timesheet->project_id)
     ->where('task_id', $timesheet->task_id)

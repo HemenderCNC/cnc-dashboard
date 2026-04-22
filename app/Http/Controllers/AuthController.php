@@ -108,6 +108,23 @@ class AuthController extends Controller
         // Generate a custom token
         $token = PersonalAccessToken::createToken($user, 'auth_token', ['*'],800);
 
+        // Auto-pause any running tasks from previous days
+        $runningTimesheets = Timesheet::where('employee_id', $user->id)
+            ->where('status', 'running')
+            ->get();
+
+        foreach ($runningTimesheets as $timesheet) {
+            $dates = $timesheet->dates;
+            if (is_array($dates) && !empty($dates)) {
+                $lastDateIndex = count($dates) - 1;
+                $lastDateStr = $dates[$lastDateIndex]['date'] ?? null;
+                if ($lastDateStr && $lastDateStr !== now()->toDateString()) {
+                    $timesheet->status = 'paused';
+                    $timesheet->save();
+                }
+            }
+        }
+
          $loginSession = LoginSession::where('employee_id', $user->id)
            ->where('date', now()->toDateString())
            ->where('is_logout', true)
@@ -143,6 +160,9 @@ class AuthController extends Controller
                     ],
                 ]);
             }
+
+
+            
 
         // Return the token
         return response()->json([
