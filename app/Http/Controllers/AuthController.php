@@ -61,8 +61,9 @@ class AuthController extends Controller
         ]);
 
         // return redirect()->route('login');
-        // Create token
-        $token = PersonalAccessToken::createToken($user, 'auth_token', ['*'], 800);
+        // Create token that expires exactly at midnight (when the date changes)
+        $minutesUntilMidnight = now()->diffInMinutes(now()->endOfDay());
+        $token = PersonalAccessToken::createToken($user, 'auth_token', ['*'], $minutesUntilMidnight);
 
         return response()->json([
             'access_token' => $token,
@@ -105,8 +106,9 @@ class AuthController extends Controller
             return response()->json(['errors' => 'Email or password not match.'], 422);
         }
 
-        // Generate a custom token
-        $token = PersonalAccessToken::createToken($user, 'auth_token', ['*'],800);
+        // Generate a custom token that expires exactly at midnight
+        $minutesUntilMidnight = now()->diffInMinutes(now()->endOfDay());
+        $token = PersonalAccessToken::createToken($user, 'auth_token', ['*'], $minutesUntilMidnight);
 
         // Auto-pause any running tasks from previous days
         $runningTimesheets = Timesheet::where('employee_id', $user->id)
