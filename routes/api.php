@@ -54,6 +54,7 @@ Route::middleware('api')->group(function () {
         Route::get('logout', [AuthController::class, 'logout']);
         Route::get('track-session', [LoginSessionController::class, 'trackSession']);
         Route::get('attendance', [LoginSessionController::class, 'attendance']);
+        Route::get('weekly-work-summary', [LoginSessionController::class, 'weeklyWorkSummary']);
         Route::post('logout', [AuthController::class, 'logout']);
         Route::get('dashboard', [AuthController::class, 'dashboard']);
 

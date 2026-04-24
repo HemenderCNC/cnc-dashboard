@@ -85,6 +85,11 @@ class TasksController extends Controller
             $matchStage->project_id = $request->project_id;
         }
 
+        // Filter by billable or not
+        if ($request->has('is_billable')) {
+            $matchStage->is_billable = (string) $request->is_billable;
+        }
+
         // Filter by project industry
         if ($request->has('milestone_name')) {
             // Get all matching milestones first

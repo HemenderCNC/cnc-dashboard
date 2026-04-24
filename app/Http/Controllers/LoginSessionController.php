@@ -247,4 +247,57 @@ class LoginSessionController extends Controller
             'session_logs' => $session_logs
         ];
     }
+
+    public function weeklyWorkSummary(Request $request)
+    {
+        // Default to current week (Monday to Sunday)
+        $startDate = Carbon::now()->startOfWeek(Carbon::MONDAY);
+        $endDate = Carbon::now()->endOfWeek(Carbon::SUNDAY);
+
+        if ($request->has('start_date') && $request->has('end_date')) {
+            $startDate = Carbon::parse($request->start_date);
+            $endDate = Carbon::parse($request->end_date);
+        }
+
+        $query = LoginSession::query()
+            ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()]);
+
+        // Filter by user role/id
+        if ($request->user->role->slug === 'employee' || $request->user->role->slug === 'qa') {
+            $query->where('employee_id', $request->user->id);
+        } else if ($request->has('employee_id')) {
+            $query->where('employee_id', $request->employee_id);
+        }
+
+        $sessions = $query->get()->keyBy('date');
+
+        $data = [];
+        $period = \Carbon\CarbonPeriod::create($startDate, $endDate);
+
+        foreach ($period as $date) {
+            $dateStr = $date->toDateString();
+            $session = $sessions->get($dateStr);
+            
+            // Extract decimal hours from total_working_time (format "HH:MM")
+            $hours = 0;
+            if ($session && $session->total_working_time) {
+                try {
+                    $parts = explode(':', $session->total_working_time);
+                    if (count($parts) >= 2) {
+                        $hours = (int)$parts[0] + (round((int)$parts[1] / 60, 2));
+                    }
+                } catch (\Exception $e) {
+                    $hours = 0;
+                }
+            }
+
+            $data[] = [
+                'day' => $date->format('D'), // Mon, Tue, etc.
+                'date' => $dateStr,
+                'hours' => $hours
+            ];
+        }
+
+        return response()->json($data);
+    }
 }
