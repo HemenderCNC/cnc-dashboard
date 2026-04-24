@@ -24,7 +24,8 @@ class LeaveRequestedMail extends Mailable
         $leaveType = $this->leave->leave_type ?? 'Leave Request';
         $startDate = \Illuminate\Support\Carbon::parse($this->leave->start_date)->format('d-m-Y');
 
-        return $this->from($this->employee->email, $this->employee->name . ' ' . $this->employee->last_name)
+        return $this->from(config('mail.from.address'), $this->employee->name . ' ' . $this->employee->last_name)
+            ->replyTo($this->employee->email, $this->employee->name . ' ' . $this->employee->last_name)
             ->markdown('emails.leave_requested')
             ->subject($leaveType . ' - ' . $startDate)
             ->with([

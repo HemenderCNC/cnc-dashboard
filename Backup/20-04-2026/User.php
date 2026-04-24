@@ -162,7 +162,6 @@ class User extends Eloquent
 
     return [
         'role_name' => $this->role->name,
-        'slug'      => $this->role->slug,
         'permissions' => $permissions->map(function ($permission) {
             return [
                 'id'              => (string) $permission->_id,

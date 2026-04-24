@@ -50,18 +50,14 @@ class LoginSessionController extends Controller
             | TIME LOG (WORK TRACKING)
             |--------------------------------------------------------------------------
             */
-            $lastUpdatedTime = Carbon::parse($session->updated_at)->timestamp;
             $now = Carbon::now()->timestamp;
             $timeLog = $session->time_log ?? [];
-            if (!empty($timeLog) && ($now - $lastUpdatedTime) >= 900) {
-                $timeLog[] = [
-                    'start_time' => Carbon::now()->format('H:i'),
-                    'end_time' => Carbon::now()->format('H:i'),
-                ];
-            } else if (!empty($timeLog)) {
+            if (!empty($timeLog)) {
+                // Always update the end_time of the last entry
                 $lastIndex = count($timeLog) - 1;
                 $timeLog[$lastIndex]['end_time'] = Carbon::now()->format('H:i');
             } else {
+                // Create the first entry if log is empty
                 $timeLog[] = [
                     'start_time' => Carbon::now()->format('H:i'),
                     'end_time' => Carbon::now()->format('H:i'),

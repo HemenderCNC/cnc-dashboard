@@ -129,7 +129,6 @@ class AuthController extends Controller
 
          $loginSession = LoginSession::where('employee_id', $user->id)
            ->where('date', now()->toDateString())
-           ->where('is_logout', true)
             ->first();
 
            if ($loginSession) {
@@ -162,9 +161,6 @@ class AuthController extends Controller
                     ],
                 ]);
             }
-
-
-            
 
         // Return the token
         return response()->json([
