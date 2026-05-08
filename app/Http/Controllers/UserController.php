@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\User;
+use App\Models\Role;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use App\Services\FileUploadService;
@@ -62,6 +63,12 @@ class UserController extends Controller
             'work_location_id' => 'nullable|exists:work_locations,_id',
             'created_by' => 'required|exists:users,_id',
             'original_certificate_no' => 'nullable|string',
+
+            // Leave Information
+            'privilege_leave' => 'nullable|integer',
+            'paternity_leave' => 'nullable|integer',
+            'critical_medical_leave' => 'nullable|integer',
+            'leave_without_pay' => 'nullable|integer',
 
             //Skills
             'skills' => 'nullable|array',
@@ -194,12 +201,16 @@ class UserController extends Controller
             'employment_type_id' => $request->employment_type_id,
             'employee_status_id' => $request->employee_status_id,
             'work_location_id' => $request->work_location_id,
-            // 'email' => $request->email,
-
-            // 'role' => $request->role,
             'created_by' => $request->user->id,
+
             //Skills
             'skills' => $request->skills,
+
+            //Leave Information
+            'privilege_leave' => $request->privilege_leave,
+            'paternity_leave' => $request->paternity_leave,
+            'critical_medical_leave' => $request->critical_medical_leave,
+            'leave_without_pay' => $request->leave_without_pay,
 
             //Bank details
             'account_holde_name' => $request->account_holde_name,
@@ -407,6 +418,12 @@ class UserController extends Controller
 
             // Skills
             'skills' => $request->skills, // Save array of skill IDs
+
+            //Leave Information
+            'privilege_leave' => $request->privilege_leave,
+            'paternity_leave' => $request->paternity_leave,
+            'critical_medical_leave' => $request->critical_medical_leave,
+            'leave_without_pay' => $request->leave_without_pay,
 
             //Bank details
             'account_holde_name' => $request->account_holde_name,
@@ -1009,65 +1026,35 @@ class UserController extends Controller
         ], 200);
     }
 
-    public function getAllUsersNotAdmins()
-    {
+public function getAllUsersNotAdmins()
+{
+    // Get administrator role id
+    $adminRole = Role::where('slug', 'administrator')->first();
 
-        // Fetch all users with the role "employee" and exclude the current user
-        $users = User::raw(function ($collection) {
-            return $collection->aggregate([
-                // Convert role_id (string) to ObjectId for the lookup
-                [
-                    '$addFields' => [
-                        'role_id_object' => ['$toObjectId' => '$role_id']
-                    ]
-                ],
+    $users = User::where('role_id', '!=', (string) $adminRole->_id)
+        ->select(
+            '_id',
+            'name',
+            'last_name',
+            'email',
+            'contact_number',
+            'profile_photo',
+            'employee_id',
+            'role_id'
+        )
+        ->get();
 
-                // Lookup Role
-                [
-                    '$lookup' => [
-                        'from' => 'roles',
-                        'localField' => 'role_id_object', // Use the converted ObjectId field
-                        'foreignField' => '_id',
-                        'as' => 'role'
-                    ]
-                ],
-                ['$unwind' => ['path' => '$role', 'preserveNullAndEmptyArrays' => true]],
-
-                // Match users with the role "administrator" exclude
-                [
-                    '$match' => [
-                        'role.slug' => ['$ne' => 'administrator'],
-                    ]
-                ],
-
-                // Project Only Required Fields
-                [
-                    '$project' => [
-                        'name' => 1,
-                        '_id' => 1,
-                        'last_name' => 1,
-                        'email' => 1,
-                        'contact_number' => 1,
-                        'role' => 1,
-                        'profile_photo' => 1,
-                        'employee_id' => 1,
-                    ]
-                ]
-            ]);
-        });
-
-        // Check if users exist
-        if ($users->isEmpty()) {
-            return response()->json([
-                'message' => 'No employees found',
-            ], 404);
-        }
-
+    if ($users->isEmpty()) {
         return response()->json([
-            'message' => 'Employees retrieved successfully',
-            'data' => $users,
-        ], 200);
+            'message' => 'No employees found',
+        ], 404);
     }
+
+    return response()->json([
+        'message' => 'Employees retrieved successfully',
+        'data' => $users,
+    ], 200);
+}
 
     public function getProjectManagers()
     {

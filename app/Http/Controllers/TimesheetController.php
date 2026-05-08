@@ -1900,9 +1900,14 @@ class TimesheetController extends Controller
     {
         $userId = $request->user->id;
         $this->userBreakLogStart($userId);
-        return response()->json(['message' => 'Break Start'], 200);
+        $now = now();
+        $currentDateTimeZone = $now->copy()->timezone('Asia/Kolkata');
+        $formattedString = $currentDateTimeZone->format('Y-m-d H:i:s');
+        return response()->json([
+            'message' => 'Break Start',
+            'data' => $formattedString,
+        ], 200);
     }
-
     public function stopBreak(Request $request)
     {
         $userId = $request->user->id;

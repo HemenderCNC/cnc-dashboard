@@ -43,7 +43,7 @@ class FileUploadService
         $storedFileName = "{$uniqueFileName}.{$extension}";
 
         // Move file to "public/uploads/..."
-        $filePath = "{$directory}/{$storedFileName}";
+        $filePath = "public/{$directory}/{$storedFileName}";
         $file->move(public_path($directory), $storedFileName);
 
         // $fileSize = $file->getSize(); // Get size before moving the file

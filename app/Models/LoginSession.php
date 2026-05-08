@@ -27,8 +27,17 @@ class LoginSession extends Eloquent
         'actual_check_out_date',
     ];
 
-    protected $appends = ['last_updated_at','actual_total_login_time','actual_check_in_time', 'actual_check_in_date', 'actual_check_out_time', 'actual_check_out_date', 'check_in_time', 'check_out_time', 'total_login_time','total_working_time','total_break_time','is_logout'];
+    protected $appends = ['last_break_log_start_time','last_updated_at','actual_total_login_time','actual_check_in_time', 'actual_check_in_date', 'actual_check_out_time', 'actual_check_out_date', 'check_in_time', 'check_out_time', 'total_login_time','total_working_time','total_break_time','is_logout'];
 
+    public function getLastBreakLogStartTimeAttribute()
+    {
+        if (empty($this->break_log)) {
+            return null;
+        }
+        $sorted = collect($this->break_log)->sortByDesc('start_time')->values();
+
+        return $sorted[0]['start_time'] ?? null;
+    }
     public function getLastUpdatedAtAttribute()
     {
         return $this->attributes['updated_at'] ?? null;

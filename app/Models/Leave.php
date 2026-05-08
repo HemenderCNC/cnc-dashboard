@@ -24,7 +24,9 @@ class Leave extends Eloquent
         'status',
         'leave_type',
         'approve_comment',
-        'approved_by'
+        'approved_by',
+        'medical_document',
+        'year',
     ];
 
     public function employee()

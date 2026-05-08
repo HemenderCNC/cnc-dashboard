@@ -55,6 +55,11 @@ class User extends Eloquent
         //Skills
         'skills',
         'original_certificate_no',
+        // Leave Information
+        'privilege_leave',
+        'paternity_leave',
+        'critical_medical_leave',
+        'leave_without_pay',
 
         //Bank details
         'account_holde_name',

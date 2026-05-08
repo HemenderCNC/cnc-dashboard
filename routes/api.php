@@ -634,6 +634,7 @@ Route::middleware('api')->group(function () {
                 Route::delete('/{id}', [LeaveController::class, 'destroy']);
             });
 
+            Route::post('/change-leave-balance', [LeaveController::class, 'changeLeaveBalance']); // Get summary
 
             // Route::get('/leaves-summary', [LeaveController::class, 'getLeaveSummary']);
             // Route::get('/', [LeaveController::class, 'index']); // Employee views own leaves
@@ -644,6 +645,10 @@ Route::middleware('api')->group(function () {
             // Route::put('/{id}/approve', [LeaveController::class, 'approve']);
             // Route::put('/{id}/reject', [LeaveController::class, 'reject']);
         });
+
+        Route::get('/get-leave-balance', [LeaveController::class, 'getLeaveBalance']);
+        Route::post('/update-user-leave-balance', [LeaveController::class, 'UpdateuserLeaveBalance']);
+
 
         Route::prefix('alloverleaves')->group(function () {
             Route::middleware(['permission:view_leave'])->group(function () {
