@@ -13,6 +13,7 @@ use App\Models\User;
 use MongoDB\BSON\UTCDateTime;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\LeaveRequestedMail;
+use App\Mail\LeaveStatusMail;
 
 
 class LeaveController extends Controller
@@ -262,14 +263,6 @@ if ($request->filled('status')) {
             return response()->json(['message' => 'Leave request not found'], 404);
         }
 
-        if ($leave->status !== 'pending') {
-            return response()->json(['message' => 'You can only update a pending leave request'], 403);
-        }
-
-        if ($leave->status === 'canceled') {
-            return response()->json(['message' => 'You cannot update a canceled leave request'], 403);
-        }
-
         $validator = Validator::make($request->all(), [
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
@@ -285,14 +278,95 @@ if ($request->filled('status')) {
             ], 422);
         }
 
-        $leave_duration = (new \DateTime($request->start_date))->diff(new \DateTime($request->end_date))->days + 1;
-        if ($request->boolean('half_day')) {
-            $leave_duration = 0.5;
+        $startDate = Carbon::parse($request->start_date);
+        $endDate = Carbon::parse($request->end_date);
+        $oldDuration = (float)$leave->leave_duration;
+        $newDuration = 0;
+
+        // 1. Check overlapping leave dates (excluding current leave)
+        $overlap = Leave::where('employee_id', $leave->employee_id)
+            ->where('id', '!=', $id)
+            ->where(function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('start_date', [$startDate->toDateString(), $endDate->toDateString()])
+                    ->orWhereBetween('end_date', [$startDate->toDateString(), $endDate->toDateString()])
+                    ->orWhere(function ($q) use ($startDate, $endDate) {
+                        $q->where('start_date', '<=', $startDate->toDateString())
+                            ->where('end_date', '>=', $endDate->toDateString());
+                    });
+            })
+            ->exists();
+        if ($overlap) {
+            return response()->json([
+                'message' => 'You have already applied for leave during these dates.'
+            ], 422);
         }
+
+        // 2. Calculate leave duration excluding weekends & holidays
+        if ($request->boolean('half_day')) {
+            $newDuration = 0.5;
+        } else {
+            $holidayDates = Holiday::pluck('festival_date')->map(fn($d) => Carbon::parse($d)->toDateString())->toArray();
+
+            $period = new \DatePeriod($startDate, new \DateInterval('P1D'), $endDate->copy()->addDay());
+
+            foreach ($period as $date) {
+                $carbonDate = Carbon::instance($date);
+                $day = $carbonDate->toDateString();
+                $isWeekend = in_array($carbonDate->dayOfWeek, [Carbon::SATURDAY, Carbon::SUNDAY]);
+                $isHoliday = in_array($day, $holidayDates);
+
+                if (!$isWeekend && !$isHoliday) {
+                    $newDuration++;
+                }
+            }
+        }
+
+        if ($newDuration == 0) {
+            return response()->json([
+                'message' => 'This day is already holiday.'
+            ], 422);
+        }
+
+        // 3. Adjust leave balance
+        $durationDiff = $newDuration - $oldDuration;
+        $user = User::find($leave->employee_id);
+
+        if ($user && $leave->leave_type && $durationDiff != 0 && in_array(strtolower($leave->status), ['pending', 'approved'])) {
+            // Check if employee has enough leave balance for the increase
+            if ($durationDiff > 0) {
+                $hasEnoughBalance = true;
+                if ($leave->leave_type === 'Privilege Leave (PL)' && (float)$user->privilege_leave < $durationDiff) {
+                    $hasEnoughBalance = false;
+                } elseif ($leave->leave_type === 'Paternity Leave' && (float)$user->paternity_leave < $durationDiff) {
+                    $hasEnoughBalance = false;
+                } elseif ($leave->leave_type === 'Critical Medical Leave (CML)' && (float)$user->critical_medical_leave < $durationDiff) {
+                    $hasEnoughBalance = false;
+                }
+
+                if (!$hasEnoughBalance) {
+                    return response()->json([
+                        'message' => 'You do not have enough balance for this increase.'
+                    ], 422);
+                }
+            }
+
+            // Deduct or restore balance based on the difference
+            if ($leave->leave_type === 'Privilege Leave (PL)') {
+                $user->privilege_leave = (float)$user->privilege_leave - $durationDiff;
+            } elseif ($leave->leave_type === 'Paternity Leave') {
+                $user->paternity_leave = (float)$user->paternity_leave - $durationDiff;
+            } elseif ($leave->leave_type === 'Critical Medical Leave (CML)') {
+                $user->critical_medical_leave = (float)$user->critical_medical_leave - $durationDiff;
+            } elseif ($leave->leave_type === 'Leave Without Pay') {
+                $user->leave_without_pay = (float)$user->leave_without_pay + $durationDiff;
+            }
+            $user->save();
+        }
+
         $leave->update([
             'start_date' => $request->start_date,
             'end_date' => $request->end_date,
-            'leave_duration' => $leave_duration,
+            'leave_duration' => $newDuration,
             'half_day' => $request->boolean('half_day'),
             'half_day_type' => $request->boolean('half_day') ? $request->half_day_type : null,
             'reason' => $request->reason,
@@ -310,8 +384,8 @@ if ($request->filled('status')) {
             return response()->json(['message' => 'Leave request not found'], 404);
         }
 
-        if ($leave->status !== 'pending') {
-            return response()->json(['message' => 'You can only cancel a leave request that is pending'], 403);
+        if (in_array($leave->status, ['canceled', 'rejected'])) {
+            return response()->json(['message' => 'Leave request is already ' . $leave->status], 404);
         }
 
         // Check if the leave start date has already passed
@@ -320,7 +394,29 @@ if ($request->filled('status')) {
             return response()->json(['message' => 'You cannot cancel a leave request after the start date has passed'], 403);
         }
 
+        // Restore the respective leave balance based on leave_type
+        $user = User::find($leave->employee_id);
+        if ($user && $leave->leave_type) {
+            $leaveDuration = (float)$leave->leave_duration;
+            if ($leave->leave_type === 'Privilege Leave (PL)') {
+                $user->privilege_leave = (float)$user->privilege_leave + $leaveDuration;
+            } elseif ($leave->leave_type === 'Paternity Leave') {
+                $user->paternity_leave = (float)$user->paternity_leave + $leaveDuration;
+            } elseif ($leave->leave_type === 'Critical Medical Leave (CML)') {
+                $user->critical_medical_leave = (float)$user->critical_medical_leave + $leaveDuration;
+            } elseif ($leave->leave_type === 'Leave Without Pay') {
+                $user->leave_without_pay = (float)$user->leave_without_pay - $leaveDuration;
+            }
+            $user->save();
+        }
+
         $leave->update(['status' => 'canceled']);
+
+        try {
+            Mail::to($user->email)->send(new LeaveStatusMail($leave, $user, 'canceled', $request->user));
+        } catch (\Exception $e) {
+            // Log error or ignore
+        }
 
         return response()->json(['message' => 'Leave request canceled successfully'], 200);
     }
@@ -372,12 +468,53 @@ if ($request->filled('status')) {
             ], 422);
         }
 
+        // Handle balance synchronization
+        $user = User::find($leave->employee_id);
+        if ($user) {
+            $leaveDuration = (float)$leave->leave_duration;
+            $oldStatus = strtolower($leave->status);
+            $oldType = $leave->leave_type;
+            $newType = $request->leave_type;
+
+            // 1. If it was previously deducted (Pending or Approved), restore it first to reset
+            if (in_array($oldStatus, ['pending', 'approved']) && $oldType) {
+                if ($oldType === 'Privilege Leave (PL)') {
+                    $user->privilege_leave = (float)$user->privilege_leave + $leaveDuration;
+                } elseif ($oldType === 'Paternity Leave') {
+                    $user->paternity_leave = (float)$user->paternity_leave + $leaveDuration;
+                } elseif ($oldType === 'Critical Medical Leave (CML)') {
+                    $user->critical_medical_leave = (float)$user->critical_medical_leave + $leaveDuration;
+                } elseif ($oldType === 'Leave Without Pay') {
+                    $user->leave_without_pay = (float)$user->leave_without_pay - $leaveDuration;
+                }
+            }
+
+            // 2. Deduct for the new approved type
+            if ($newType === 'Privilege Leave (PL)') {
+                $user->privilege_leave = (float)$user->privilege_leave - $leaveDuration;
+            } elseif ($newType === 'Paternity Leave') {
+                $user->paternity_leave = (float)$user->paternity_leave - $leaveDuration;
+            } elseif ($newType === 'Critical Medical Leave (CML)') {
+                $user->critical_medical_leave = (float)$user->critical_medical_leave - $leaveDuration;
+            } elseif ($newType === 'Leave Without Pay') {
+                $user->leave_without_pay = (float)$user->leave_without_pay + $leaveDuration;
+            }
+            
+            $user->save();
+        }
+
         $leave->update([
             'status' => 'approved',
             'leave_type' => $request->leave_type,
             'approve_comment' => $request->approve_comment,
             'approved_by' => $request->user->id
         ]);
+
+        try {
+            Mail::to($user->email)->send(new LeaveStatusMail($leave, $user, 'approved', $request->user));
+        } catch (\Exception $e) {
+            // Log error or ignore
+        }
 
         return response()->json(['message' => 'Leave approved successfully', 'leave' => $leave], 200);
     }
@@ -389,6 +526,10 @@ if ($request->filled('status')) {
 
         if (!$leave) {
             return response()->json(['message' => 'Leave request not found'], 404);
+        }
+
+        if (in_array($leave->status, ['rejected', 'canceled'])) {
+            return response()->json(['message' => 'Leave request is already ' . $leave->status], 404);
         }
 
         $validator = Validator::make($request->all(), [
@@ -403,11 +544,32 @@ if ($request->filled('status')) {
             ], 422);
         }
 
+        $user = User::find($leave->employee_id);
+        if ($user && $leave->leave_type) {
+            $leaveDuration = (float)$leave->leave_duration;
+            if ($leave->leave_type === 'Privilege Leave (PL)') {
+                $user->privilege_leave = (float)$user->privilege_leave + $leaveDuration;
+            } elseif ($leave->leave_type === 'Paternity Leave') {
+                $user->paternity_leave = (float)$user->paternity_leave + $leaveDuration;
+            } elseif ($leave->leave_type === 'Critical Medical Leave (CML)') {
+                $user->critical_medical_leave = (float)$user->critical_medical_leave + $leaveDuration;
+            } elseif ($leave->leave_type === 'Leave Without Pay') {
+                $user->leave_without_pay = (float)$user->leave_without_pay - $leaveDuration;
+            }
+            $user->save();
+        }
+
         $leave->update([
             'status' => 'rejected',
             'approve_comment' => $request->approve_comment,
             'approved_by' => $request->user->id
         ]);
+
+        try {
+            Mail::to($user->email)->send(new LeaveStatusMail($leave, $user, 'rejected', $request->user));
+        } catch (\Exception $e) {
+            // Log error or ignore
+        }
 
         return response()->json(['message' => 'Leave rejected', 'leave' => $leave], 200);
     }
