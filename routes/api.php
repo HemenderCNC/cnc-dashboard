@@ -611,6 +611,7 @@ Route::middleware('api')->group(function () {
         Route::prefix('leaves')->group(function () {
 
             Route::get('/', [LeaveController::class, 'index']); // Employee views own leaves
+            Route::get('/get-all-leaves', [LeaveController::class, 'getAllLeaves']); // All employees leaves
             Route::get('/leaves-summary', [LeaveController::class, 'getLeaveSummary']); // Get summary
             Route::middleware(['permission:view_leave'])->group(function () {
                 Route::get('/{id}', [LeaveController::class, 'show']); // View specific leave request

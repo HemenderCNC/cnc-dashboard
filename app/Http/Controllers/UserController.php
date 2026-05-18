@@ -207,10 +207,10 @@ class UserController extends Controller
             'skills' => $request->skills,
 
             //Leave Information
-            'privilege_leave' => $request->privilege_leave,
-            'paternity_leave' => $request->paternity_leave,
-            'critical_medical_leave' => $request->critical_medical_leave,
-            'leave_without_pay' => $request->leave_without_pay,
+            'privilege_leave' => $request->privilege_leave ?? 0,
+            'paternity_leave' => $request->paternity_leave ?? 0,
+            'critical_medical_leave' => $request->critical_medical_leave ?? 0,
+            'leave_without_pay' => $request->leave_without_pay ?? 0,
 
             //Bank details
             'account_holde_name' => $request->account_holde_name,
@@ -418,13 +418,7 @@ class UserController extends Controller
 
             // Skills
             'skills' => $request->skills, // Save array of skill IDs
-
-            //Leave Information
-            'privilege_leave' => $request->privilege_leave,
-            'paternity_leave' => $request->paternity_leave,
-            'critical_medical_leave' => $request->critical_medical_leave,
-            'leave_without_pay' => $request->leave_without_pay,
-
+ 
             //Bank details
             'account_holde_name' => $request->account_holde_name,
             'bank_name' => $request->bank_name,

@@ -1137,11 +1137,11 @@ class TimesheetController extends Controller
 
         if ($timesheet) {
 
-            if ($timesheet->status === 'completed' && $timesheet->task_type !== 'R&D') {
-                return response()->json([
-                    'message' => 'Task already completed.'
-                ], 400);
-            }
+            // if ($timesheet->status === 'completed' && $timesheet->task_type !== 'R&D') {
+            //     return response()->json([
+            //         'message' => 'Task already completed.'
+            //     ], 400);
+            // }
 
             if ($timesheet->status === 'paused' && $timesheet->is_display !== false) {
                 return response()->json([
@@ -1896,6 +1896,7 @@ class TimesheetController extends Controller
     //     return response()->json($timesheet);
     // }
 
+    
     public function startBreak(Request $request)
     {
         $userId = $request->user->id;
@@ -2294,5 +2295,4 @@ class TimesheetController extends Controller
             'message' => 'Timesheet found successfully',
         ], 200);
     }
-    
-}   
+}

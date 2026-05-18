@@ -80,6 +80,62 @@ if ($request->filled('status')) {
         ], 200);
     }
 
+    public function getAllLeaves(Request $request)
+    {
+        $query = Leave::with(['employee:id,name,last_name']);
+
+        // Pagination setup
+        $page = (int) $request->input('page', 1);
+        $limit = (int) $request->input('limit', -1);
+
+
+        // Filter by date range (start_date, end_date)
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $query->whereBetween('start_date', [$request->start_date, $request->end_date]);
+        }
+
+        // Filter by status (Supports multiple statuses separated by comma)
+        if ($request->filled('status')) {
+            $statuses = explode(',', $request->status);
+
+            $query->where(function ($q) use ($statuses) {
+                foreach ($statuses as $status) {
+                    $q->orWhere('status', 'regex', new \MongoDB\BSON\Regex("^$status$", 'i'));
+                }
+            });
+        }
+
+        $query->orderBy('created_at', 'desc');
+
+        if ($limit == -1) {
+            $leaves = $query->get();
+
+            return response()->json([
+                'data' => $leaves,
+                'meta' => [
+                    'page' => 1,
+                    'limit' => $limit,
+                    'total' => $leaves->count(),
+                    'total_pages' => 1,
+                ]
+            ], 200);
+        }
+
+        // Else use pagination
+        $leaves = $query->paginate($limit, ['*'], 'page', $page);
+
+        return response()->json([
+            'data' => $leaves->items(),
+            'meta' => [
+                'page' => $leaves->currentPage(),
+                'limit' => $leaves->perPage(),
+                'total' => $leaves->total(),
+                'total_pages' => $leaves->lastPage(),
+            ]
+        ], 200);
+
+    }
+
     // Employee submits a leave request
     public function store(Request $request)
     {

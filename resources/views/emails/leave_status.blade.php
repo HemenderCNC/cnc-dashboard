@@ -1,21 +1,168 @@
-{{-- filepath: resources/views/emails/leave_status.blade.php --}}
-@component('mail::message')
-# Leave Request {{ ucfirst($status) }}
-
-Hi {{ $employee->name }},
-
-Your leave request for the following period has been **{{ $status }}**.
-
-- **Leave Type:** {{ $leave->leave_type }}
-- **Start Date:** {{ \Carbon\Carbon::parse($leave->start_date)->format('d-M-Y') }}
-- **End Date:** {{ \Carbon\Carbon::parse($leave->end_date)->format('d-M-Y') }}
-- **Duration:** {{ $leave->leave_duration }} day(s)
-- **Action By:** {{ $actionBy->name }} {{ $actionBy->last_name }}
-
-@if($leave->approve_comment)
-**Comment:** {{ $leave->approve_comment }}
-@endif
-
-Thanks,<br>
-{{ config('app.name') }} Team
-@endcomponent
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leave Request {{ ucfirst($status) }}</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: Verdana, sans-serif; background-color: #DCDDE1;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #DCDDE1;">
+        <tr>
+            <td align="center">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="width: 100%; max-width: 600px; margin: 0 auto;">
+                    <tbody>
+                        <tr>
+                               <td align="center" style="padding:0;">
+                               <a href='https://codeandcore.com/' style='width: 600px; display: block;'>
+                                                                    <img src='https://codeandcore.sirv.com/newsletter/contact-top-banner.png' alt='Code and Core Contact Form Submission' style='display: block;' />
+                                                                </a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td align="left" bgcolor="#FFFFFF" style="padding: 50px 30px;">
+                                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                                    <tbody>
+                                        <tr>
+                                            <td align="center">
+                                                <h1 style="margin: 0; font-weight: 600; font-size: 24px; line-height: 30px; color: #1A0726; text-transform: capitalize;">Leave Request {{ ucfirst($status) }}</h1>
+                                                <br><br>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td align="left">
+                                                <p style="margin: 0 0 20px 0; font-size: 14px; color: #2C2C2C;">Hi {{ $employee->name }},</p>
+                                                <p style="margin: 0 0 20px 0; font-size: 14px; color: #2C2C2C;">Your leave request for the following period has been <strong style="color: {{ $status == 'approved' ? '#27ae60' : '#e74c3c' }};">{{ $status }}</strong>.</p>
+                                                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                                                    <tbody>
+                                                        <!-- Leave Type -->
+                                                        <tr>
+                                                            <td width="35%" align="left" valign="middle" style="border-bottom: 1px solid #1A0726; padding: 7px 0;">
+                                                                <table cellpadding="0" cellspacing="0" border="0">
+                                                                    <tr>
+                                                                        <td width="20px"><img src="https://codeandcore.sirv.com/newsletter/dot.png" alt="dot" style="display: block;" /></td>
+                                                                        <td><p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">Leave Type</p></td>
+                                                                    </tr>
+                                                                </table>
+                                                            </td>
+                                                            <td width="2%" style="border-bottom: 1px solid #1A0726; padding: 7px 0;" valign="middle">
+                                                                <p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">:</p>
+                                                            </td>
+                                                            <td width="63%" align="left" valign="middle" style="border-bottom: 1px solid #1A0726; padding: 7px 0;">
+                                                                <p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">{{ $leave->leave_type }}</p>
+                                                            </td>
+                                                        </tr>
+                                                        <!-- Dates -->
+                                                        <tr>
+                                                            <td width="35%" align="left" valign="middle" style="border-bottom: 1px solid #1A0726; padding: 7px 0;">
+                                                                <table cellpadding="0" cellspacing="0" border="0">
+                                                                    <tr>
+                                                                        <td width="20px"><img src="https://codeandcore.sirv.com/newsletter/dot.png" alt="dot" style="display: block;" /></td>
+                                                                        <td><p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">Duration</p></td>
+                                                                    </tr>
+                                                                </table>
+                                                            </td>
+                                                            <td width="2%" style="border-bottom: 1px solid #1A0726; padding: 7px 0;" valign="middle">
+                                                                <p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">:</p>
+                                                            </td>
+                                                            <td width="63%" align="left" valign="middle" style="border-bottom: 1px solid #1A0726; padding: 7px 0;">
+                                                                <p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">{{ \Carbon\Carbon::parse($leave->start_date)->format('d-M-Y') }} to {{ \Carbon\Carbon::parse($leave->end_date)->format('d-M-Y') }} ({{ $leave->leave_duration }} day(s))</p>
+                                                            </td>
+                                                        </tr>
+                                                        <!-- Action By -->
+                                                        <tr>
+                                                            <td width="35%" align="left" valign="middle" style="border-bottom: 1px solid #1A0726; padding: 7px 0;">
+                                                                <table cellpadding="0" cellspacing="0" border="0">
+                                                                    <tr>
+                                                                        <td width="20px"><img src="https://codeandcore.sirv.com/newsletter/dot.png" alt="dot" style="display: block;" /></td>
+                                                                        <td><p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">Action By</p></td>
+                                                                    </tr>
+                                                                </table>
+                                                            </td>
+                                                            <td width="2%" style="border-bottom: 1px solid #1A0726; padding: 7px 0;" valign="middle">
+                                                                <p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">:</p>
+                                                            </td>
+                                                            <td width="63%" align="left" valign="middle" style="border-bottom: 1px solid #1A0726; padding: 7px 0;">
+                                                                <p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">{{ $actionBy->name }} {{ $actionBy->last_name }}</p>
+                                                            </td>
+                                                        </tr>
+                                                        @if($leave->approve_comment)
+                                                        <!-- Comment -->
+                                                        <tr>
+                                                            <td width="35%" align="left" valign="middle" style="padding: 7px 0;">
+                                                                <table cellpadding="0" cellspacing="0" border="0">
+                                                                    <tr>
+                                                                        <td width="20px"><img src="https://codeandcore.sirv.com/newsletter/dot.png" alt="dot" style="display: block;" /></td>
+                                                                        <td><p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">Comment</p></td>
+                                                                    </tr>
+                                                                </table>
+                                                            </td>
+                                                            <td width="2%" style="padding: 7px 0;" valign="middle">
+                                                                <p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">:</p>
+                                                            </td>
+                                                            <td width="63%" align="left" valign="middle" style="padding: 7px 0;">
+                                                                <p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">{{ $leave->approve_comment }}</p>
+                                                            </td>
+                                                        </tr>
+                                                        @endif
+                                                    </tbody>
+                                                </table>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td align="left" bgcolor="#F6F5FF" style="padding: 50px 70px;">
+                                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                                    <tbody>
+                                        <tr>
+                                            <td align="center">
+                                                <table cellpadding="0" cellspacing="0" border="0">
+                                                    <tr>
+                                                        <td style="padding: 0 5px;"><a href="https://www.facebook.com/codeandcore" target="_blank"><img src="https://codeandcore.sirv.com/newsletter/facebook.png" alt="FB" width="30" /></a></td>
+                                                        <td style="padding: 0 5px;"><a href="https://www.instagram.com/codeandcore" target="_blank"><img src="https://codeandcore.sirv.com/newsletter/instagram.png" alt="IG" width="30" /></a></td>
+                                                        <td style="padding: 0 5px;"><a href="https://www.youtube.com/@codeandcoreofficial" target="_blank"><img src="https://codeandcore.sirv.com/newsletter/youtube.png" alt="YT" width="30" /></a></td>
+                                                        <td style="padding: 0 5px;"><a href="https://www.linkedin.com/company/code-and-core" target="_blank"><img src="https://codeandcore.sirv.com/newsletter/linkedin.png" alt="IN" width="30" /></a></td>
+                                                        <td style="padding: 0 5px;"><a href="mailto:codeandcore@gmail.com" target="_blank"><img src="https://codeandcore.sirv.com/newsletter/email.png" alt="Email" width="30" /></a></td>
+                                                        <td style="padding: 0 5px;"><a href="https://codeandcore.com/" target="_blank"><img src="https://codeandcore.sirv.com/newsletter/website.png" alt="Web" width="30" /></a></td>
+                                                        <td style="padding: 0 5px;"><a href="https://x.com/codeandcore" target="_blank"><img src="https://codeandcore.sirv.com/newsletter/x.png" alt="X" width="30" /></a></td>
+                                                    </tr>
+                                                </table>
+                                            </td>
+                                        </tr>
+                                        <tr><td height="35"></td></tr>
+                                        <tr>
+                                            <td align="center">
+                                                <a href="https://codeandcore.com/" target="_blank">
+                                                    <img src="https://codeandcore.sirv.com/newsletter/cnc.png" alt="Code and Core" width="230" />
+                                                </a>
+                                            </td>
+                                        </tr>
+                                        <tr><td height="25"></td></tr>
+                                        <tr>
+                                            <td align="center">
+                                                <p style="margin: 10px 0; font-size: 14px; color: #2C2C2C;">422,423,410 - S.V. Square commercial building, New Ranip, Ahmedabad, Gujrat, India.</p>
+                                                <p style="margin: 0; font-size: 14px; color: #2C2C2C;">&copy; 2025 Code and core Tech LLP</p>
+                                            </td>
+                                        </tr>
+                                        <tr><td height="25"></td></tr>
+                                        <tr>
+                                            <td align="center">
+                                                <p style="margin: 0; font-size: 14px; color: #2C2C2C;">
+                                                    <a href="https://codeandcore.com/contact-us/" style="color: #2C2C2C; text-decoration: underline;">Contact Us</a> | 
+                                                    <a href="https://codeandcore.com/privacy-policy/" style="color: #2C2C2C; text-decoration: underline;">Privacy Policy</a>
+                                                </p>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
