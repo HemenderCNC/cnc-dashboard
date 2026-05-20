@@ -1755,4 +1755,42 @@ class TasksController extends Controller
 
         return response()->json($tasks_data, 200);
     }
+
+    public function getTotalTasks(Request $request)
+    {
+        $statusNames = ['To Do', 'QA Failed'];
+        if ($request->user->role && $request->user->role->name === 'QA') {
+            $statusNames[] = 'Ready For QA';
+        }
+
+        $taskStatusId = TaskStatus::whereIn('name', $statusNames)
+            ->pluck('id')
+            ->toArray();
+
+        $tasks = Tasks::with(['project', 'status', 'taskType'])
+            ->where(function ($query) use ($request) {
+                $query->where('assignees', (string) $request->user->id)
+                    ->orWhere('qa_id', (string) $request->user->id);
+            })
+            ->whereIn('status_id', $taskStatusId)
+            ->select('id', 'title', 'status_id', 'project_id', 'task_type_id', 'estimated_hours', 'due_date')
+            ->get()
+            ->map(function ($task) {
+                return [
+                    'id' => $task->id,
+                    'title' => $task->title,
+                    'status_id' => $task->status_id,
+                    'project_id' => $task->project_id,
+                    'task_type_id' => $task->task_type_id,
+                    'estimated_hours' => $task->estimated_hours,
+                    'due_date' => $task->due_date,
+                    'project_name' => $task->project ? $task->project->project_name : null,
+                    'status_name' => $task->status ? $task->status->name : null,
+                    'task_type_name' => $task->taskType ? $task->taskType->name : null,
+                ];
+            });
+
+        return response()->json(['data' => $tasks], 200);
+    }
 }
+

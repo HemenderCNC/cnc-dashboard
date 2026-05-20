@@ -125,6 +125,51 @@ class OvertimeController extends Controller
             'message' => 'OT claim updated successfully',
         ], 200);
     }
+    
+    public function otClaimDelete($id)
+    {
+        $otClaim = Overtime::find($id);
+        if (!$otClaim) {
+            return response()->json(['message' => 'OT claim not found'], 404);
+        }
+
+        $otClaim->delete();
+
+        return response()->json([
+            'message' => 'OT claim deleted successfully',
+        ], 200);
+    }
+
+    public function otClaimEdit(Request $request, $id)
+    {
+        $validator = Validator::make($request->all(), [
+            'task_id' => 'required',
+            'reason' => 'required',
+            'url' => 'nullable',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => $validator->errors()->first(),
+            ], 422);
+        }
+
+        $otClaim = Overtime::find($id);
+        if (!$otClaim) {
+            return response()->json(['message' => 'OT claim not found'], 404);
+        }
+
+        $otClaim->task_id = $request->task_id;
+        $otClaim->reason = $request->reason;
+        $otClaim->url = $request->url;
+        $otClaim->updated_by = $request->user->id;
+        $otClaim->updated_at = Carbon::now();
+        $otClaim->save();
+
+        return response()->json([
+            'message' => 'OT claim updated successfully',
+        ], 200);
+    }
 
     public function otClaimList(Request $request)
     {
@@ -138,7 +183,14 @@ class OvertimeController extends Controller
             ], 422);
         }
 
-        $otClaim = Overtime::with(['employee', 'task'])->where('date', 'like', $request->month . '%')->get();
+        $otClaimQuery = Overtime::with(['employee', 'task'])
+            ->where('date', 'like', $request->month . '%');
+
+        if ($request->user && $request->user->role && in_array($request->user->role->slug, ['employee', 'qa' , 'team-leader'])) {
+            $otClaimQuery->where('employee_id', $request->user->id);
+        }
+
+        $otClaim = $otClaimQuery->get();
 
         $grouped = $otClaim->groupBy('employee_id');
 
@@ -166,9 +218,23 @@ class OvertimeController extends Controller
             ];
         })->values();
 
+        $global_total_mins = $otClaim->filter(function($item) {
+            return in_array($item->status, ['Approved', 'Partial Approved']);
+        })->sum(function ($item) {
+            return $this->convertToMinutes($item->approved_ot_hours ?? $item->ot_hours);
+        });
+
+        $statistics = [
+            'pending_approval_count' => $otClaim->whereIn('status', ['Pending', 'Pending Review'])->count(),
+            'approved_count' => $otClaim->whereIn('status', ['Approved', 'Partial Approved'])->count(),
+            'rejected_count' => $otClaim->where('status', 'Rejected')->count(),
+            'ot_total_hours' => $this->convertMinutesToTime($global_total_mins),
+        ];
+
         return response()->json([
             'message' => 'OT claim list',
             'data' => $result,
+            'statistics' => $statistics,
         ], 200);
     }
 
@@ -189,8 +255,8 @@ class OvertimeController extends Controller
         return sprintf('%02d:%02d', $hours, $mins);
     }
    
-   public function otApprove(Request $request)
-   {
+    public function otApprove(Request $request)
+    {
 
     $validator = Validator::make($request->all(), [
         'id' => 'required',
@@ -221,11 +287,11 @@ class OvertimeController extends Controller
     return response()->json([
         'message' => 'OT claim approved successfully',
     ], 200);
-    
-   }
 
-   public function otReject(Request $request)
-   {
+    }
+
+    public function otReject(Request $request)
+    {
 
     $validator = Validator::make($request->all(), [
         'id' => 'required',
@@ -256,11 +322,11 @@ class OvertimeController extends Controller
     return response()->json([
         'message' => 'OT claim rejected successfully',
     ], 200);
-    
-   }
 
-   public function otPartialApprove(Request $request)
-   {
+    }
+
+    public function otPartialApprove(Request $request)
+    {
 
     $validator = Validator::make($request->all(), [
         'id' => 'required',
@@ -286,23 +352,23 @@ class OvertimeController extends Controller
     return response()->json([
         'message' => 'OT claim approved successfully',
     ], 200);
-    
-   }
 
-   public function preDefiendReviewNotes(Request $request)
-   {
+    }
+
+    public function preDefiendReviewNotes(Request $request)
+    {
 
     $predefined_notes = PredefinedNote::all();
-    
+
     return response()->json([
         'message' => 'Predefined notes',
         'data' => $predefined_notes,
     ], 200);
-    
-   }
 
-   public function preDefiendReviewNotesStore(Request $request)
-   {
+    }
+
+    public function preDefiendReviewNotesStore(Request $request)
+    {
 
     $validator = Validator::make($request->all(), [
         'note' => 'required|max:25',
@@ -321,7 +387,6 @@ class OvertimeController extends Controller
     return response()->json([
         'message' => 'Predefined note created successfully',
     ], 200);
-    
-   }
 
+    }
 }   

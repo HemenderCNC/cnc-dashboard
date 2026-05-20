@@ -546,6 +546,7 @@ Route::middleware('api')->group(function () {
             Route::get('/project-tasks-summary', [TasksController::class, 'getTasksByProject']);
             Route::get('/parent-tasks', [TasksController::class, 'getParentTasks']);
             Route::get('/', [TasksController::class, 'index']); // Get all tasks
+            Route::get('/get-total-tasks', [TasksController::class, 'getTotalTasks']);
             Route::middleware(['permission:view_task'])->group(function () {
                 Route::get('/{id}', [TasksController::class, 'show']); // Get task by ID
             });
@@ -560,6 +561,7 @@ Route::middleware('api')->group(function () {
             Route::delete('/{id}', [TasksController::class, 'destroy'])->middleware('permission:delete_task');
 
             Route::get('/update-task-log/{id}', [TasksController::class, 'updateTaskLog']);
+
         });
 
         // Route::prefix('tasks')->group(function () {
@@ -797,7 +799,9 @@ Route::middleware('api')->group(function () {
         Route::get('getgeneralsettings/protected', [GeneralSettingsController::class, 'index']); // Update settings
 
         Route::post('/OT-claim', [OvertimeController::class, 'otClaimStore']);
+        Route::put('/OT-claim/{id}', [OvertimeController::class, 'otClaimEdit']);
         Route::get('/OT-claim-list', [OvertimeController::class, 'otClaimList']);
+        Route::delete('/OT-claim/{id}', [OvertimeController::class, 'otClaimDelete']);
         Route::post('/OT-approve', [OvertimeController::class, 'otApprove']);
         Route::post('/OT-reject', [OvertimeController::class, 'otReject']);
         Route::post('/OT-partial-approve', [OvertimeController::class, 'otPartialApprove']);

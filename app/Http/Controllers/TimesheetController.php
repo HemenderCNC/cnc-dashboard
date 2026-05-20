@@ -1149,7 +1149,7 @@ class TimesheetController extends Controller
                 ], 400);
             }
 
-            if ($request->user->role->slug !== 'qa' && ($timesheet->status == 'Ready For QA' || $timesheet->status == 'paused' || $timesheet->task_type == 'R&D')) {
+            if ($request->user->role->slug !== 'qa' && ($timesheet->status == 'Ready For QA' || $timesheet->status == 'paused' || $timesheet->status == 'completed' || $timesheet->status == 'QA Failed' || $timesheet->task_type == 'R&D')) {
                 $task = Tasks::with('status')
                     ->where('_id', $request->task_id)
                     ->first();
@@ -1185,6 +1185,7 @@ class TimesheetController extends Controller
             }
 
         } else {
+
             // Create a new timesheet entry
             $timesheet = Timesheet::create([
                 'project_id' => $request->project_id,
@@ -2274,8 +2275,9 @@ class TimesheetController extends Controller
         }
 
         $date = $request->date;
+        $employeeId = $request->employee_id ?? $request->user->id;
 
-        $timesheet = Timesheet::where('employee_id', $request->user->id)
+        $timesheet = Timesheet::where('employee_id', $employeeId)
             ->whereDate('created_at', $date)
             ->get();
 

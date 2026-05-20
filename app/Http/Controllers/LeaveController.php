@@ -40,15 +40,15 @@ class LeaveController extends Controller
         }
 
         // Filter by status (Supports multiple statuses separated by comma)
-if ($request->filled('status')) {
-    $statuses = explode(',', $request->status);
+        if ($request->filled('status')) {
+            $statuses = explode(',', $request->status);
 
-    $query->where(function ($q) use ($statuses) {
-        foreach ($statuses as $status) {
-            $q->orWhere('status', 'regex', new \MongoDB\BSON\Regex("^$status$", 'i'));
+            $query->where(function ($q) use ($statuses) {
+                foreach ($statuses as $status) {
+                    $q->orWhere('status', 'regex', new \MongoDB\BSON\Regex("^$status$", 'i'));
+                }
+            });
         }
-    });
-}
 
         $query->orderBy('created_at', 'desc');
 
@@ -569,7 +569,6 @@ if ($request->filled('status')) {
         try {
             Mail::to($user->email)->send(new LeaveStatusMail($leave, $user, 'approved', $request->user));
         } catch (\Exception $e) {
-            // Log error or ignore
         }
 
         return response()->json(['message' => 'Leave approved successfully', 'leave' => $leave], 200);
