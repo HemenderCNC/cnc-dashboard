@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Leave;
-use App\Models\LeaveBalance;
 use App\Models\GeneralSettings;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Http\Request;
@@ -15,6 +14,7 @@ use MongoDB\BSON\UTCDateTime;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\LeaveRequestedMail;
 use App\Mail\LeaveStatusMail;
+
 
 class LeaveController extends Controller
 {
@@ -40,15 +40,15 @@ class LeaveController extends Controller
         }
 
         // Filter by status (Supports multiple statuses separated by comma)
-        if ($request->filled('status')) {
-            $statuses = explode(',', $request->status);
+if ($request->filled('status')) {
+    $statuses = explode(',', $request->status);
 
-            $query->where(function ($q) use ($statuses) {
-                foreach ($statuses as $status) {
-                    $q->orWhere('status', 'regex', new \MongoDB\BSON\Regex("^$status$", 'i'));
-                }
-            });
+    $query->where(function ($q) use ($statuses) {
+        foreach ($statuses as $status) {
+            $q->orWhere('status', 'regex', new \MongoDB\BSON\Regex("^$status$", 'i'));
         }
+    });
+}
 
         $query->orderBy('created_at', 'desc');
 
@@ -209,25 +209,14 @@ class LeaveController extends Controller
         }
 
         // Check if employee has enough leave balance
-        $userId = $request->user->id;
-        $currentYear = date('Y');
-        $leaveBalance = LeaveBalance::firstOrCreate(
-            ['user_id' => (string) $userId, 'year' => (int) $currentYear],
-            [
-                'privilege_leave' => 0,
-                'paternity_leave' => 0,
-                'critical_medical_leave' => 0,
-                'leave_without_pay' => 0,
-            ]
-        );
-
+        $user = $request->user;
         if ($request->filled('leave_type')) {
             $hasEnoughBalance = true;
-            if ($request->leave_type === 'Privilege Leave (PL)' && (float)$leaveBalance->privilege_leave < $leaveDuration) {
+            if ($request->leave_type === 'Privilege Leave (PL)' && (float)$user->privilege_leave < $leaveDuration) {
                 $hasEnoughBalance = false;
-            } elseif ($request->leave_type === 'Paternity Leave' && (float)$leaveBalance->paternity_leave < $leaveDuration) {
+            } elseif ($request->leave_type === 'Paternity Leave' && (float)$user->paternity_leave < $leaveDuration) {
                 $hasEnoughBalance = false;
-            } elseif ($request->leave_type === 'Critical Medical Leave (CML)' && (float)$leaveBalance->critical_medical_leave < $leaveDuration) {
+            } elseif ($request->leave_type === 'Critical Medical Leave (CML)' && (float)$user->critical_medical_leave < $leaveDuration) {
                 $hasEnoughBalance = false;
             }
 
@@ -258,20 +247,21 @@ class LeaveController extends Controller
         ]);
 
         // Deduct from the respective leave balance based on leave_type
+        $user = $request->user;
         if ($request->filled('leave_type')) {
             if ($request->leave_type === 'Privilege Leave (PL)') {
-                $leaveBalance->privilege_leave = (float)$leaveBalance->privilege_leave - $leaveDuration;
+                $user->privilege_leave = (float)$user->privilege_leave - $leaveDuration;
             } elseif ($request->leave_type === 'Paternity Leave') {
-                $leaveBalance->paternity_leave = (float)$leaveBalance->paternity_leave - $leaveDuration;
+                $user->paternity_leave = (float)$user->paternity_leave - $leaveDuration;
             } elseif ($request->leave_type === 'Critical Medical Leave (CML)') {
-                $leaveBalance->critical_medical_leave = (float)$leaveBalance->critical_medical_leave - $leaveDuration;
+                $user->critical_medical_leave = (float)$user->critical_medical_leave - $leaveDuration;
             } elseif ($request->leave_type === 'Leave Without Pay') {
-                $leaveBalance->leave_without_pay = (float)$leaveBalance->leave_without_pay + $leaveDuration;
+                $user->leave_without_pay = (float)$user->leave_without_pay + $leaveDuration;
             }
-            $leaveBalance->save();
+            $user->save();
         }
 
-        if (!in_array($request->user->email, ['vishva.cnc26@gmail.com', 'developeruser@gmail.com', 'ravindrapawarcnc@gmail.com'])) {
+        if (!in_array($request->user->email, ['vishva.cnc26@gmail.com', 'developeruser@gmail.com'])) {
             try {
                 $reportingManager = $request->user->reportingManager;
                 $users = $request->user->email;
@@ -395,26 +385,17 @@ class LeaveController extends Controller
 
         // 3. Adjust leave balance
         $durationDiff = $newDuration - $oldDuration;
-        $leaveYear = $leave->year ?? date('Y');
-        $leaveBalance = LeaveBalance::firstOrCreate(
-            ['user_id' => (string) $leave->employee_id, 'year' => (int) $leaveYear],
-            [
-                'privilege_leave' => 0,
-                'paternity_leave' => 0,
-                'critical_medical_leave' => 0,
-                'leave_without_pay' => 0,
-            ]
-        );
+        $user = User::find($leave->employee_id);
 
-        if ($leave->leave_type && $durationDiff != 0 && in_array(strtolower($leave->status), ['pending', 'approved'])) {
+        if ($user && $leave->leave_type && $durationDiff != 0 && in_array(strtolower($leave->status), ['pending', 'approved'])) {
             // Check if employee has enough leave balance for the increase
             if ($durationDiff > 0) {
                 $hasEnoughBalance = true;
-                if ($leave->leave_type === 'Privilege Leave (PL)' && (float)$leaveBalance->privilege_leave < $durationDiff) {
+                if ($leave->leave_type === 'Privilege Leave (PL)' && (float)$user->privilege_leave < $durationDiff) {
                     $hasEnoughBalance = false;
-                } elseif ($leave->leave_type === 'Paternity Leave' && (float)$leaveBalance->paternity_leave < $durationDiff) {
+                } elseif ($leave->leave_type === 'Paternity Leave' && (float)$user->paternity_leave < $durationDiff) {
                     $hasEnoughBalance = false;
-                } elseif ($leave->leave_type === 'Critical Medical Leave (CML)' && (float)$leaveBalance->critical_medical_leave < $durationDiff) {
+                } elseif ($leave->leave_type === 'Critical Medical Leave (CML)' && (float)$user->critical_medical_leave < $durationDiff) {
                     $hasEnoughBalance = false;
                 }
 
@@ -427,15 +408,15 @@ class LeaveController extends Controller
 
             // Deduct or restore balance based on the difference
             if ($leave->leave_type === 'Privilege Leave (PL)') {
-                $leaveBalance->privilege_leave = (float)$leaveBalance->privilege_leave - $durationDiff;
+                $user->privilege_leave = (float)$user->privilege_leave - $durationDiff;
             } elseif ($leave->leave_type === 'Paternity Leave') {
-                $leaveBalance->paternity_leave = (float)$leaveBalance->paternity_leave - $durationDiff;
+                $user->paternity_leave = (float)$user->paternity_leave - $durationDiff;
             } elseif ($leave->leave_type === 'Critical Medical Leave (CML)') {
-                $leaveBalance->critical_medical_leave = (float)$leaveBalance->critical_medical_leave - $durationDiff;
+                $user->critical_medical_leave = (float)$user->critical_medical_leave - $durationDiff;
             } elseif ($leave->leave_type === 'Leave Without Pay') {
-                $leaveBalance->leave_without_pay = (float)$leaveBalance->leave_without_pay + $durationDiff;
+                $user->leave_without_pay = (float)$user->leave_without_pay + $durationDiff;
             }
-            $leaveBalance->save();
+            $user->save();
         }
 
         $leave->update([
@@ -471,22 +452,18 @@ class LeaveController extends Controller
 
         // Restore the respective leave balance based on leave_type
         $user = User::find($leave->employee_id);
-        $leaveYear = $leave->year ?? date('Y');
-        $leaveBalance = LeaveBalance::where('user_id', (string) $leave->employee_id)
-            ->where('year', (int) $leaveYear)
-            ->first();
-        if ($leaveBalance && $leave->leave_type) {
+        if ($user && $leave->leave_type) {
             $leaveDuration = (float)$leave->leave_duration;
             if ($leave->leave_type === 'Privilege Leave (PL)') {
-                $leaveBalance->privilege_leave = (float)$leaveBalance->privilege_leave + $leaveDuration;
+                $user->privilege_leave = (float)$user->privilege_leave + $leaveDuration;
             } elseif ($leave->leave_type === 'Paternity Leave') {
-                $leaveBalance->paternity_leave = (float)$leaveBalance->paternity_leave + $leaveDuration;
+                $user->paternity_leave = (float)$user->paternity_leave + $leaveDuration;
             } elseif ($leave->leave_type === 'Critical Medical Leave (CML)') {
-                $leaveBalance->critical_medical_leave = (float)$leaveBalance->critical_medical_leave + $leaveDuration;
+                $user->critical_medical_leave = (float)$user->critical_medical_leave + $leaveDuration;
             } elseif ($leave->leave_type === 'Leave Without Pay') {
-                $leaveBalance->leave_without_pay = (float)$leaveBalance->leave_without_pay - $leaveDuration;
+                $user->leave_without_pay = (float)$user->leave_without_pay - $leaveDuration;
             }
-            $leaveBalance->save();
+            $user->save();
         }
 
         $leave->update(['status' => 'canceled']);
@@ -516,23 +493,12 @@ class LeaveController extends Controller
             ], 404);
         }
 
-        $currentYear = date('Y');
-        $leaveBalance = LeaveBalance::firstOrCreate(
-            ['user_id' => (string) $employeeId, 'year' => (int) $currentYear],
-            [
-                'privilege_leave' => 0,
-                'paternity_leave' => 0,
-                'critical_medical_leave' => 0,
-                'leave_without_pay' => 0,
-            ]
-        );
-
         return response()->json([
             'message' => 'Leave summary retrieved successfully',
-            'privilege_leave' => (float) $leaveBalance->privilege_leave,
-            'critical_medical_leave' => (float) $leaveBalance->critical_medical_leave,
-            'paternity_leave' => (float) $leaveBalance->paternity_leave,
-            'leave_without_pay' => (float) $leaveBalance->leave_without_pay
+            'privilege_leave' => (float) $user->privilege_leave,
+            'critical_medical_leave' => (float) $user->critical_medical_leave,
+            'paternity_leave' => (float) $user->paternity_leave,
+            'leave_without_pay' => (float) $user->leave_without_pay
         ], 200);
     }
 
@@ -560,18 +526,7 @@ class LeaveController extends Controller
 
         // Handle balance synchronization
         $user = User::find($leave->employee_id);
-        $leaveYear = $leave->year ?? date('Y');
-        $leaveBalance = LeaveBalance::firstOrCreate(
-            ['user_id' => (string) $leave->employee_id, 'year' => (int) $leaveYear],
-            [
-                'privilege_leave' => 0,
-                'paternity_leave' => 0,
-                'critical_medical_leave' => 0,
-                'leave_without_pay' => 0,
-            ]
-        );
-
-        if ($leaveBalance) {
+        if ($user) {
             $leaveDuration = (float)$leave->leave_duration;
             $oldStatus = strtolower($leave->status);
             $oldType = $leave->leave_type;
@@ -580,28 +535,28 @@ class LeaveController extends Controller
             // 1. If it was previously deducted (Pending or Approved), restore it first to reset
             if (in_array($oldStatus, ['pending', 'approved']) && $oldType) {
                 if ($oldType === 'Privilege Leave (PL)') {
-                    $leaveBalance->privilege_leave = (float)$leaveBalance->privilege_leave + $leaveDuration;
+                    $user->privilege_leave = (float)$user->privilege_leave + $leaveDuration;
                 } elseif ($oldType === 'Paternity Leave') {
-                    $leaveBalance->paternity_leave = (float)$leaveBalance->paternity_leave + $leaveDuration;
+                    $user->paternity_leave = (float)$user->paternity_leave + $leaveDuration;
                 } elseif ($oldType === 'Critical Medical Leave (CML)') {
-                    $leaveBalance->critical_medical_leave = (float)$leaveBalance->critical_medical_leave + $leaveDuration;
+                    $user->critical_medical_leave = (float)$user->critical_medical_leave + $leaveDuration;
                 } elseif ($oldType === 'Leave Without Pay') {
-                    $leaveBalance->leave_without_pay = (float)$leaveBalance->leave_without_pay - $leaveDuration;
+                    $user->leave_without_pay = (float)$user->leave_without_pay - $leaveDuration;
                 }
             }
 
             // 2. Deduct for the new approved type
             if ($newType === 'Privilege Leave (PL)') {
-                $leaveBalance->privilege_leave = (float)$leaveBalance->privilege_leave - $leaveDuration;
+                $user->privilege_leave = (float)$user->privilege_leave - $leaveDuration;
             } elseif ($newType === 'Paternity Leave') {
-                $leaveBalance->paternity_leave = (float)$leaveBalance->paternity_leave - $leaveDuration;
+                $user->paternity_leave = (float)$user->paternity_leave - $leaveDuration;
             } elseif ($newType === 'Critical Medical Leave (CML)') {
-                $leaveBalance->critical_medical_leave = (float)$leaveBalance->critical_medical_leave - $leaveDuration;
+                $user->critical_medical_leave = (float)$user->critical_medical_leave - $leaveDuration;
             } elseif ($newType === 'Leave Without Pay') {
-                $leaveBalance->leave_without_pay = (float)$leaveBalance->leave_without_pay + $leaveDuration;
+                $user->leave_without_pay = (float)$user->leave_without_pay + $leaveDuration;
             }
             
-            $leaveBalance->save();
+            $user->save();
         }
 
         $leave->update([
@@ -614,6 +569,7 @@ class LeaveController extends Controller
         try {
             Mail::to($user->email)->send(new LeaveStatusMail($leave, $user, 'approved', $request->user));
         } catch (\Exception $e) {
+            // Log error or ignore
         }
 
         return response()->json(['message' => 'Leave approved successfully', 'leave' => $leave], 200);
@@ -645,22 +601,18 @@ class LeaveController extends Controller
         }
 
         $user = User::find($leave->employee_id);
-        $leaveYear = $leave->year ?? date('Y');
-        $leaveBalance = LeaveBalance::where('user_id', (string) $leave->employee_id)
-            ->where('year', (int) $leaveYear)
-            ->first();
-        if ($leaveBalance && $leave->leave_type) {
+        if ($user && $leave->leave_type) {
             $leaveDuration = (float)$leave->leave_duration;
             if ($leave->leave_type === 'Privilege Leave (PL)') {
-                $leaveBalance->privilege_leave = (float)$leaveBalance->privilege_leave + $leaveDuration;
+                $user->privilege_leave = (float)$user->privilege_leave + $leaveDuration;
             } elseif ($leave->leave_type === 'Paternity Leave') {
-                $leaveBalance->paternity_leave = (float)$leaveBalance->paternity_leave + $leaveDuration;
+                $user->paternity_leave = (float)$user->paternity_leave + $leaveDuration;
             } elseif ($leave->leave_type === 'Critical Medical Leave (CML)') {
-                $leaveBalance->critical_medical_leave = (float)$leaveBalance->critical_medical_leave + $leaveDuration;
+                $user->critical_medical_leave = (float)$user->critical_medical_leave + $leaveDuration;
             } elseif ($leave->leave_type === 'Leave Without Pay') {
-                $leaveBalance->leave_without_pay = (float)$leaveBalance->leave_without_pay - $leaveDuration;
+                $user->leave_without_pay = (float)$user->leave_without_pay - $leaveDuration;
             }
-            $leaveBalance->save();
+            $user->save();
         }
 
         $leave->update([
@@ -704,12 +656,31 @@ class LeaveController extends Controller
         $Leave->delete();
         return response()->json(['message' => 'Leave deleted successfully'], 200);
     }
+    public function changeLeaveBalance(Request $request)
+    {
+        $users = User::all();
 
+        $privilege_leave = (float) $request->input('privilege_leave', 12);
+        $paternity_leave = (float) $request->input('paternity_leave', 4);
+        $critical_medical_leave = (float) $request->input('critical_medical_leave', 4);
+        $leave_without_pay = (float) $request->input('leave_without_pay', 0);
+
+        foreach ($users as $user) {
+            $user->privilege_leave = $privilege_leave;
+            $user->paternity_leave = $paternity_leave;
+            $user->critical_medical_leave = $critical_medical_leave;
+            $user->leave_without_pay = $leave_without_pay;
+            $user->save();
+        }
+
+        return response()->json([
+            'message' => 'Leave balances updated for all users successfully'
+        ], 200);
+    }
     public function getLeaveBalance(Request $request)
     {
         $limit = $request->input('limit', 10);
         $page = $request->input('page', 1);
-        $currentYear = date('Y');
 
         $query = User::query();
 
@@ -722,17 +693,13 @@ class LeaveController extends Controller
         $leaveBalances = [];
 
         foreach ($users as $user) {
-            $balance = LeaveBalance::where(
-                ['user_id' => $user->_id, 'year' => (int) $currentYear]
-            )->first();
-
             $leaveBalances[] = [
                 'user_id' => $user->id,
                 'employee_name' => trim($user->name . ' ' . $user->last_name),
-                'privilege_leave' => (float) $balance->privilege_leave ?? 0,
-                'paternity_leave' => (float) $balance->paternity_leave ?? 0,
-                'critical_medical_leave' => (float) $balance->critical_medical_leave ?? 0,
-                'leave_without_pay' => (float) $balance->leave_without_pay ?? 0
+                'privilege_leave' => (float) $user->privilege_leave,
+                'paternity_leave' => (float) $user->paternity_leave,
+                'critical_medical_leave' => (float) $user->critical_medical_leave,
+                'leave_without_pay' => (float) $user->leave_without_pay
             ];
         }
 
@@ -747,7 +714,6 @@ class LeaveController extends Controller
             ]
         ], 200);
     }
-
     public function UpdateuserLeaveBalance(Request $request)
     {
         $user = User::find($request->user_id);
@@ -756,23 +722,15 @@ class LeaveController extends Controller
             return response()->json(['message' => 'User not found'], 404);
         }
 
-        $currentYear = date('Y');
-        $leaveBalance = LeaveBalance::updateOrCreate(
-            [
-                'user_id' => (string) $request->user_id,
-                'year' => (int) $currentYear
-            ],
-            [
-                'privilege_leave' => (float) $request->input('privilege_leave', 12),
-                'paternity_leave' => (float) $request->input('paternity_leave', 4),
-                'critical_medical_leave' => (float) $request->input('critical_medical_leave', 4),
-                'leave_without_pay' => (float) $request->input('leave_without_pay', 0),
-            ]
-        );
+        $user->privilege_leave = (float) $request->input('privilege_leave', 12);
+        $user->paternity_leave = (float) $request->input('paternity_leave', 4);
+        $user->critical_medical_leave = (float) $request->input('critical_medical_leave', 4);
+        $user->leave_without_pay = (float) $request->input('leave_without_pay', 0);
+        $user->save();
 
         return response()->json([
             'message' => 'User leave balance updated successfully',
-            'data' => $leaveBalance
+            'data' => $user
         ], 200);
     }
 }

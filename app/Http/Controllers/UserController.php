@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\User;
+use App\Models\LeaveBalance;
 use App\Models\Role;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
@@ -54,6 +55,7 @@ class UserController extends Controller
             'department_id' => 'nullable|exists:departments,_id',
             'designation_id' => 'nullable|exists:designations,_id',
             'joining_date' => 'nullable|date',
+            'leave_cycle_start_date' => 'nullable|date',
             'in_time' => 'nullable|string',
             'out_time' => 'nullable|string',
             'adharcard_number' => 'nullable|string|size:12',
@@ -63,12 +65,6 @@ class UserController extends Controller
             'work_location_id' => 'nullable|exists:work_locations,_id',
             'created_by' => 'required|exists:users,_id',
             'original_certificate_no' => 'nullable|string',
-
-            // Leave Information
-            'privilege_leave' => 'nullable|integer',
-            'paternity_leave' => 'nullable|integer',
-            'critical_medical_leave' => 'nullable|integer',
-            'leave_without_pay' => 'nullable|integer',
 
             //Skills
             'skills' => 'nullable|array',
@@ -194,6 +190,7 @@ class UserController extends Controller
             'department_id' => $request->department_id,
             'designation_id' => $request->designation_id,
             'joining_date' => $request->joining_date,
+            'leave_cycle_start_date' => $request->leave_cycle_start_date,
             'in_time' => $request->in_time,
             'out_time' => $request->out_time,
             'adharcard_number' => $request->adharcard_number,
@@ -205,12 +202,6 @@ class UserController extends Controller
 
             //Skills
             'skills' => $request->skills,
-
-            //Leave Information
-            'privilege_leave' => $request->privilege_leave ?? 0,
-            'paternity_leave' => $request->paternity_leave ?? 0,
-            'critical_medical_leave' => $request->critical_medical_leave ?? 0,
-            'leave_without_pay' => $request->leave_without_pay ?? 0,
 
             //Bank details
             'account_holde_name' => $request->account_holde_name,
@@ -227,6 +218,17 @@ class UserController extends Controller
 
             'reporting_manager_id' => $request->reporting_manager_id,
         ]);
+
+        // Create initial leave balance for the new employee
+        LeaveBalance::create([
+            'user_id' => (string) $user->_id,
+            'year' => (int) date('Y'),
+            'privilege_leave' => 0,
+            'paternity_leave' => 0,
+            'critical_medical_leave' => 0,
+            'leave_without_pay' => 0,
+        ]);
+        
         // Send welcome onboard email
         try {
             $user->password = $request->password;
@@ -404,6 +406,7 @@ class UserController extends Controller
             'department_id' => $request->department_id,
             'designation_id' => $request->designation_id,
             'joining_date' => $request->joining_date,
+            'leave_cycle_start_date' => $request->leave_cycle_start_date,
             'in_time' => $request->in_time,
             'out_time' => $request->out_time,
             'adharcard_number' => $request->adharcard_number,
@@ -957,98 +960,60 @@ class UserController extends Controller
      *
      * @return \Illuminate\Http\JsonResponse
      */
-        public function getAllEmployees()
+    public function getAllEmployees()
     {
-        $users = User::raw(function ($collection) {
-            return $collection->aggregate([
-                // Convert role_id (string) to ObjectId for the lookup
-                [
-                    '$addFields' => [
-                        'role_id_object' => [
-                            '$cond' => [
-                                'if' => [
-                                    '$and' => [
-                                        ['$ne' => ['$role_id', null]],
-                                        ['$ne' => ['$role_id', '']],
-                                    ]
-                                ],
-                                'then' => ['$toObjectId' => '$role_id'],
-                                'else' => null
-                            ]
-                        ]
-                    ]
-                ],
+        $users = User::with(['role' => function ($query) {
+            $query->select('_id', 'name', 'slug');
+        }])
+        ->select('_id', 'name', 'last_name', 'email', 'contact_number', 'employee_id', 'profile_photo', 'role_id')
+        ->get();
 
-                // Lookup Role
-                [
-                    '$lookup' => [
-                        'from' => 'roles',
-                        'localField' => 'role_id_object',
-                        'foreignField' => '_id',
-                        'as' => 'role'
-                    ]
-                ],
-                ['$unwind' => ['path' => '$role', 'preserveNullAndEmptyArrays' => true]],
-
-                // Project Only Required Fields
-                [
-                    '$project' => [
-                        'name' => 1,
-                        '_id' => 1,
-                        'last_name' => 1,
-                        'email' => 1,
-                        'contact_number' => 1,
-                        'role_id' => 1,
-                        'role' => 1,
-                        'profile_photo' => 1,
-                        'employee_id' => 1,
-                    ]
-                ]
-            ]);
+        $users->each(function ($user) {
+            $user->setAppends(['role_with_permissions']);
         });
 
-        // Check if users exist
         if ($users->isEmpty()) {
             return response()->json([
-                'message' => 'No users found',
+                'message' => 'No users found'
             ], 404);
         }
 
         return response()->json([
             'message' => 'Users retrieved successfully',
-            'data' => $users,
+            'data' => $users
         ], 200);
     }
 
-public function getAllUsersNotAdmins()
-{
-    // Get administrator role id
-    $adminRole = Role::where('slug', 'administrator')->first();
 
-    $users = User::where('role_id', '!=', (string) $adminRole->_id)
-        ->select(
-            '_id',
-            'name',
-            'last_name',
-            'email',
-            'contact_number',
-            'profile_photo',
-            'employee_id',
-            'role_id'
-        )
-        ->get();
+    public function getAllUsersNotAdmins()
+    {
+        // Get administrator role id
+        $adminRole = Role::where('slug', 'administrator')->first();
 
-    if ($users->isEmpty()) {
+        $users = User::where('role_id', '!=', (string) $adminRole->_id)
+            ->select(
+                '_id',
+                'name',
+                'last_name',
+                'email',
+                'contact_number',
+                'profile_photo',
+                'employee_id',
+                'role_id'
+            )
+            ->get();
+
+        if ($users->isEmpty()) {
+            return response()->json([
+                'message' => 'No employees found',
+            ], 404);
+        }
+
         return response()->json([
-            'message' => 'No employees found',
-        ], 404);
+            'message' => 'Employees retrieved successfully',
+            'data' => $users,
+        ], 200);
     }
-
-    return response()->json([
-        'message' => 'Employees retrieved successfully',
-        'data' => $users,
-    ], 200);
-}
 
     public function getProjectManagers()
     {
@@ -1111,7 +1076,6 @@ public function getAllUsersNotAdmins()
             'data' => $users,
         ], 200);
     }
-    
     /**
      * Update a user's password.
      *

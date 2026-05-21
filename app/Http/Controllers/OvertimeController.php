@@ -21,6 +21,7 @@ class OvertimeController extends Controller
         'ot_hours' => 'required',
         'reason' => 'required',
         'url' => 'nullable',
+        'employee_id' => 'nullable',
     ]);
 
     if ($validator->fails()) {
@@ -29,7 +30,7 @@ class OvertimeController extends Controller
         ], 422);
     }
 
-    $exists = Overtime::where('employee_id', $request->user->id)
+    $exists = Overtime::where('employee_id', $request->employee_id)
         ->where('date', $request->date)
         ->where('task_id', $request->task_id)
         ->exists();
@@ -52,7 +53,7 @@ class OvertimeController extends Controller
         ], 422);
     }
 
-    $existing_ot_sum = Overtime::where('employee_id', $request->user->id)
+    $existing_ot_sum = Overtime::where('employee_id', $request->employee_id)
         ->where('date', $request->date)
         ->get()
         ->sum(function ($item) {
@@ -75,7 +76,7 @@ class OvertimeController extends Controller
     }
 
     $otClaim = new Overtime();
-    $otClaim->employee_id = $request->user->id;
+    $otClaim->employee_id = $request->employee_id;
     $otClaim->date = $request->date;
     $otClaim->task_id = $request->task_id;
     $otClaim->shift_hours = $request->shift_hours;
@@ -201,9 +202,20 @@ class OvertimeController extends Controller
             });
 
             $approved_mins = $items->filter(function($item) {
-                return in_array($item->status, ['Approved', 'Partial Approved']);
+                return in_array($item->status, ['Approved', 'Partial Approved', 'Partially Approved']);
             })->sum(function ($item) {
                 return $this->convertToMinutes($item->approved_ot_hours);
+            });
+
+            $rejected_mins = $items->sum(function ($item) {
+                if ($item->status === 'Rejected') {
+                    return $this->convertToMinutes($item->ot_hours);
+                } elseif (in_array($item->status, ['Partial Approved', 'Partially Approved'])) {
+                    $ot_mins = $this->convertToMinutes($item->ot_hours);
+                    $app_mins = $this->convertToMinutes($item->approved_ot_hours);
+                    return max(0, $ot_mins - $app_mins);
+                }
+                return 0;
             });
 
             $employee = $items->first()->employee ?? null;
@@ -214,19 +226,20 @@ class OvertimeController extends Controller
                 'total_ot_hours' => $this->convertMinutesToTime($total_ot_mins),
                 'days_ot_claimed' => $items->count(),
                 'hrs_approved' => $this->convertMinutesToTime($approved_mins),
+                'hrs_rejected' => $this->convertMinutesToTime($rejected_mins),
                 'ot_claim' => $items->values(),
             ];
         })->values();
 
         $global_total_mins = $otClaim->filter(function($item) {
-            return in_array($item->status, ['Approved', 'Partial Approved']);
+            return in_array($item->status, ['Approved', 'Partial Approved', 'Partially Approved']);
         })->sum(function ($item) {
             return $this->convertToMinutes($item->approved_ot_hours ?? $item->ot_hours);
         });
 
         $statistics = [
             'pending_approval_count' => $otClaim->whereIn('status', ['Pending', 'Pending Review'])->count(),
-            'approved_count' => $otClaim->whereIn('status', ['Approved', 'Partial Approved'])->count(),
+            'approved_count' => $otClaim->whereIn('status', ['Approved', 'Partial Approved', 'Partially Approved'])->count(),
             'rejected_count' => $otClaim->where('status', 'Rejected')->count(),
             'ot_total_hours' => $this->convertMinutesToTime($global_total_mins),
         ];

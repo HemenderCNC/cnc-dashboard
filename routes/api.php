@@ -49,6 +49,9 @@ Route::middleware('api')->group(function () {
     Route::post('otp-verify', [AuthController::class, 'otpVerify']);
     Route::post('reset-password', [AuthController::class, 'resetPassword']);
 
+    Route::post('restore-leave-balance', [AuthController::class, 'restoreLeaveBalance']);
+
+
     // Protected routes with auth.token
     Route::middleware('auth.token')->group(function () {
         Route::get('logout', [AuthController::class, 'logout']);
@@ -636,8 +639,6 @@ Route::middleware('api')->group(function () {
             Route::middleware(['permission:delete_leave'])->group(function () {
                 Route::delete('/{id}', [LeaveController::class, 'destroy']);
             });
-
-            Route::post('/change-leave-balance', [LeaveController::class, 'changeLeaveBalance']); // Get summary
 
             // Route::get('/leaves-summary', [LeaveController::class, 'getLeaveSummary']);
             // Route::get('/', [LeaveController::class, 'index']); // Employee views own leaves

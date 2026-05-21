@@ -43,6 +43,7 @@ class User extends Eloquent
         'department_id',
         'designation_id',
         'joining_date',
+        'leave_cycle_start_date',
         'in_time',
         'out_time',
         'adharcard_number',
@@ -55,12 +56,6 @@ class User extends Eloquent
         //Skills
         'skills',
         'original_certificate_no',
-        // Leave Information
-        'privilege_leave',
-        'paternity_leave',
-        'critical_medical_leave',
-        'leave_without_pay',
-
         //Bank details
         'account_holde_name',
         'bank_name',

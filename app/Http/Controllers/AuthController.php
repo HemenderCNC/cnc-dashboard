@@ -8,6 +8,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Role;
+use App\Models\LeaveBalance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -309,4 +310,35 @@ class AuthController extends Controller
             'message' => 'Logout successfully.',
         ]);
     }
+
+    public function restoreLeaveBalance(Request $request)
+    {
+        $currentYear = now()->year;
+        $users = User::all();
+        
+        $recordsProcessed = 0;
+
+        foreach ($users as $user) {
+            LeaveBalance::updateOrCreate(
+                [
+                    'user_id' => (string) $user->_id,
+                    'year' => $currentYear
+                ],
+                [
+                    'privilege_leave' => $user->privilege_leave,
+                    'paternity_leave' => $user->paternity_leave,
+                    'critical_medical_leave' => $user->critical_medical_leave,
+                    'leave_without_pay' => $user->leave_without_pay
+                ]
+            );
+            $recordsProcessed++;
+        }
+
+        return response()->json([
+            'message' => 'Leave balances restored successfully.',
+            'total_users' => $recordsProcessed,
+            'year' => $currentYear
+        ], 200);
+    }
+    
 }

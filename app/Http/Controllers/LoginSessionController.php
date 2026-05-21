@@ -238,13 +238,27 @@ class LoginSessionController extends Controller
         $total_leaves = $query->where('status', 'approved')->sum('leave_duration');
         $days_present = $session_count;
 
+        $total_minutes = $session_logs->sum(function ($log) {
+            $time = $log->total_working_time;
+            if (!$time) return 0;
+            if (strpos($time, ':') !== false) {
+                list($hours, $minutes) = explode(':', $time);
+                return ((int)$hours * 60) + (int)$minutes;
+            }
+            return (int)$time * 60;
+        });
+        $hours = floor($total_minutes / 60);
+        $mins = $total_minutes % 60;
+        $total_weekly_working_hrs = sprintf('%02d:%02d', $hours, $mins);
+
         return [
             'total_days' => $endDate->day,
             'total_working_days' => $adjustedWorkingDays,
             'total_holidays_excluding_weekends' => $holidays,
             'days_present' => $days_present,
             'total_leaves' => $total_leaves,
-            'session_logs' => $session_logs
+            'session_logs' => $session_logs,
+            'total_weekly_working_hrs' => $total_weekly_working_hrs,
         ];
     }
 
