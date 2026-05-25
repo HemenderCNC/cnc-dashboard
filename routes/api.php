@@ -802,6 +802,7 @@ Route::middleware('api')->group(function () {
         Route::post('/OT-claim', [OvertimeController::class, 'otClaimStore']);
         Route::put('/OT-claim/{id}', [OvertimeController::class, 'otClaimEdit']);
         Route::get('/OT-claim-list', [OvertimeController::class, 'otClaimList']);
+        Route::get('/OT-claim-export', [OvertimeController::class, 'exportApprovedOtClaims']);
         Route::delete('/OT-claim/{id}', [OvertimeController::class, 'otClaimDelete']);
         Route::post('/OT-approve', [OvertimeController::class, 'otApprove']);
         Route::post('/OT-reject', [OvertimeController::class, 'otReject']);

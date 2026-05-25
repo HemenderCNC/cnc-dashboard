@@ -110,7 +110,9 @@ class OvertimeController extends Controller
 
         $otClaim = Overtime::find($request->id);
 
-        if (!$request->has('approved_ot_hours')) {
+        if (strtolower($request->status) === 'rejected') {
+            $otClaim->approved_ot_hours = '00:00';
+        } elseif (!$request->has('approved_ot_hours')) {
             $otClaim->approved_ot_hours = $otClaim->ot_hours;
         } else {
             $otClaim->approved_ot_hours = $request->approved_ot_hours;
@@ -189,6 +191,8 @@ class OvertimeController extends Controller
 
         if ($request->user && $request->user->role && in_array($request->user->role->slug, ['employee', 'qa' , 'team-leader'])) {
             $otClaimQuery->where('employee_id', $request->user->id);
+        } elseif ($request->has('employee_id') && $request->employee_id) {
+            $otClaimQuery->where('employee_id', $request->employee_id);
         }
 
         $otClaim = $otClaimQuery->get();
@@ -324,11 +328,7 @@ class OvertimeController extends Controller
     $otClaim->updated_by = $request->user->id;
     $otClaim->updated_at = Carbon::now();
 
-    if (!$request->has('approved_ot_hours')) {
-        $otClaim->approved_ot_hours = $otClaim->ot_hours;
-    } else {
-        $otClaim->approved_ot_hours = $request->approved_ot_hours;
-    }
+    $otClaim->approved_ot_hours = '00:00';
 
     $otClaim->save();
 
@@ -365,7 +365,59 @@ class OvertimeController extends Controller
     return response()->json([
         'message' => 'OT claim approved successfully',
     ], 200);
+    }
 
+    public function exportApprovedOtClaims(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'month' => 'required', // format: 2026-03
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => $validator->errors()->first(),
+            ], 422);
+        }
+
+        $otClaimQuery = Overtime::with(['employee', 'task'])
+            ->where('date', 'like', $request->month . '%')
+            ->where('status', 'Approved');
+
+        // Allow filtering by employee_id if passed
+        if ($request->has('employee_id') && $request->employee_id) {
+            $otClaimQuery->where('employee_id', $request->employee_id);
+        }
+
+        // Apply restrictions for employee / QA / TL roles
+        if ($request->user && $request->user->role && in_array($request->user->role->slug, ['employee', 'qa', 'team-leader'])) {
+            $otClaimQuery->where('employee_id', $request->user->id);
+        }
+
+        $otClaims = $otClaimQuery->orderBy('date', 'asc')->get();
+
+        if ($otClaims->isEmpty()) {
+            return response()->json([
+                'message' => 'No approved OT claims found for the selected month.',
+            ], 404);
+        }
+
+        $formattedData = $otClaims->map(function ($claim) {
+            $employee = $claim->employee;
+            $empCode = $employee ? ($employee->employee_id ?? $employee->official_id ?? '') : '';
+            $empName = $employee ? $employee->name . ' ' . ($employee->last_name ?? '') : 'Unknown';
+            $taskTitle = $claim->task ? $claim->task->title : 'No Task';
+            
+            return [
+                $claim->date,
+                $empName,
+                $claim->approved_ot_hours,
+            ];
+        });
+
+        return response()->json([
+            'message' => 'Approved OT claims',
+            'data' => $formattedData
+        ], 200);
     }
 
     public function preDefiendReviewNotes(Request $request)
