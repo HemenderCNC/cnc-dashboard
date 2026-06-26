@@ -21,15 +21,24 @@ class LeaveController extends Controller
     // Employee can view only their own leave requests
     public function index(Request $request)
     {
-        $query = Leave::with(['employee:id,name,last_name']);
+        $query = Leave::with(['employee:_id,name,last_name,profile_photo']);
 
         // Pagination setup
         $page = (int) $request->input('page', 1);
         $limit = (int) $request->input('limit', -1);
 
-        // If user is an Employee, restrict to their own records
+        // Role-based leave restrictions
         if ($request->user->role->slug === 'employee') {
             $query->where('employee_id', $request->user->id);
+        } else if ($request->user->role->slug === 'team-leader') {
+            $childEmployeeIds = User::where('reporting_manager_id', (string)$request->user->id)->pluck('id')->toArray();
+            $allowedEmployeeIds = array_merge([$request->user->id], $childEmployeeIds);
+
+            if ($request->filled('employee_id') && in_array($request->employee_id, $allowedEmployeeIds)) {
+                $query->where('employee_id', $request->employee_id);
+            } else {
+                $query->whereIn('employee_id', $allowedEmployeeIds);
+            }
         } else if ($request->filled('employee_id')) {
             $query->where('employee_id', $request->employee_id);
         }
@@ -82,11 +91,27 @@ class LeaveController extends Controller
 
     public function getAllLeaves(Request $request)
     {
-        $query = Leave::with(['employee:id,name,last_name']);
+        $query = Leave::with(['employee:_id,name,last_name,profile_photo']);
 
         // Pagination setup
         $page = (int) $request->input('page', 1);
         $limit = (int) $request->input('limit', -1);
+
+        // Role-based leave restrictions
+        if ($request->user->role->slug === 'employee') {
+            $query->where('employee_id', $request->user->id);
+        } else if ($request->user->role->slug === 'team-leader') {
+            $childEmployeeIds = User::where('reporting_manager_id', (string)$request->user->id)->pluck('id')->toArray();
+            $allowedEmployeeIds = array_merge([$request->user->id], $childEmployeeIds);
+
+            if ($request->filled('employee_id') && in_array($request->employee_id, $allowedEmployeeIds)) {
+                $query->where('employee_id', $request->employee_id);
+            } else {
+                $query->whereIn('employee_id', $allowedEmployeeIds);
+            }
+        } else if ($request->filled('employee_id')) {
+            $query->where('employee_id', $request->employee_id);
+        }
 
 
         // Filter by date range (start_date, end_date)
@@ -166,6 +191,7 @@ class LeaveController extends Controller
 
         // 1. Check overlapping leave dates
         $overlap = Leave::where('employee_id', $employeeId)
+            ->whereNotIn('status', ['rejected', 'canceled', 'cancelled'])
             ->where(function ($query) use ($startDate, $endDate) {
                 $query->whereBetween('start_date', [$startDate->toDateString(), $endDate->toDateString()])
                     ->orWhereBetween('end_date', [$startDate->toDateString(), $endDate->toDateString()])
@@ -240,7 +266,13 @@ class LeaveController extends Controller
 
         $medicalDocumentPath = null;
         if ($request->hasFile('medical_document')) {
-            $medicalDocumentPath = $request->file('medical_document')->store('medical_documents', 'public');
+            $file = $request->file('medical_document');
+            $fileName = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+            if (!is_dir(public_path('medical_documents'))) {
+                mkdir(public_path('medical_documents'), 0755, true);
+            }
+            $file->move(public_path('medical_documents'), $fileName);
+            $medicalDocumentPath = asset('medical_documents/' . $fileName);
         }
 
         $leave = Leave::create([
@@ -335,6 +367,7 @@ class LeaveController extends Controller
             'half_day' => 'nullable',
             'half_day_type' => 'nullable',
             'reason' => 'required|string',
+            'medical_document' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
         ]);
 
         if ($validator->fails()) {
@@ -352,6 +385,7 @@ class LeaveController extends Controller
         // 1. Check overlapping leave dates (excluding current leave)
         $overlap = Leave::where('employee_id', $leave->employee_id)
             ->where('id', '!=', $id)
+            ->whereNotIn('status', ['rejected', 'canceled', 'cancelled'])
             ->where(function ($query) use ($startDate, $endDate) {
                 $query->whereBetween('start_date', [$startDate->toDateString(), $endDate->toDateString()])
                     ->orWhereBetween('end_date', [$startDate->toDateString(), $endDate->toDateString()])
@@ -438,6 +472,17 @@ class LeaveController extends Controller
             $leaveBalance->save();
         }
 
+        $medicalDocumentPath = $leave->medical_document;
+        if ($request->hasFile('medical_document')) {
+            $file = $request->file('medical_document');
+            $fileName = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+            if (!is_dir(public_path('medical_documents'))) {
+                mkdir(public_path('medical_documents'), 0755, true);
+            }
+            $file->move(public_path('medical_documents'), $fileName);
+            $medicalDocumentPath = asset('medical_documents/' . $fileName);
+        }
+
         $leave->update([
             'start_date' => $request->start_date,
             'end_date' => $request->end_date,
@@ -445,6 +490,7 @@ class LeaveController extends Controller
             'half_day' => $request->boolean('half_day'),
             'half_day_type' => $request->boolean('half_day') ? $request->half_day_type : null,
             'reason' => $request->reason,
+            'medical_document' => $medicalDocumentPath,
         ]);
 
         return response()->json(['message' => 'Leave request updated successfully', 'leave' => $leave], 200);
@@ -464,10 +510,10 @@ class LeaveController extends Controller
         }
 
         // Check if the leave start date has already passed
-        $today = now()->toDateString();
-        if ($leave->start_date < $today) {
-            return response()->json(['message' => 'You cannot cancel a leave request after the start date has passed'], 403);
-        }
+        // $today = now()->toDateString();
+        // if ($leave->start_date < $today) {
+        //     return response()->json(['message' => 'You cannot cancel a leave request after the start date has passed'], 403);
+        // }
 
         // Restore the respective leave balance based on leave_type
         $user = User::find($leave->employee_id);
@@ -506,6 +552,15 @@ class LeaveController extends Controller
 
         if ($request->user->role->slug === 'employee') {
             $employeeId = $request->user->id;
+        } else if ($request->user->role->slug === 'team-leader') {
+            $childEmployeeIds = User::where('reporting_manager_id', (string)$request->user->id)->pluck('id')->toArray();
+            $allowedEmployeeIds = array_merge([$request->user->id], $childEmployeeIds);
+
+            if ($request->filled('employee_id') && in_array($request->employee_id, $allowedEmployeeIds)) {
+                $employeeId = $request->employee_id;
+            } else {
+                $employeeId = $request->user->id;
+            }
         }
 
         $user = User::find($employeeId);
@@ -680,8 +735,14 @@ class LeaveController extends Controller
 
     public function allUsersPendingLeaves(Request $request)
     {
-        if ($request->user->role->slug !== 'employee') {
-            $leaves = Leave::with(['employee:id,name,last_name'])
+        if ($request->user->role->slug === 'team-leader') {
+            $childEmployeeIds = User::where('reporting_manager_id', (string)$request->user->id)->pluck('id')->toArray();
+            $leaves = Leave::with(['employee:_id,name,last_name'])
+                ->where('status', 'pending')
+                ->whereIn('employee_id', $childEmployeeIds)
+                ->get();
+        } else if ($request->user->role->slug !== 'employee') {
+            $leaves = Leave::with(['employee:_id,name,last_name'])
                 ->where('status', 'pending')
                 ->get();
         } else {
@@ -713,8 +774,19 @@ class LeaveController extends Controller
 
         $query = User::query();
 
-        if ($request->has('employee_id') && !empty($request->employee_id)) {
-            $query->where('_id', $request->employee_id);
+        if ($request->user->role->slug === 'team-leader') {
+            $childEmployeeIds = User::where('reporting_manager_id', (string)$request->user->id)->pluck('id')->toArray();
+            $allowedEmployeeIds = array_merge([$request->user->id], $childEmployeeIds);
+
+            if ($request->has('employee_id') && !empty($request->employee_id) && in_array($request->employee_id, $allowedEmployeeIds)) {
+                $query->where('_id', $request->employee_id);
+            } else {
+                $query->whereIn('_id', $allowedEmployeeIds);
+            }
+        } else {
+            if ($request->has('employee_id') && !empty($request->employee_id)) {
+                $query->where('_id', $request->employee_id);
+            }
         }
 
         $users = $query->paginate((int)$limit, ['*'], 'page', (int)$page);
@@ -729,10 +801,10 @@ class LeaveController extends Controller
             $leaveBalances[] = [
                 'user_id' => $user->id,
                 'employee_name' => trim($user->name . ' ' . $user->last_name),
-                'privilege_leave' => (float) $balance->privilege_leave ?? 0,
-                'paternity_leave' => (float) $balance->paternity_leave ?? 0,
-                'critical_medical_leave' => (float) $balance->critical_medical_leave ?? 0,
-                'leave_without_pay' => (float) $balance->leave_without_pay ?? 0
+                'privilege_leave' => $balance ? (float) ($balance->privilege_leave ?? 0) : 0,
+                'paternity_leave' => $balance ? (float) ($balance->paternity_leave ?? 0) : 0,
+                'critical_medical_leave' => $balance ? (float) ($balance->critical_medical_leave ?? 0) : 0,
+                'leave_without_pay' => $balance ? (float) ($balance->leave_without_pay ?? 0) : 0
             ];
         }
 
@@ -750,6 +822,18 @@ class LeaveController extends Controller
 
     public function UpdateuserLeaveBalance(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'user_id' => 'required',
+            'privilege_leave' => 'nullable|numeric|min:0',
+            'paternity_leave' => 'nullable|numeric|min:0',
+            'critical_medical_leave' => 'nullable|numeric|min:0',
+            'leave_without_pay' => 'nullable|numeric|min:0',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['message' => $validator->errors()->first()], 400);
+        }
+
         $user = User::find($request->user_id);
 
         if (!$user) {

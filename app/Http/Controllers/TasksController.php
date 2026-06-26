@@ -1774,6 +1774,7 @@ class TasksController extends Controller
             })
             ->whereIn('status_id', $taskStatusId)
             ->select('id', 'title', 'status_id', 'project_id', 'task_type_id', 'estimated_hours', 'due_date')
+            ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($task) {
                 return [

@@ -986,35 +986,39 @@ class UserController extends Controller
 
 
     public function getAllUsersNotAdmins()
-    {
-        // Get administrator role id
-        $adminRole = Role::where('slug', 'administrator')->first();
+{
+    $adminRole = Role::where('slug', 'administrator')
+        ->select('_id')
+        ->first();
 
-        $users = User::where('role_id', '!=', (string) $adminRole->_id)
-            ->select(
-                '_id',
-                'name',
-                'last_name',
-                'email',
-                'contact_number',
-                'profile_photo',
-                'employee_id',
-                'role_id'
-            )
-            ->get();
+    $users = User::raw(function($collection) use ($adminRole){
 
-        if ($users->isEmpty()) {
-            return response()->json([
-                'message' => 'No employees found',
-            ], 404);
-        }
+        return $collection->find(
+            [
+                'role_id'=>[
+                    '$ne'=>(string)$adminRole->_id
+                ]
+            ],
+            [
+                'projection'=>[
+                    '_id'=>1,
+                    'name'=>1,
+                    'last_name'=>1,
+                    'email'=>1,
+                    'contact_number'=>1,
+                    'profile_photo'=>1,
+                    'employee_id'=>1
+                ],
+            ]
+        );
 
-        return response()->json([
-            'message' => 'Employees retrieved successfully',
-            'data' => $users,
-        ], 200);
-    }
+    });
 
+    return response()->json([
+        'message'=>'Employees retrieved successfully',
+        'data'=>iterator_to_array($users)
+    ]);
+}
     public function getProjectManagers()
     {
 
