@@ -91,72 +91,15 @@ class LeaveController extends Controller
 
     public function getAllLeaves(Request $request)
     {
-        $query = Leave::with(['employee:_id,name,last_name,profile_photo']);
-
-        // Pagination setup
-        $page = (int) $request->input('page', 1);
-        $limit = (int) $request->input('limit', -1);
-
-        // Role-based leave restrictions
-        if ($request->user->role->slug === 'employee') {
-            $query->where('employee_id', $request->user->id);
-        } else if ($request->user->role->slug === 'team-leader') {
-            $childEmployeeIds = User::where('reporting_manager_id', (string)$request->user->id)->pluck('id')->toArray();
-            $allowedEmployeeIds = array_merge([$request->user->id], $childEmployeeIds);
-
-            if ($request->filled('employee_id') && in_array($request->employee_id, $allowedEmployeeIds)) {
-                $query->where('employee_id', $request->employee_id);
-            } else {
-                $query->whereIn('employee_id', $allowedEmployeeIds);
-            }
-        } else if ($request->filled('employee_id')) {
-            $query->where('employee_id', $request->employee_id);
-        }
-
-
-        // Filter by date range (start_date, end_date)
-        if ($request->filled('start_date') && $request->filled('end_date')) {
-            $query->whereBetween('start_date', [$request->start_date, $request->end_date]);
-        }
-
-        // Filter by status (Supports multiple statuses separated by comma)
-        if ($request->filled('status')) {
-            $statuses = explode(',', $request->status);
-
-            $query->where(function ($q) use ($statuses) {
-                foreach ($statuses as $status) {
-                    $q->orWhere('status', 'regex', new \MongoDB\BSON\Regex("^$status$", 'i'));
-                }
-            });
-        }
-
-        $query->orderBy('created_at', 'desc');
-
-        if ($limit == -1) {
-            $leaves = $query->get();
-
-            return response()->json([
-                'data' => $leaves,
-                'meta' => [
-                    'page' => 1,
-                    'limit' => $limit,
-                    'total' => $leaves->count(),
-                    'total_pages' => 1,
-                ]
-            ], 200);
-        }
-
-        // Else use pagination
-        $leaves = $query->paginate($limit, ['*'], 'page', $page);
+        $today = Carbon::today()->toDateString();
+        $leaves = Leave::with(['employee:_id,name,last_name,profile_photo'])
+            ->where('status', 'approved')
+            ->where('start_date', '>=', $today)
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         return response()->json([
-            'data' => $leaves->items(),
-            'meta' => [
-                'page' => $leaves->currentPage(),
-                'limit' => $leaves->perPage(),
-                'total' => $leaves->total(),
-                'total_pages' => $leaves->lastPage(),
-            ]
+            'data' => $leaves,
         ], 200);
 
     }
@@ -268,10 +211,10 @@ class LeaveController extends Controller
         if ($request->hasFile('medical_document')) {
             $file = $request->file('medical_document');
             $fileName = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-            if (!is_dir(public_path('medical_documents'))) {
-                mkdir(public_path('medical_documents'), 0755, true);
+            if (!is_dir(base_path('medical_documents'))) {
+                mkdir(base_path('medical_documents'), 0755, true);
             }
-            $file->move(public_path('medical_documents'), $fileName);
+            $file->move(base_path('medical_documents'), $fileName);
             $medicalDocumentPath = asset('medical_documents/' . $fileName);
         }
 
@@ -303,15 +246,13 @@ class LeaveController extends Controller
             $leaveBalance->save();
         }
 
-        if (!in_array($request->user->email, ['vishva.cnc26@gmail.com', 'developeruser@gmail.com', 'ravindrapawarcnc@gmail.com'])) {
+        
             try {
                 $reportingManager = $request->user->reportingManager;
                 $users = $request->user->email;
 
                 $ccList = [
-                    'nagender@codeandcore.com',
-                    'saurabhsoni.cnc@gmail.com',
-                    'nikul@codeandcore.com'
+                    'patelparth5133@gmail.com'
                 ];
 
                 if ($reportingManager && !empty($reportingManager->email)) {
@@ -324,7 +265,7 @@ class LeaveController extends Controller
 
                 $ccList = array_unique($ccList);
 
-                Mail::to('hr@codeandcore.com')
+                Mail::to('patelparth56653@gmail.com')
                     ->cc($ccList)
                     ->send(new LeaveRequestedMail($leave, $request->user));
                     
@@ -335,7 +276,6 @@ class LeaveController extends Controller
                     'error' => $e->getMessage()
                 ], 500);
             }
-        }
 
         return response()->json($leave, 201);
     }
@@ -476,10 +416,10 @@ class LeaveController extends Controller
         if ($request->hasFile('medical_document')) {
             $file = $request->file('medical_document');
             $fileName = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-            if (!is_dir(public_path('medical_documents'))) {
-                mkdir(public_path('medical_documents'), 0755, true);
+            if (!is_dir(base_path('medical_documents'))) {
+                mkdir(base_path('medical_documents'), 0755, true);
             }
-            $file->move(public_path('medical_documents'), $fileName);
+            $file->move(base_path('medical_documents'), $fileName);
             $medicalDocumentPath = asset('medical_documents/' . $fileName);
         }
 
@@ -762,8 +702,82 @@ class LeaveController extends Controller
             return response()->json(['message' => 'Leave not found'], 404);
         }
 
+        // Restore the respective leave balance if the status is pending or approved
+        if (in_array(strtolower($Leave->status), ['pending', 'approved'])) {
+            $leaveYear = $Leave->year ?? date('Y');
+            $leaveBalance = LeaveBalance::where('user_id', (string) $Leave->employee_id)
+                ->where('year', (int) $leaveYear)
+                ->first();
+            if ($leaveBalance && $Leave->leave_type) {
+                $leaveDuration = (float)$Leave->leave_duration;
+                if ($Leave->leave_type === 'Privilege Leave (PL)') {
+                    $leaveBalance->privilege_leave = (float)$leaveBalance->privilege_leave + $leaveDuration;
+                } elseif ($Leave->leave_type === 'Paternity Leave') {
+                    $leaveBalance->paternity_leave = (float)$leaveBalance->paternity_leave + $leaveDuration;
+                } elseif ($Leave->leave_type === 'Critical Medical Leave (CML)') {
+                    $leaveBalance->critical_medical_leave = (float)$leaveBalance->critical_medical_leave + $leaveDuration;
+                } elseif ($Leave->leave_type === 'Leave Without Pay') {
+                    $leaveBalance->leave_without_pay = (float)$leaveBalance->leave_without_pay - $leaveDuration;
+                }
+                $leaveBalance->save();
+            }
+        }
+
         $Leave->delete();
         return response()->json(['message' => 'Leave deleted successfully'], 200);
+    }
+
+    public function bulkDelete(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'ids' => 'required|array',
+            'ids.*' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $ids = $request->ids;
+        $leaves = Leave::whereIn('id', $ids)->get();
+
+        if ($leaves->isEmpty()) {
+            return response()->json(['message' => 'No leaves found to delete'], 404);
+        }
+
+        $deletedCount = 0;
+        foreach ($leaves as $leave) {
+            // Restore the respective leave balance if the status is pending or approved
+            if (in_array(strtolower($leave->status), ['pending', 'approved'])) {
+                $leaveYear = $leave->year ?? date('Y');
+                $leaveBalance = LeaveBalance::where('user_id', (string) $leave->employee_id)
+                    ->where('year', (int) $leaveYear)
+                    ->first();
+                if ($leaveBalance && $leave->leave_type) {
+                    $leaveDuration = (float)$leave->leave_duration;
+                    if ($leave->leave_type === 'Privilege Leave (PL)') {
+                        $leaveBalance->privilege_leave = (float)$leaveBalance->privilege_leave + $leaveDuration;
+                    } elseif ($leave->leave_type === 'Paternity Leave') {
+                        $leaveBalance->paternity_leave = (float)$leaveBalance->paternity_leave + $leaveDuration;
+                    } elseif ($leave->leave_type === 'Critical Medical Leave (CML)') {
+                        $leaveBalance->critical_medical_leave = (float)$leaveBalance->critical_medical_leave + $leaveDuration;
+                    } elseif ($leave->leave_type === 'Leave Without Pay') {
+                        $leaveBalance->leave_without_pay = (float)$leaveBalance->leave_without_pay - $leaveDuration;
+                    }
+                    $leaveBalance->save();
+                }
+            }
+            $leave->delete();
+            $deletedCount++;
+        }
+
+        return response()->json([
+            'message' => 'Leaves deleted successfully',
+            'deleted_count' => $deletedCount
+        ], 200);
     }
 
     public function getLeaveBalance(Request $request)

@@ -108,7 +108,7 @@
                                         <tr>
                                             <td align="center">
                                                 <p style="margin: 10px 0; font-size: 14px; color: #2C2C2C;">422,423,410 - S.V. Square commercial building, New Ranip, Ahmedabad, Gujrat, India.</p>
-                                                <p style="margin: 0; font-size: 14px; color: #2C2C2C;">&copy; 2025 Code and core Tech LLP</p>
+                                                <p style="margin: 0; font-size: 14px; color: #2C2C2C;">&copy; {{ date('Y') }} Code and core Tech LLP</p>
                                             </td>
                                         </tr>
                                         <tr><td height="25"></td></tr>

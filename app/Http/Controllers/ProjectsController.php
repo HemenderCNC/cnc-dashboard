@@ -312,7 +312,8 @@ class ProjectsController extends Controller
                     'languages' => 1,
                     'other_details' => 1,
                     'spent_hours' => 1,
-                    'milestone_stats' => 1
+                    'milestone_stats' => 1,
+                    'is_ongoing' => 1
                 ]]
             ];
             if ($limit !== -1) {
@@ -571,6 +572,8 @@ class ProjectsController extends Controller
             $project->attachment = $attachment;
         }
 
+        $oldAssignees = array_map('strval', (array) ($project->assignee ?? []));
+
         $project->update(
             [
                 'project_name' => $request->project_name,
@@ -593,6 +596,24 @@ class ProjectsController extends Controller
                 'is_ongoing' => $request->is_ongoing,
             ]
         );
+
+        // Send email to newly added assignees
+        $newAssignees = array_map('strval', (array) ($request->assignee ?? []));
+        $addedAssignees = array_diff($newAssignees, $oldAssignees);
+
+        if (!empty($addedAssignees)) {
+            $assignees = User::whereIn('_id', $addedAssignees)->get();
+            $projectManagers = User::whereIn('_id', (array) $request->project_manager_id)->get();
+            $managerNames = $projectManagers->pluck('name')->implode(', ');
+
+            foreach ($assignees as $assignee) {
+                Mail::to($assignee->email)->send(new ProjectAssignedMail(
+                    $project,
+                    $managerNames ?: 'N/A'
+                ));
+            }
+        }
+
         return response()->json($project, 200);
     }
 

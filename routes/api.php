@@ -29,7 +29,7 @@ use App\Http\Controllers\TasksController;
 use App\Http\Controllers\TimesheetController;
 use App\Http\Controllers\GeneralSettingsController;
 use App\Http\Controllers\LoginSessionController;
-use App\Http\Controllers\CountriesController;
+use App\Http\Controllers\CountriesController; 
 use App\Http\Controllers\IndustryTypesController;
 use App\Http\Controllers\ProjectFilesController;
 use App\Http\Controllers\ActivityLogController;
@@ -638,6 +638,7 @@ Route::middleware('api')->group(function () {
             });
             Route::middleware(['permission:delete_leave'])->group(function () {
                 Route::delete('/{id}', [LeaveController::class, 'destroy']);
+                Route::post('/bulk-delete', [LeaveController::class, 'bulkDelete']);
             });
 
             // Route::get('/leaves-summary', [LeaveController::class, 'getLeaveSummary']);

@@ -65,7 +65,7 @@
                                                                 <p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">:</p>
                                                             </td>
                                                             <td width="63%" align="left" valign="middle" style="border-bottom: 1px solid #1A0726; padding: 7px 0;">
-                                                                <p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">{{ \Carbon\Carbon::parse($leave->start_date)->format('d-M-Y') }} to {{ \Carbon\Carbon::parse($leave->end_date)->format('d-M-Y') }} ({{ $leave->leave_duration }} day(s))</p>
+                                                                <p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">{{ \Carbon\Carbon::parse($leave->start_date)->format('d-M-Y') }} to {{ \Carbon\Carbon::parse($leave->end_date)->format('d-M-Y') }} ({{ $leave->leave_duration }} day(s)@if($leave->half_day && $leave->half_day_type) - {{ ucwords(str_replace('_', ' ', $leave->half_day_type)) }}@endif)</p>
                                                             </td>
                                                         </tr>
                                                         <!-- Action By -->
@@ -143,7 +143,7 @@
                                         <tr>
                                             <td align="center">
                                                 <p style="margin: 10px 0; font-size: 14px; color: #2C2C2C;">422,423,410 - S.V. Square commercial building, New Ranip, Ahmedabad, Gujrat, India.</p>
-                                                <p style="margin: 0; font-size: 14px; color: #2C2C2C;">&copy; 2025 Code and core Tech LLP</p>
+                                                <p style="margin: 0; font-size: 14px; color: #2C2C2C;">&copy; {{ date('Y') }} Code and core Tech LLP</p>
                                             </td>
                                         </tr>
                                         <tr><td height="25"></td></tr>

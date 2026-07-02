@@ -139,23 +139,34 @@ class TasksController extends Controller
         if ($request->has('assignee_id')) {
             $matchStage->assignees = ['$in' => array_map('strval', (array) $request->assignee_id)];
         }
-        if ($request->has('start_date') && $request->has('end_date')) {
-            $startDateStr = Carbon::parse($request->start_date)->startOfDay()->toIso8601String();
-            $endDateStr = Carbon::parse($request->end_date)->endOfDay()->toIso8601String();
+        $startDateStr = $request->filled('start_date') ? Carbon::parse($request->start_date)->startOfDay()->toIso8601String() : null;
+        $endDateStr = $request->filled('end_date') ? Carbon::parse($request->end_date)->endOfDay()->toIso8601String() : null;
 
-            $startDateMongo = new \MongoDB\BSON\UTCDateTime(Carbon::parse($request->start_date)->startOfDay());
-            $endDateMongo = new \MongoDB\BSON\UTCDateTime(Carbon::parse($request->end_date)->endOfDay());
+        $startDateMongo = $request->filled('start_date') ? new \MongoDB\BSON\UTCDateTime(Carbon::parse($request->start_date)->startOfDay()) : null;
+        $endDateMongo = $request->filled('end_date') ? new \MongoDB\BSON\UTCDateTime(Carbon::parse($request->end_date)->endOfDay()) : null;
 
+        if ($startDateStr || $endDateStr) {
             if (!isset($matchStage->{'$and'})) {
                 $matchStage->{'$and'} = [];
             }
 
-            $matchStage->{'$and'}[] = [
-                '$or' => [
-                    ['start_date' => ['$gte' => $startDateStr, '$lte' => $endDateStr]],
-                    ['start_date' => ['$gte' => $startDateMongo, '$lte' => $endDateMongo]]
-                ]
-            ];
+            if ($startDateStr) {
+                $matchStage->{'$and'}[] = [
+                    '$or' => [
+                        ['start_date' => ['$type' => 'string', '$gte' => $startDateStr]],
+                        ['start_date' => ['$type' => 'date', '$gte' => $startDateMongo]]
+                    ]
+                ];
+            }
+
+            if ($endDateStr) {
+                $matchStage->{'$and'}[] = [
+                    '$or' => [
+                        ['due_date' => ['$type' => 'string', '$lte' => $endDateStr]],
+                        ['due_date' => ['$type' => 'date', '$lte' => $endDateMongo]]
+                    ]
+                ];
+            }
         }
 
         // Exclude "Complete" tasks (case-insensitive check)
@@ -172,7 +183,7 @@ class TasksController extends Controller
         if (empty((array) $matchStage)) {
             $matchStage = (object)[]; // Empty object for MongoDB
         }
-        $sortStage = ['$sort' => ['status_priority' => 1, 'created_at' => -1]]; // Default sorting by created_at (Descending)
+        $sortStage = ['$sort' => ['created_at' => -1]]; // Default sorting by created_at (Descending)
         $matchDueDate = null;
         if ($request->has('sort') && $request->sort === 'due_date') {
             $todayTimestampStr = Carbon::today()->toIso8601String();
@@ -1065,6 +1076,13 @@ class TasksController extends Controller
             $task->attachment = $attachment;
         }
 
+        if ($request->has('attachment') && empty($request->attachment)) {
+            if ($task->attachment) {
+                $service->delete($task->attachment['file_path'], $task->attachment['media_id']);
+            }
+            $task->attachment = '';
+        }
+
         // Check and update project assignee list
         $project = Project::find($request->project_id);
 
@@ -1253,6 +1271,22 @@ class TasksController extends Controller
         $task = Tasks::find($id);
         if (!$task) {
             return response()->json(['message' => 'Task not found'], 404);
+        }
+
+        $taskIds = [$id];
+        $childTaskIds = Tasks::where('parent_task_id', $id)->pluck('_id')->toArray();
+        if (!empty($childTaskIds)) {
+            $taskIds = array_merge($taskIds, $childTaskIds);
+        }
+
+        $activeTimesheetExists = Timesheet::whereIn('task_id', $taskIds)
+            ->where('status', 'running')
+            ->exists();
+
+        if ($activeTimesheetExists) {
+            return response()->json([
+                'message' => 'Cannot delete a task that is currently in progress. Please pause the task first.'
+            ], 422);
         }
 
         $task->delete();

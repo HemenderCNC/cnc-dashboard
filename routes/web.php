@@ -25,3 +25,28 @@ Route::middleware(['auth'])->group(function () {
     Route::get('dashboard', [AuthController::class, 'dashboard'])->name('dashboard');
     Route::post('logout', [AuthController::class, 'logout'])->name('logout');
 });
+
+// Serve medical documents from root directory
+Route::get('medical_documents/{filename}', function ($filename) {
+    $path = base_path('medical_documents/' . $filename);
+    if (!file_exists($path)) {
+        abort(404);
+    }
+    return response()->file($path);
+});
+
+Route::get('/optimize-clear', function () {
+    try {
+        \Illuminate\Support\Facades\Artisan::call('optimize:clear');
+        return response()->json([
+            'success' => true,
+            'message' => 'php artisan optimize:clear executed successfully.',
+            'output' => \Illuminate\Support\Facades\Artisan::output()
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error: ' . $e->getMessage()
+        ], 500);
+    }
+});
