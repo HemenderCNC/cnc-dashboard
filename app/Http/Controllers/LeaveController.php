@@ -116,7 +116,7 @@ class LeaveController extends Controller
             'end_date' => 'required|date|after_or_equal:start_date',
             'half_day' => 'nullable',
             'half_day_type' => 'nullable',
-            'reason' => 'required|string',
+            'reason' => 'required|string|max:100',
             'leave_type' => 'nullable|string',
             'medical_document' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
         ]);
@@ -246,13 +246,14 @@ class LeaveController extends Controller
             $leaveBalance->save();
         }
 
-        
+         if (!in_array($request->user->email, ['vishva.cnc26@gmail.com', 'developeruser@gmail.com', 'ravindrapawarcnc@gmail.com'])) {
             try {
                 $reportingManager = $request->user->reportingManager;
                 $users = $request->user->email;
 
-                $ccList = [
-                    'patelparth5133@gmail.com'
+                $ccList = [ 'nagender@codeandcore.com',
+                    'saurabhsoni.cnc@gmail.com',
+                    'nikul@codeandcore.com'
                 ];
 
                 if ($reportingManager && !empty($reportingManager->email)) {
@@ -265,7 +266,7 @@ class LeaveController extends Controller
 
                 $ccList = array_unique($ccList);
 
-                Mail::to('patelparth56653@gmail.com')
+                Mail::to('hr@codeandcore.com')
                     ->cc($ccList)
                     ->send(new LeaveRequestedMail($leave, $request->user));
                     
@@ -276,6 +277,7 @@ class LeaveController extends Controller
                     'error' => $e->getMessage()
                 ], 500);
             }
+        }
 
         return response()->json($leave, 201);
     }
@@ -306,7 +308,7 @@ class LeaveController extends Controller
             'end_date' => 'required|date|after_or_equal:start_date',
             'half_day' => 'nullable',
             'half_day_type' => 'nullable',
-            'reason' => 'required|string',
+            'reason' => 'required|string|max:100',
             'medical_document' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
         ]);
 

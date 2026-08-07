@@ -518,10 +518,10 @@ class ProjectsController extends Controller
         if (!$project) {
             return response()->json(['message' => 'Project not found'], 404);
         }
-        $project->assignees_data = $project->assignees_data;
+        $project->assignees_data = $project->assignees_data ? $project->assignees_data->makeHidden(['role_with_permissions', 'skills_data', 'working', 'total_work_hours', 'total_projects', 'today_tasks', 'role']) : [];
         $project->languages_data = $project->languages_data;
         $project->platforms_data = $project->platforms_data;
-        $project->project_managers = $project->project_managers;
+        $project->project_managers = $project->project_managers ? $project->project_managers->makeHidden(['role_with_permissions', 'skills_data', 'working', 'total_work_hours', 'total_projects', 'today_tasks', 'role']) : [];
 
         return response()->json($project, 200);
     }
