@@ -40,6 +40,7 @@ use App\Http\Controllers\MovieTicketController;
 use App\Http\Controllers\ChartController;
 use App\Http\Controllers\BugsController;
 use App\Http\Controllers\OvertimeController;
+use App\Http\Controllers\EmployeeStatusBoardController;
 
 Route::middleware('api')->group(function () {
     // Public routes
@@ -798,6 +799,7 @@ Route::middleware('api')->group(function () {
 
         //Activity Logs listing
         Route::get('/activity-logs', [ActivityLogController::class, 'getActivityLogs']);
+        Route::get('/employee-status-board', [EmployeeStatusBoardController::class, 'getStatusBoard'])->middleware('permission:view_emp_status_board');
         Route::get('getgeneralsettings/protected', [GeneralSettingsController::class, 'index']); // Update settings
 
         Route::post('/OT-claim', [OvertimeController::class, 'otClaimStore']);

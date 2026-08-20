@@ -548,109 +548,81 @@ class UserController extends Controller
         $users = User::raw(function ($collection) use ($filters, $limit, $skip) {
             $pipeline = [
                 ['$match' => count($filters) > 0 ? $filters : (object)[]], // Ensure valid match object
-
-                // Lookup Department
-                [
-                    '$lookup' => [
-                        'from' => 'departments',
-                        'let' => ['deptId' => ['$toObjectId' => '$department_id']],
-                        'pipeline' => [
-                            ['$match' => [
-                                '$expr' => [
-                                    '$eq' => ['$_id', '$$deptId']
-                                ]
-                            ]]
-                        ],
-                        'as' => 'department'
-                    ]
-                ],
-                ['$unwind' => ['path' => '$department', 'preserveNullAndEmptyArrays' => true]],
-
-                [
-                    '$lookup' => [
-                        'from' => 'employee_types',
-                        'let' => ['deptId' => ['$toObjectId' => '$employment_type_id']],
-                        'pipeline' => [
-                            ['$match' => [
-                                '$expr' => [
-                                    '$eq' => ['$_id', '$$deptId']
-                                ]
-                            ]]
-                        ],
-                        'as' => 'employee_type'
-                    ]
-                ],
-                ['$unwind' => ['path' => '$employee_type', 'preserveNullAndEmptyArrays' => true]],
-
-                [
-                    '$lookup' => [
-                        'from' => 'designations',
-                        'let' => ['deptId' => ['$toObjectId' => '$designation_id']],
-                        'pipeline' => [
-                            ['$match' => [
-                                '$expr' => [
-                                    '$eq' => ['$_id', '$$deptId']
-                                ]
-                            ]]
-                        ],
-                        'as' => 'designation'
-                    ]
-                ],
-                ['$unwind' => ['path' => '$designation', 'preserveNullAndEmptyArrays' => true]],
-
-                // Lookup Role
-                // ['$lookup' => [
-                //     'from' => 'roles',
-                //     'localField' => 'role_id',
-                //     'foreignField' => '_id',
-                //     'as' => 'role'
-                // ]],
-                // ['$unwind' => ['path' => '$role', 'preserveNullAndEmptyArrays' => true]],
-
-                // Lookup Office
-                // ['$lookup' => [
-                //     'from' => 'work_locations',
-                //     'localField' => 'work_location_id',
-                //     'foreignField' => '_id',
-                //     'as' => 'work_location'
-                // ]],
-                // ['$unwind' => ['path' => '$work_location', 'preserveNullAndEmptyArrays' => true]],
-
-                // Lookup Employee Status (Fix ObjectId issue)
-                // ['$lookup' => [
-                //     'from' => 'employee_statuses',
-                //     'let' => ['statusId' => ['$toObjectId' => '$employee_status_id']],
-                //     'pipeline' => [
-                //         ['$match' => ['$expr' => ['$eq' => ['$_id', '$$statusId']]]]
-                //     ],
-                //     'as' => 'employee_status'
-                // ]],
-                // ['$unwind' => ['path' => '$employee_status', 'preserveNullAndEmptyArrays' => true]],
                 ['$sort' => ['created_at' => -1]],
-
-                // Project Only Required Fields
-                ['$project' => [
-                    'name' => 1,
-                    '_id' => 1,
-                    'last_name' => 1,
-                    'birthdate' => 1,
-                    'personal_email' => 1,
-                    'username' => 1,
-                    'employee_type' => 1,
-                    'designation' => 1,
-                    'profile_photo' => 1,
-                    'employee_id' => 1,
-                    'email' => 1,
-                    'joining_date' => 1,
-                    'department' => 1,
-                    'work_location' => 1,
-                    'employee_status' => 1,
-                ]]
             ];
+
             if ($limit !== -1) {
                 $pipeline[] = ['$skip' => $skip];
                 $pipeline[] = ['$limit' => $limit];
             }
+
+            // Defer lookup stages to run only on the paginated/subset of documents
+            $pipeline[] = [
+                '$lookup' => [
+                    'from' => 'departments',
+                    'let' => ['deptId' => ['$toObjectId' => '$department_id']],
+                    'pipeline' => [
+                        ['$match' => [
+                            '$expr' => [
+                                '$eq' => ['$_id', '$$deptId']
+                            ]
+                        ]]
+                    ],
+                    'as' => 'department'
+                ]
+            ];
+            $pipeline[] = ['$unwind' => ['path' => '$department', 'preserveNullAndEmptyArrays' => true]];
+
+            $pipeline[] = [
+                '$lookup' => [
+                    'from' => 'employee_types',
+                    'let' => ['deptId' => ['$toObjectId' => '$employment_type_id']],
+                    'pipeline' => [
+                        ['$match' => [
+                            '$expr' => [
+                                '$eq' => ['$_id', '$$deptId']
+                            ]
+                        ]]
+                    ],
+                    'as' => 'employee_type'
+                ]
+            ];
+            $pipeline[] = ['$unwind' => ['path' => '$employee_type', 'preserveNullAndEmptyArrays' => true]];
+
+            $pipeline[] = [
+                '$lookup' => [
+                    'from' => 'designations',
+                    'let' => ['deptId' => ['$toObjectId' => '$designation_id']],
+                    'pipeline' => [
+                        ['$match' => [
+                            '$expr' => [
+                                '$eq' => ['$_id', '$$deptId']
+                            ]
+                        ]]
+                    ],
+                    'as' => 'designation'
+                ]
+            ];
+            $pipeline[] = ['$unwind' => ['path' => '$designation', 'preserveNullAndEmptyArrays' => true]];
+
+            // Project Only Required Fields
+            $pipeline[] = ['$project' => [
+                'name' => 1,
+                '_id' => 1,
+                'last_name' => 1,
+                'birthdate' => 1,
+                'personal_email' => 1,
+                'username' => 1,
+                'employee_type' => 1,
+                'designation' => 1,
+                'profile_photo' => 1,
+                'employee_id' => 1,
+                'email' => 1,
+                'joining_date' => 1,
+                'department' => 1,
+                'work_location' => 1,
+                'employee_status' => 1,
+            ]];
 
             return $collection->aggregate($pipeline);
         });

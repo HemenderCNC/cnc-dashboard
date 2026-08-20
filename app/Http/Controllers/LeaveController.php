@@ -251,9 +251,14 @@ class LeaveController extends Controller
                 $reportingManager = $request->user->reportingManager;
                 $users = $request->user->email;
 
-                $ccList = [ 'nagender@codeandcore.com',
-                    'saurabhsoni.cnc@gmail.com',
+                $toList = [
+                    'hr@codeandcore.com',
+                    'nagender@codeandcore.com',
                     'nikul@codeandcore.com'
+                ];
+
+                $ccList = [
+                    'saurabhsoni.cnc@gmail.com'
                 ];
 
                 if ($reportingManager && !empty($reportingManager->email)) {
@@ -264,11 +269,13 @@ class LeaveController extends Controller
                     $ccList[] = $users;
                 }
 
-                $ccList = array_unique($ccList);
+                $ccList = array_values(array_unique(array_diff($ccList, $toList)));
 
-                Mail::to('hr@codeandcore.com')
-                    ->cc($ccList)
-                    ->send(new LeaveRequestedMail($leave, $request->user));
+                $mail = Mail::to($toList);
+                if (!empty($ccList)) {
+                    $mail->cc($ccList);
+                }
+                $mail->send(new LeaveRequestedMail($leave, $request->user));
                     
             } catch (\Exception $e) {
 

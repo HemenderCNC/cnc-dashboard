@@ -7,6 +7,10 @@ use App\Models\MovieTicket;
 use App\Models\Media;
 use Illuminate\Support\Facades\Validator;
 use App\Services\FileUploadService;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\MovieTicketAppliedMail;
+use App\Models\User;
 
 class MovieTicketController extends Controller
 {
@@ -23,11 +27,28 @@ class MovieTicketController extends Controller
         $validator = Validator::make($request->all(), [
             'image' => 'required|image|mimes:jpeg,png,jpg|max:2048',
             'date' => 'required|date|before_or_equal:today',
-            'amount' => 'required|numeric|min:0',
+            'amount' => 'required|numeric|gt:0|max:400',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        // Validate only one ticket per month per user
+        $ticketDate = Carbon::parse($request->date);
+        $startDate = Carbon::createFromDate($ticketDate->year, $ticketDate->month, 1)->startOfMonth()->toDateString();
+        $endDate = Carbon::createFromDate($ticketDate->year, $ticketDate->month, 1)->endOfMonth()->toDateString();
+
+        $exists = MovieTicket::where('created_by', $request->user->id)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->exists();
+
+        if ($exists) {
+            return response()->json([
+                'errors' => [
+                    'date' => ['You have already submitted a movie ticket for this month. Only one ticket is allowed per month.']
+                ]
+            ], 422);
         }
 
         // Handle File Upload
@@ -43,6 +64,17 @@ class MovieTicketController extends Controller
             'created_by' => $request->user->id,
         ]);
 
+        $recipients = ['hr@codeandcore.com', 'saurabhsoni.cnc@gmail.com'];
+        $recipients = array_unique(array_filter($recipients));
+        
+        if (!empty($recipients)) {
+            try {
+                Mail::to($recipients)->send(new MovieTicketAppliedMail($movieTicket, $request->user));
+            } catch (\Exception $e) {
+                \Log::error('Movie Ticket email failed: ' . $e->getMessage());
+            }
+        }
+
         return response()->json(['message' => 'Movie ticket added successfully', 'ticket' => $movieTicket], 201);
     }
 
@@ -51,13 +83,35 @@ class MovieTicketController extends Controller
     {
         $page = (int) $request->input('page', 1);
         $limit = (int) $request->input('limit', -1);
+        
+        $yearInput = $request->input('year');
+        $monthInput = $request->input('month');
+
+        $query = MovieTicket::query();
+
+        if ($yearInput !== 'all' && $monthInput !== 'all') {
+            $year = $yearInput ? (int) $yearInput : Carbon::now()->year;
+            $month = $monthInput ? (int) $monthInput : Carbon::now()->month;
+            $startDate = Carbon::createFromDate($year, $month, 1)->startOfMonth()->toDateString();
+            $endDate = Carbon::createFromDate($year, $month, 1)->endOfMonth()->toDateString();
+            $query->whereBetween('date', [$startDate, $endDate]);
+        } elseif ($yearInput !== 'all' && $monthInput === 'all') {
+            $year = (int) $yearInput;
+            $startDate = Carbon::createFromDate($year, 1, 1)->startOfYear()->toDateString();
+            $endDate = Carbon::createFromDate($year, 12, 31)->endOfYear()->toDateString();
+            $query->whereBetween('date', [$startDate, $endDate]);
+        } elseif ($yearInput === 'all' && $monthInput !== 'all') {
+            $month = $monthInput ? (int) $monthInput : Carbon::now()->month;
+            $paddedMonth = str_pad($month, 2, '0', STR_PAD_LEFT);
+            $query->where('date', 'like', "%-$paddedMonth-%");
+        }
+
+        if ($request->user->role->slug !== 'administrator') {
+            $query->where('created_by', $request->user->id);
+        }
+
         if ($limit == -1) {
-            if ($request->user->role->slug === 'administrator') {
-                $tickets = MovieTicket::with('creator:id,name,email')->orderBy('created_at', 'desc')->get();
-            }
-            else{
-                $tickets = MovieTicket::where('created_by', $request->user->id)->with('creator:id,name,email')->orderBy('created_at', 'desc')->get();
-            }
+            $tickets = $query->with('creator:id,name,last_name,email')->orderBy('created_at', 'desc')->get();
             $tickets = $tickets->map(function ($ticket) {
                 return [
                     'id' => (string) $ticket->_id,
@@ -66,7 +120,7 @@ class MovieTicketController extends Controller
                     'amount' => $ticket->amount,
                     'created_by' => [
                         'id' => $ticket->creator ? (string) $ticket->creator->_id : null,
-                        'name' => $ticket->creator ? $ticket->creator->name : null,
+                        'name' => $ticket->creator ? trim($ticket->creator->name . ' ' . ($ticket->creator->last_name ?? '')) : null,
                         'email' => $ticket->creator ? $ticket->creator->email : null,
                     ],
                 ];
@@ -81,12 +135,9 @@ class MovieTicketController extends Controller
                 ]
             ], 200);
         }
-        if ($request->user->role->slug === 'administrator') {
-                $tickets = MovieTicket::with('creator:id,name,email')->orderBy('created_at', 'desc')->paginate($limit, ['*'], 'page', $page);
-            }
-            else{
-                $tickets = MovieTicket::where('created_by', $request->user->id)->with('creator:id,name,email')->orderBy('created_at', 'desc')->paginate($limit, ['*'], 'page', $page);
-            }
+
+        $tickets = $query->with('creator:id,name,last_name,email')->orderBy('created_at', 'desc')->paginate($limit, ['*'], 'page', $page);
+        
         $ticketsin = $tickets->map(function ($ticket) {
             return [
                 'id' => (string) $ticket->_id,
@@ -95,7 +146,7 @@ class MovieTicketController extends Controller
                 'amount' => $ticket->amount,
                 'created_by' => [
                     'id' => $ticket->creator ? (string) $ticket->creator->_id : null,
-                    'name' => $ticket->creator ? $ticket->creator->name : null,
+                    'name' => $ticket->creator ? trim($ticket->creator->name . ' ' . ($ticket->creator->last_name ?? '')) : null,
                     'email' => $ticket->creator ? $ticket->creator->email : null,
                 ],
             ];
@@ -114,7 +165,7 @@ class MovieTicketController extends Controller
     // Get Single Movie Ticket by ID
     public function show($id)
     {
-        $ticket = MovieTicket::with('creator:id,name,email')->find($id);
+        $ticket = MovieTicket::with('creator:id,name,last_name,email')->find($id);
 
         if (!$ticket) {
             return response()->json(['message' => 'Movie ticket not found'], 404);
@@ -128,7 +179,7 @@ class MovieTicketController extends Controller
                 'amount' => $ticket->amount,
                 'created_by' => [
                     'id' => $ticket->creator ? (string) $ticket->creator->_id : null,
-                    'name' => $ticket->creator ? $ticket->creator->name : null,
+                    'name' => $ticket->creator ? trim($ticket->creator->name . ' ' . ($ticket->creator->last_name ?? '')) : null,
                     'email' => $ticket->creator ? $ticket->creator->email : null,
                 ],
             ],
@@ -146,11 +197,29 @@ class MovieTicketController extends Controller
         $validator = Validator::make($request->all(), [
             'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
             'date' => 'required|date|before_or_equal:today',
-            'amount' => 'required|numeric|min:0',
+            'amount' => 'required|numeric|gt:0|max:400',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        // Validate only one ticket per month per user (excluding current ticket)
+        $ticketDate = Carbon::parse($request->date);
+        $startDate = Carbon::createFromDate($ticketDate->year, $ticketDate->month, 1)->startOfMonth()->toDateString();
+        $endDate = Carbon::createFromDate($ticketDate->year, $ticketDate->month, 1)->endOfMonth()->toDateString();
+
+        $exists = MovieTicket::where('created_by', $request->user->id)
+            ->where('_id', '!=', $id)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->exists();
+
+        if ($exists) {
+            return response()->json([
+                'errors' => [
+                    'date' => ['You have already submitted a movie ticket for this month. Only one ticket is allowed per month.']
+                ]
+            ], 422);
         }
 
         // Handle Image Update

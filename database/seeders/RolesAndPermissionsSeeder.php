@@ -59,11 +59,16 @@ class RolesAndPermissionsSeeder extends Seeder
             'edit_notice',
             'view_notice',
             'delete_notice',
+            'view_emp_status_board',
         ];
 
         // Create permissions
         foreach ($permissions as $permission) {
-            Permission::firstOrCreate(['name' => $permission]);
+            $slug = \Illuminate\Support\Str::slug($permission, '_');
+            Permission::updateOrCreate(
+                ['name' => $permission],
+                ['slug' => $slug]
+            );
         }
 
         // Create roles
