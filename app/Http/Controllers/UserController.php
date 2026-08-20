@@ -14,6 +14,9 @@ use MongoDB\BSON\ObjectId;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\WelcomeOnboardMailEmployee;
+use App\Mail\NewTeamMemberReportingMail;
+use App\Models\Department;
+use App\Models\Designation;
 
 class UserController extends Controller
 {
@@ -29,7 +32,6 @@ class UserController extends Controller
             'personal_email' => 'nullable|email',
             'blood_group' => 'nullable|string',
             'marital_status' => 'nullable|string',
-            'nationality' => 'nullable|string',
             'profile_photo' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
 
             // Address Information
@@ -49,7 +51,7 @@ class UserController extends Controller
 
             // Work Information
             'company_email' => 'nullable|email|unique:users,email',
-            'username' => 'required|string|unique:users,username',
+            'username' => 'nullable|string',
             'password' => 'required|string|min:6',
             'role_id' => 'required|exists:roles,_id',
             'department_id' => 'nullable|exists:departments,_id',
@@ -161,7 +163,6 @@ class UserController extends Controller
             'personal_email' => $request->personal_email,
             'blood_group' => $request->blood_group,
             'marital_status' => $request->marital_status,
-            'nationality' => $request->nationality,
             'profile_photo' => $profilePhoto,
 
             // Address Information
@@ -184,7 +185,7 @@ class UserController extends Controller
             'email' => $request->company_email,
             'work_location_id' => $request->work_location_id,
             'office_location' => $request->office_location,
-            'username' => $request->username,
+            'username' => $request->username ?: ($request->company_email ?: strtolower($request->first_name . '_' . $request->last_name)),
             'password' => Hash::make($request->password),
             'role_id' => $request->role_id,
             'department_id' => $request->department_id,
@@ -236,9 +237,26 @@ class UserController extends Controller
             // Mail sent successfully
         } catch (\Exception $e) {
             // Mail sending failed
-            // You can log the error or handle it as needed
-            // \Log::error('Mail sending failed: ' . $e->getMessage());
-            // return response()->json(['message' => 'Failed to Onboard email. Please try again later. '], 500);
+        }
+
+        // Send email to Reporting Manager if assigned
+        if (!empty($user->reporting_manager_id)) {
+            try {
+                $reportingManager = User::find($user->reporting_manager_id);
+                if ($reportingManager && !empty($reportingManager->email)) {
+                    $department = !empty($user->department_id) ? Department::find($user->department_id) : null;
+                    $designation = !empty($user->designation_id) ? Designation::find($user->designation_id) : null;
+                    $departmentName = $department->name ?? '';
+                    $designationName = $designation->name ?? '';
+
+                    Mail::to($reportingManager->email)->send(
+                        new NewTeamMemberReportingMail($reportingManager, $user, $departmentName, $designationName)
+                    );
+                }
+            } catch (\Exception $e) {
+                // Log reporting manager mail error without breaking the user creation response
+                \Log::error('Reporting manager mail error: ' . $e->getMessage());
+            }
         }
 
         return response()->json(['message' => 'User added successfully!', 'user' => $user], 201);
@@ -265,7 +283,6 @@ class UserController extends Controller
             'personal_email' => 'nullable|email',
             'blood_group' => 'nullable|string',
             'marital_status' => 'nullable|string',
-            'nationality' => 'nullable|string',
             'profile_photo' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
 
             // Address Information
@@ -379,7 +396,6 @@ class UserController extends Controller
             'personal_email' => $request->personal_email,
             'blood_group' => $request->blood_group,
             'marital_status' => $request->marital_status,
-            'nationality' => $request->nationality,
             // 'profile_photo' => $profilePhoto, //CREATED seperate API to edit docs
 
             // Address Information

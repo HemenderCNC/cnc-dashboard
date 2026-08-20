@@ -42,6 +42,8 @@ class GeneralSettingsController extends Controller
             'total_break_hrs' => $total_break_hrs,
             'actual_check_in_time' => $LoginSession->actual_check_in_time ?? null,
             'last_updated_at' => $LoginSession->updated_at ?? null,
+            'is_break' => $LoginSession->break ?? false,
+            'break' => $LoginSession->break ?? false,
         ]));
     }
 

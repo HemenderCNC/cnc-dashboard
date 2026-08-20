@@ -18,7 +18,6 @@ class User extends Eloquent
         'personal_email',
         'blood_group',
         'marital_status',
-        'nationality',
         'profile_photo',
         'office_location',
         // Address Information
