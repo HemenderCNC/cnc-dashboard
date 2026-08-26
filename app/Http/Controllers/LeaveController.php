@@ -465,7 +465,7 @@ class LeaveController extends Controller
         // }
 
         // Restore the respective leave balance based on leave_type
-        $user = User::find($leave->employee_id);
+        $user = User::find($leave->employee_id) ?? User::where('_id', $leave->employee_id)->first() ?? $leave->employee;
         $leaveYear = $leave->year ?? date('Y');
         $leaveBalance = LeaveBalance::where('user_id', (string) $leave->employee_id)
             ->where('year', (int) $leaveYear)
@@ -486,10 +486,27 @@ class LeaveController extends Controller
 
         $leave->update(['status' => 'canceled']);
 
-        try {
-            Mail::to($user->email)->send(new LeaveStatusMail($leave, $user, 'canceled', $request->user));
-        } catch (\Exception $e) {
-            // Log error or ignore
+        if ($user && !empty($user->email)) {
+            try {
+                $reportingManager = $user->reportingManager;
+                $toList = [$user->email];
+                $ccList = [
+                    'hr@codeandcore.com',
+                    'saurabhsoni.cnc@gmail.com'
+                ];
+                if ($reportingManager && !empty($reportingManager->email)) {
+                    $ccList[] = $reportingManager->email;
+                }
+                $ccList = array_values(array_unique(array_diff($ccList, $toList)));
+
+                $mail = Mail::to($toList);
+                if (!empty($ccList)) {
+                    $mail->cc($ccList);
+                }
+                $mail->send(new LeaveStatusMail($leave, $user, 'canceled', $request->user));
+            } catch (\Exception $e) {
+                \Log::error('Leave cancel email failed: ' . $e->getMessage());
+            }
         }
 
         return response()->json(['message' => 'Leave request canceled successfully'], 200);
@@ -563,7 +580,7 @@ class LeaveController extends Controller
         }
 
         // Handle balance synchronization
-        $user = User::find($leave->employee_id);
+        $user = User::find($leave->employee_id) ?? User::where('_id', $leave->employee_id)->first() ?? $leave->employee;
         $leaveYear = $leave->year ?? date('Y');
         $leaveBalance = LeaveBalance::firstOrCreate(
             ['user_id' => (string) $leave->employee_id, 'year' => (int) $leaveYear],
@@ -615,9 +632,27 @@ class LeaveController extends Controller
             'approved_by' => $request->user->id
         ]);
 
-        try {
-            Mail::to($user->email)->send(new LeaveStatusMail($leave, $user, 'approved', $request->user));
-        } catch (\Exception $e) {
+        if ($user && !empty($user->email)) {
+            try {
+                $reportingManager = $user->reportingManager;
+                $toList = [$user->email];
+                $ccList = [
+                    'hr@codeandcore.com',
+                    'saurabhsoni.cnc@gmail.com'
+                ];
+                if ($reportingManager && !empty($reportingManager->email)) {
+                    $ccList[] = $reportingManager->email;
+                }
+                $ccList = array_values(array_unique(array_diff($ccList, $toList)));
+
+                $mail = Mail::to($toList);
+                if (!empty($ccList)) {
+                    $mail->cc($ccList);
+                }
+                $mail->send(new LeaveStatusMail($leave, $user, 'approved', $request->user));
+            } catch (\Exception $e) {
+                \Log::error('Leave approval email failed: ' . $e->getMessage());
+            }
         }
 
         return response()->json(['message' => 'Leave approved successfully', 'leave' => $leave], 200);
@@ -648,7 +683,7 @@ class LeaveController extends Controller
             ], 422);
         }
 
-        $user = User::find($leave->employee_id);
+        $user = User::find($leave->employee_id) ?? User::where('_id', $leave->employee_id)->first() ?? $leave->employee;
         $leaveYear = $leave->year ?? date('Y');
         $leaveBalance = LeaveBalance::where('user_id', (string) $leave->employee_id)
             ->where('year', (int) $leaveYear)
@@ -673,10 +708,27 @@ class LeaveController extends Controller
             'approved_by' => $request->user->id
         ]);
 
-        try {
-            Mail::to($user->email)->send(new LeaveStatusMail($leave, $user, 'rejected', $request->user));
-        } catch (\Exception $e) {
-            // Log error or ignore
+        if ($user && !empty($user->email)) {
+            try {
+                $reportingManager = $user->reportingManager;
+                $toList = [$user->email];
+                $ccList = [
+                    'hr@codeandcore.com',
+                    'saurabhsoni.cnc@gmail.com'
+                ];
+                if ($reportingManager && !empty($reportingManager->email)) {
+                    $ccList[] = $reportingManager->email;
+                }
+                $ccList = array_values(array_unique(array_diff($ccList, $toList)));
+
+                $mail = Mail::to($toList);
+                if (!empty($ccList)) {
+                    $mail->cc($ccList);
+                }
+                $mail->send(new LeaveStatusMail($leave, $user, 'rejected', $request->user));
+            } catch (\Exception $e) {
+                \Log::error('Leave rejection email failed: ' . $e->getMessage());
+            }
         }
 
         return response()->json(['message' => 'Leave rejected', 'leave' => $leave], 200);

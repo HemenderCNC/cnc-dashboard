@@ -27,8 +27,8 @@ class LeaveStatusMail extends Mailable
     {
         $subject = 'Leave Request ' . ucfirst($this->status);
         
-        return $this->from(config('mail.from.address'), config('app.name'))
-            ->markdown('emails.leave_status')
+        return $this->from(config('mail.from.address'), config('mail.from.name', config('app.name')))
+            ->view('emails.leave_status')
             ->subject($subject)
             ->with([
                 'leave' => $this->leave,

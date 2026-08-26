@@ -30,8 +30,8 @@
                                         </tr>
                                         <tr>
                                             <td align="left">
-                                                <p style="margin: 0 0 20px 0; font-size: 14px; color: #2C2C2C;">Hi {{ $employee->name }},</p>
-                                                <p style="margin: 0 0 20px 0; font-size: 14px; color: #2C2C2C;">Your leave request for the following period has been <strong style="color: {{ $status == 'approved' ? '#27ae60' : '#e74c3c' }};">{{ $status }}</strong>.</p>
+                                                <p style="margin: 0 0 20px 0; font-size: 14px; color: #2C2C2C;">Hi {{ $employee->name ?? 'Employee' }},</p>
+                                                <p style="margin: 0 0 20px 0; font-size: 14px; color: #2C2C2C;">Your leave request for the following period has been <strong style="color: {{ $status == 'approved' ? '#27ae60' : ($status == 'rejected' ? '#e74c3c' : '#f39c12') }};">{{ $status }}</strong>.</p>
                                                 <table width="100%" cellpadding="0" cellspacing="0" border="0">
                                                     <tbody>
                                                         <!-- Leave Type -->
@@ -48,7 +48,7 @@
                                                                 <p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">:</p>
                                                             </td>
                                                             <td width="63%" align="left" valign="middle" style="border-bottom: 1px solid #1A0726; padding: 7px 0;">
-                                                                <p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">{{ $leave->leave_type }}</p>
+                                                                <p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">{{ $leave->leave_type ?? 'N/A' }}</p>
                                                             </td>
                                                         </tr>
                                                         <!-- Dates -->
@@ -65,7 +65,7 @@
                                                                 <p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">:</p>
                                                             </td>
                                                             <td width="63%" align="left" valign="middle" style="border-bottom: 1px solid #1A0726; padding: 7px 0;">
-                                                                <p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">{{ \Carbon\Carbon::parse($leave->start_date)->format('d-M-Y') }} to {{ \Carbon\Carbon::parse($leave->end_date)->format('d-M-Y') }} ({{ $leave->leave_duration }} day(s)@if($leave->half_day && $leave->half_day_type) - {{ ucwords(str_replace('_', ' ', $leave->half_day_type)) }}@endif)</p>
+                                                                <p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">{{ !empty($leave->start_date) ? \Carbon\Carbon::parse($leave->start_date)->format('d-M-Y') : '' }} to {{ !empty($leave->end_date) ? \Carbon\Carbon::parse($leave->end_date)->format('d-M-Y') : '' }} ({{ $leave->leave_duration ?? 0 }} day(s)@if(!empty($leave->half_day) && !empty($leave->half_day_type)) - {{ ucwords(str_replace('_', ' ', $leave->half_day_type)) }}@endif)</p>
                                                             </td>
                                                         </tr>
                                                         <!-- Action By -->
@@ -82,10 +82,10 @@
                                                                 <p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">:</p>
                                                             </td>
                                                             <td width="63%" align="left" valign="middle" style="border-bottom: 1px solid #1A0726; padding: 7px 0;">
-                                                                <p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">{{ $actionBy->name }} {{ $actionBy->last_name }}</p>
+                                                                <p style="margin: 0; font-weight: 400; font-size: 14px; color: #2C2C2C;">{{ $actionBy->name ?? '' }} {{ $actionBy->last_name ?? '' }}</p>
                                                             </td>
                                                         </tr>
-                                                        @if($leave->approve_comment)
+                                                        @if(!empty($leave->approve_comment))
                                                         <!-- Comment -->
                                                         <tr>
                                                             <td width="35%" align="left" valign="middle" style="padding: 7px 0;">
