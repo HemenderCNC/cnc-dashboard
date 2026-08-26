@@ -13,30 +13,35 @@ class NoticeController extends Controller
     {
         $page = (int) $request->input('page', 1);
         $limit = (int) $request->input('limit', -1);
+        $query = Notice::with(['postedBy' => function ($q) {
+            $q->select('_id', 'name', 'last_name', 'email', 'profile_photo', 'department_id')
+              ->with('department:_id,name');
+        }])->orderBy('updated_at', 'desc')->orderBy('created_at', 'desc');
+
         if ($limit == -1) {
-            $leaves = Notice::orderBy('created_at', 'desc')->get();
+            $notices = $query->get();
 
             return response()->json([
-                'data' => $leaves,
+                'data' => $notices,
                 'meta' => [
                     'page' => 1,
                     'limit' => $limit,
-                    'total' => $leaves->count(),
+                    'total' => $notices->count(),
                     'total_pages' => 1,
                 ]
             ], 200);
         }
 
         // Else use pagination
-        $leaves = Notice::orderBy('created_at', 'desc')->paginate($limit, ['*'], 'page', $page);
+        $notices = $query->paginate($limit, ['*'], 'page', $page);
 
         return response()->json([
-            'data' => $leaves->items(),
+            'data' => $notices->items(),
             'meta' => [
-                'page' => $leaves->currentPage(),
-                'limit' => $leaves->perPage(),
-                'total' => $leaves->total(),
-                'total_pages' => ceil($leaves->total() / $leaves->perPage()),
+                'page' => $notices->currentPage(),
+                'limit' => $notices->perPage(),
+                'total' => $notices->total(),
+                'total_pages' => ceil($notices->total() / $notices->perPage()),
             ]
         ], 200);
     }
@@ -58,12 +63,20 @@ class NoticeController extends Controller
             ], 422);
         }
 
+        $userId = $request->user ? ($request->user->_id ?? $request->user->id) : null;
+
         $notice = Notice::create([
             'message' => $request->message,
             'start_date' => $request->start_date,
             'end_date' => $request->end_date,
             'status' => $request->status ?? 'visible',
+            'posted_by' => $userId,
         ]);
+
+        $notice->load(['postedBy' => function ($q) {
+            $q->select('_id', 'name', 'last_name', 'email', 'profile_photo', 'department_id')
+              ->with('department:_id,name');
+        }]);
 
         return response()->json(['message' => 'Notice created successfully', 'notice' => $notice], 201);
     }
@@ -71,7 +84,10 @@ class NoticeController extends Controller
     // Get a single notice by ID
     public function show($id)
     {
-        $notice = Notice::find($id);
+        $notice = Notice::with(['postedBy' => function ($q) {
+            $q->select('_id', 'name', 'last_name', 'email', 'profile_photo', 'department_id')
+              ->with('department:_id,name');
+        }])->find($id);
 
         if (!$notice) {
             return response()->json(['message' => 'Notice not found'], 404);
@@ -154,9 +170,14 @@ class NoticeController extends Controller
     public function getVisibleNotices()
     {
         $today = Carbon::today()->toDateString();
-        $notices = Notice::where('status', 'visible')
+        $notices = Notice::with(['postedBy' => function ($q) {
+            $q->select('_id', 'name', 'last_name', 'email', 'profile_photo', 'department_id')
+              ->with('department:_id,name');
+        }])->where('status', 'visible')
             ->where('start_date', '<=', $today)
             ->where('end_date', '>=', $today)
+            ->orderBy('updated_at', 'desc')
+            ->orderBy('created_at', 'desc')
             ->get();
 
         if ($notices->isEmpty()) {

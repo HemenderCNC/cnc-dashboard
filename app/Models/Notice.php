@@ -20,4 +20,9 @@ class Notice extends Eloquent
         'status',
         'posted_by'
     ];
+
+    public function postedBy()
+    {
+        return $this->belongsTo(User::class, 'posted_by');
+    }
 }

@@ -18,8 +18,10 @@ class DashboardController extends Controller
         $today = $now->toDateString();
         $totalUsers = User::count();
         $totalClients = Clients::count();
-        $totalProjects = Project::count();
-        $notices = Notice::where('status','visible')->where('start_date', '<=', $today)->where('end_date', '>=', $today)->orderBy('created_at', 'desc')->get();
+        $notices = Notice::with(['postedBy' => function ($q) {
+            $q->select('_id', 'name', 'last_name', 'email', 'profile_photo', 'department_id')
+              ->with('department:_id,name');
+        }])->where('status','visible')->where('start_date', '<=', $today)->where('end_date', '>=', $today)->orderBy('updated_at', 'desc')->orderBy('created_at', 'desc')->get();
         $upcomingHolidays = Holiday::where('festival_date', '>=', $today)
             ->orderBy('festival_date', 'asc')
             ->get();
