@@ -25,7 +25,8 @@ class Timesheet extends Eloquent
         'dates',  // Array of dates with time logs
         'work_description',
         'status',
-        'is_display'
+        'is_display',
+        'is_manual'
     ];
 
     public function project()

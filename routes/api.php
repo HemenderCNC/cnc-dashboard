@@ -762,9 +762,7 @@ Route::middleware('api')->group(function () {
             Route::middleware(['permission:edit_timesheet'])->group(function () {
                 Route::post('/{id}', [TimesheetController::class, 'update']); // Update a timesheet
             });
-            Route::middleware(['permission:delete_timesheet'])->group(function () {
-                Route::delete('/{id}', [TimesheetController::class, 'destroy']); // Delete a timesheet
-            });
+            Route::delete('/{id}', [TimesheetController::class, 'destroy']); // Delete a timesheet
 
             // Route::get('/', [TimesheetController::class, 'index']); // Get all timesheets
             // Route::post('/', [TimesheetController::class, 'store']); // Create a timesheet

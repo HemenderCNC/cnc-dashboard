@@ -172,6 +172,7 @@ class TimesheetController extends Controller
                     'total_time_spent' => 1,
                     'work_description' => 1,
                     'status' => 1,
+                    'is_manual' => ['$ifNull' => ['$is_manual', false]],
                     'project' => [
                         '$map' => [
                             'input' => '$project',
@@ -379,6 +380,7 @@ class TimesheetController extends Controller
                     'employee_id' => ['$first' => '$employee_id'],
                     'work_description' => ['$first' => '$work_description'],
                     'status' => ['$first' => '$status'],
+                    'is_manual' => ['$first' => '$is_manual'],
                     'total_time_spent_minutes' => ['$sum' => '$duration_minutes'],
                     'created_at' => ['$first' => '$created_at'],
                     'task_id' => ['$first' => '$task_id'],
@@ -446,6 +448,7 @@ class TimesheetController extends Controller
                     'total_time_spent' => 1,
                     'work_description' => 1,
                     'status' => 1,
+                    'is_manual' => ['$ifNull' => ['$is_manual', false]],
                     'project' => 1,
                     'task_type' => 1,
                     'task' => 1,
@@ -1307,6 +1310,49 @@ class TimesheetController extends Controller
             ], 422);
         }
 
+        $toMinutes = function($timeStr) {
+            if (!$timeStr) return 0;
+            $parts = explode(':', $timeStr);
+            return ((int)($parts[0] ?? 0) * 60) + (int)($parts[1] ?? 0);
+        };
+
+        $newStartMin = $toMinutes($request->start_time);
+        $newEndMin = $toMinutes($request->end_time);
+
+        $existingTimesheets = Timesheet::where('employee_id', $userId)
+            ->where('dates.date', $request->date)
+            ->get();
+
+        foreach ($existingTimesheets as $ts) {
+            $dates = $ts->dates ?? [];
+            foreach ($dates as $d) {
+                if (($d['date'] ?? '') === $request->date) {
+                    $logs = $d['time_log'] ?? [];
+                    foreach ($logs as $log) {
+                        $logStart = $log['start_time'] ?? null;
+                        $logEnd = $log['end_time'] ?? null;
+                        if (!$logStart) continue;
+                        $logStartMin = $toMinutes($logStart);
+                        $logEndMin = $logEnd ? $toMinutes($logEnd) : 0;
+                        if (($ts->status ?? '') === 'running' && $logEndMin <= $logStartMin) {
+                            $logEndMin = $toMinutes(Carbon::now()->format('H:i'));
+                        }
+                        if ($logEndMin > $logStartMin) {
+                            if ($newStartMin < $logEndMin && $newEndMin > $logStartMin) {
+                                return response()->json([
+                                    'message' => "Timesheet entry overlaps with an existing time slot ($logStart - " . ($logEnd ?: 'Running') . "). Please choose a different time.",
+                                    'errors' => [
+                                        'start_time' => ['Time overlaps with an existing timesheet entry.'],
+                                        'end_time' => ['Time overlaps with an existing timesheet entry.']
+                                    ]
+                                ], 422);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Create a new timesheet entry
         $timesheet = Timesheet::create([
             'project_id' => $request->project_id,
@@ -1326,6 +1372,7 @@ class TimesheetController extends Controller
             ], // Store as a plain PHP array
             'work_description' => $request->work_description,
             'status' => 'completed',
+            'is_manual' => true,
         ]);
 
         return response()->json($timesheet, 201);
@@ -2028,12 +2075,27 @@ class TimesheetController extends Controller
     }
 
     // Delete timesheet entry
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
         $timesheet = Timesheet::where('id', $id)->first();
         if (!$timesheet) {
+            $timesheet = Timesheet::find($id);
+        }
+        if (!$timesheet) {
             return response()->json(['message' => 'Timesheet not found'], 404);
         }
+
+        $user = $request->user;
+        $hasDeletePerm = false;
+        if ($user && $user->role && $user->role->permissions) {
+            $hasDeletePerm = in_array('delete_timesheet', $user->role->permission_slugs ?? []);
+        }
+        $isOwnerManual = ($timesheet->is_manual ?? false) && (string)$timesheet->employee_id === (string)$user->id;
+
+        if (!$hasDeletePerm && !$isOwnerManual && ($user->role->slug ?? '') !== 'administrator') {
+            return response()->json(['error' => 'You do not have permission to perform this action.'], 403);
+        }
+
         $timesheet->delete();
 
         return response()->json(['message' => 'Timesheet entry deleted successfully.']);

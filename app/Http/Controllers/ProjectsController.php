@@ -632,12 +632,30 @@ class ProjectsController extends Controller
     }
 
 
-    public function getAllProjects(){
+    public function getAllProjects(Request $request){
+        $role = $request->user->role->slug ?? null;
+        $userId = (string) $request->user->id;
 
-        $projects = Project::select(
+        $query = Project::select(
             'id',
             'project_name',
-        )->get();
+        );
+
+        if ($role === 'employee' || $role === 'qa') {
+            $taskProjectIds = \App\Models\Tasks::where(function($q) use ($userId) {
+                $q->whereIn('assignees', [$userId])
+                  ->orWhere('qa_id', $userId);
+            })->pluck('project_id')->filter()->unique()->toArray();
+
+            $query->where(function($q) use ($userId, $taskProjectIds) {
+                $q->whereIn('assignee', [$userId])
+                  ->orWhereIn('project_manager_id', [$userId])
+                  ->orWhereIn('_id', $taskProjectIds)
+                  ->orWhereIn('id', $taskProjectIds);
+            });
+        }
+
+        $projects = $query->get();
 
         return response()->json([
             'data' => $projects,

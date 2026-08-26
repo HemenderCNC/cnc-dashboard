@@ -990,54 +990,14 @@ class UserController extends Controller
     }
     public function getProjectManagers()
     {
+        $roleIds = Role::whereIn('slug', ['project-manager', 'administrator'])->pluck('_id')->toArray();
+        $users = User::where(function($query) use ($roleIds) {
+            $query->whereIn('role_id', array_map('strval', $roleIds))
+                  ->orWhereIn('role_id', $roleIds);
+        })
+        ->select('_id', 'name', 'last_name', 'email', 'contact_number', 'employee_id', 'profile_photo', 'role_id')
+        ->get();
 
-        // Fetch all users with the role "employee" and exclude the current user
-        $users = User::raw(function ($collection) {
-            return $collection->aggregate([
-                // Convert role_id (string) to ObjectId for the lookup
-                [
-                    '$addFields' => [
-                        'role_id_object' => ['$toObjectId' => '$role_id']
-                    ]
-                ],
-
-                // Lookup Role
-                [
-                    '$lookup' => [
-                        'from' => 'roles',
-                        'localField' => 'role_id_object', // Use the converted ObjectId field
-                        'foreignField' => '_id',
-                        'as' => 'role'
-                    ]
-                ],
-                ['$unwind' => ['path' => '$role', 'preserveNullAndEmptyArrays' => true]],
-
-                // Match users with the role "administrator" exclude
-                [
-                    '$match' => [
-                        'role.slug' => [
-                            '$in' => ['project-manager', 'administrator']
-                        ],
-                    ]
-                ],
-
-                // Project Only Required Fields
-                [
-                    '$project' => [
-                        'name' => 1,
-                        '_id' => 1,
-                        'last_name' => 1,
-                        'email' => 1,
-                        'contact_number' => 1,
-                        'role' => 1,
-                        'profile_photo' => 1,
-                        'employee_id' => 1,
-                    ]
-                ]
-            ]);
-        });
-
-        // Check if users exist
         if ($users->isEmpty()) {
             return response()->json([
                 'message' => 'No project manager found',
